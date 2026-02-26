@@ -104,8 +104,23 @@
                             </dd>
                         </div>
                     </dl>
-                    <div class="mt-4">
+                    <div class="mt-4 flex items-center justify-between">
                         <a href="{{ route('admin.licenses.show', $tenant->license) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">View License Details</a>
+
+                        <form action="{{ route('admin.tenants.change-plan', $tenant) }}" method="POST" class="flex items-center gap-2">
+                            @csrf
+                            <label for="plan_id" class="text-sm font-medium text-gray-700">Change Plan:</label>
+                            <select name="plan_id" id="plan_id" class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                @foreach($plans as $plan)
+                                    <option value="{{ $plan->id }}" @selected($tenant->license->plan_id === $plan->id)>
+                                        {{ $plan->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-indigo-300 rounded-md text-sm font-medium text-indigo-700 hover:bg-indigo-50">
+                                Update
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>

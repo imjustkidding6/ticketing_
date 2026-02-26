@@ -11,8 +11,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
+            'tenant' => \App\Http\Middleware\EnsureTenantSession::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

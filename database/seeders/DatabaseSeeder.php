@@ -22,6 +22,15 @@ class DatabaseSeeder extends Seeder
             PlanSeeder::class,
         ]);
 
+        User::firstOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'name' => 'Admin User',
+                'password' => bcrypt('password'),
+                'is_admin' => true,
+            ]
+        );
+
         $user = User::firstOrCreate(
             ['email' => 'test@example.com'],
             [
