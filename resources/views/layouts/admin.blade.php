@@ -41,6 +41,9 @@
                                 <a href="{{ route('admin.tenants.index') }}" class="@if(request()->routeIs('admin.tenants.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                                     Tenants
                                 </a>
+                                <a href="{{ route('admin.users.index') }}" class="@if(request()->routeIs('admin.users.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                    Users
+                                </a>
                             </div>
                         </div>
                         <div class="flex items-center">

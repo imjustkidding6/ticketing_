@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantUrlHelper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -11,74 +12,56 @@ class EnsureTenantSessionTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_guest_is_redirected_to_login_not_tenant_selector(): void
+    private function tenantDashboardUrl(Tenant $tenant): string
     {
-        $response = $this->get('/dashboard');
+        return app(TenantUrlHelper::class)->tenantUrl($tenant, '/dashboard');
+    }
+
+    public function test_guest_is_redirected_to_login(): void
+    {
+        $tenant = Tenant::factory()->create();
+
+        $response = $this->get($this->tenantDashboardUrl($tenant));
 
         $response->assertRedirect('/login');
     }
 
-    public function test_user_with_one_active_tenant_is_auto_set(): void
+    public function test_slug_resolves_tenant_and_sets_session(): void
     {
         $user = User::factory()->create();
         $tenant = Tenant::factory()->create();
         $tenant->addUser($user);
 
-        $response = $this->actingAs($user)->get('/dashboard');
+        $response = $this->actingAs($user)
+            ->get($this->tenantDashboardUrl($tenant));
 
         $response->assertOk();
         $this->assertEquals($tenant->id, session('current_tenant_id'));
     }
 
-    public function test_user_with_multiple_tenants_is_redirected_to_selector(): void
-    {
-        $user = User::factory()->create();
-        $tenant1 = Tenant::factory()->create();
-        $tenant2 = Tenant::factory()->create();
-        $tenant1->addUser($user);
-        $tenant2->addUser($user);
-
-        $response = $this->actingAs($user)->get('/dashboard');
-
-        $response->assertRedirect(route('tenant.select'));
-    }
-
-    public function test_user_with_valid_tenant_in_session_can_proceed(): void
+    public function test_user_accessing_wrong_slug_is_redirected(): void
     {
         $user = User::factory()->create();
         $tenant = Tenant::factory()->create();
-        $tenant->addUser($user);
 
         $response = $this->actingAs($user)
-            ->withSession(['current_tenant_id' => $tenant->id])
-            ->get('/dashboard');
+            ->get($this->tenantDashboardUrl($tenant));
 
-        $response->assertOk();
+        $response->assertRedirect(config('app.url'));
     }
 
     public function test_admin_user_bypasses_tenant_middleware(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
+        $tenant = Tenant::factory()->create();
 
-        $response = $this->actingAs($admin)->get('/dashboard');
+        $response = $this->actingAs($admin)
+            ->get($this->tenantDashboardUrl($tenant));
 
         $response->assertOk();
     }
 
-    public function test_user_with_invalid_tenant_in_session_is_redirected(): void
-    {
-        $user = User::factory()->create();
-        $tenant = Tenant::factory()->create();
-
-        $response = $this->actingAs($user)
-            ->withSession(['current_tenant_id' => $tenant->id])
-            ->get('/dashboard');
-
-        $response->assertRedirect(route('tenant.select'));
-        $this->assertNull(session('current_tenant_id'));
-    }
-
-    public function test_user_with_suspended_tenant_in_session_is_redirected(): void
+    public function test_suspended_tenant_redirects(): void
     {
         $user = User::factory()->create();
         $tenant = Tenant::factory()->create();
@@ -86,34 +69,21 @@ class EnsureTenantSessionTest extends TestCase
         $tenant->suspend();
 
         $response = $this->actingAs($user)
-            ->withSession(['current_tenant_id' => $tenant->id])
-            ->get('/dashboard');
+            ->get($this->tenantDashboardUrl($tenant));
 
-        $response->assertRedirect(route('tenant.select'));
-        $this->assertNull(session('current_tenant_id'));
+        $response->assertRedirect(config('app.url'));
     }
 
-    public function test_user_with_inactive_tenant_in_session_is_redirected(): void
+    public function test_inactive_tenant_redirects(): void
     {
         $user = User::factory()->create();
         $tenant = Tenant::factory()->create(['is_active' => false]);
         $tenant->addUser($user);
 
         $response = $this->actingAs($user)
-            ->withSession(['current_tenant_id' => $tenant->id])
-            ->get('/dashboard');
+            ->get($this->tenantDashboardUrl($tenant));
 
-        $response->assertRedirect(route('tenant.select'));
-        $this->assertNull(session('current_tenant_id'));
-    }
-
-    public function test_user_with_no_tenants_is_redirected_to_no_tenant_page(): void
-    {
-        $user = User::factory()->create();
-
-        $response = $this->actingAs($user)->get('/dashboard');
-
-        $response->assertRedirect(route('dashboard.no-tenant'));
+        $response->assertRedirect(config('app.url'));
     }
 
     public function test_user_can_switch_tenant(): void
@@ -126,7 +96,8 @@ class EnsureTenantSessionTest extends TestCase
             'tenant_id' => $tenant->id,
         ]);
 
-        $response->assertRedirect(route('dashboard'));
+        $expectedUrl = app(TenantUrlHelper::class)->tenantUrl($tenant, '/dashboard');
+        $response->assertRedirect($expectedUrl);
         $this->assertEquals($tenant->id, session('current_tenant_id'));
     }
 

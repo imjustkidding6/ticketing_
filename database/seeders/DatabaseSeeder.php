@@ -6,6 +6,7 @@ use App\Models\Distributor;
 use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantRoleService;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -20,6 +21,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             PlanSeeder::class,
+            RoleAndPermissionSeeder::class,
         ]);
 
         User::firstOrCreate(
@@ -58,5 +60,9 @@ class DatabaseSeeder extends Seeder
         $license->activate($tenant);
 
         $tenant->addUser($user, 'owner');
+
+        $roleService = new TenantRoleService;
+        $roleService->setupDefaultRoles($tenant);
+        $roleService->assignRole($user, 'admin', $tenant);
     }
 }

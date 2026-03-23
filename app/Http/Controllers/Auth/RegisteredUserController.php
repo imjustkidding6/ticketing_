@@ -6,12 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\License;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantUrlHelper;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 use Illuminate\View\View;
 
@@ -35,6 +37,12 @@ class RegisteredUserController extends Controller
         $request->validate([
             'license_key' => ['required', 'string', 'size:24'],
             'company_name' => ['required', 'string', 'max:255'],
+            'app_slug' => [
+                'required', 'string', 'min:3', 'max:63',
+                'regex:/^[a-z0-9][a-z0-9\-]*[a-z0-9]$/',
+                'unique:tenants,slug',
+                Rule::notIn(['admin', 'www', 'mail', 'api', 'portal', 'app', 'support', 'help', 'status', 'login', 'register', 'profile', 'up', 'logout']),
+            ],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
@@ -56,9 +64,11 @@ class RegisteredUserController extends Controller
             return back()->withErrors(['license_key' => 'This license key has expired.'])->withInput();
         }
 
-        $user = DB::transaction(function () use ($request, $license) {
+        /** @var array{user: User, tenant: Tenant} $result */
+        $result = DB::transaction(function () use ($request, $license) {
             $tenant = Tenant::create([
                 'name' => $request->company_name,
+                'slug' => $request->app_slug,
             ]);
 
             $license->activate($tenant);
@@ -71,13 +81,19 @@ class RegisteredUserController extends Controller
 
             $tenant->addUser($user, 'owner');
 
-            return $user;
+            \Database\Seeders\DepartmentSeeder::seedForTenant($tenant);
+            app(\App\Services\TenantRoleService::class)->setupDefaultRoles($tenant);
+
+            return compact('user', 'tenant');
         });
 
-        event(new Registered($user));
+        event(new Registered($result['user']));
 
-        Auth::login($user);
+        Auth::login($result['user']);
+        $result['user']->setCurrentTenant($result['tenant']);
 
-        return redirect(route('dashboard', absolute: false));
+        return redirect()->to(
+            app(TenantUrlHelper::class)->tenantUrl($result['tenant'], '/dashboard')
+        );
     }
 }

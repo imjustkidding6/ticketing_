@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\Tenant;
 use Closure;
 use Illuminate\Http\Request;
+use Spatie\Permission\PermissionRegistrar;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureTenantSession
@@ -12,16 +13,44 @@ class EnsureTenantSession
     /**
      * Handle an incoming request.
      *
-     * Ensures the authenticated user has a valid tenant set in session.
+     * Resolves tenant from URL slug prefix (primary) or session (fallback).
      */
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
 
         if (! $user || $user->isAdmin()) {
+            if ($request->route('slug')) {
+                $request->route()->forgetParameter('slug');
+            }
+
             return $next($request);
         }
 
+        // Primary: resolve from URL slug prefix
+        $slug = $request->route('slug');
+
+        if ($slug) {
+            $tenant = Tenant::where('slug', $slug)
+                ->where('is_active', true)
+                ->whereNull('suspended_at')
+                ->first();
+
+            if (! $tenant || ! $user->belongsToTenant($tenant)) {
+                return redirect(config('app.url'))
+                    ->with('error', 'You do not have access to this organization.');
+            }
+
+            session(['current_tenant_id' => $tenant->id]);
+            app(PermissionRegistrar::class)->setPermissionsTeamId($tenant->id);
+
+            // Remove slug from route parameters so it is not passed to controllers
+            $request->route()->forgetParameter('slug');
+
+            return $next($request);
+        }
+
+        // Fallback: session-based resolution (for non-slug-prefixed routes)
         $tenantId = session('current_tenant_id');
 
         if ($tenantId) {
@@ -33,6 +62,8 @@ class EnsureTenantSession
                 return redirect()->route('tenant.select');
             }
 
+            app(PermissionRegistrar::class)->setPermissionsTeamId($tenant->id);
+
             return $next($request);
         }
 
@@ -43,6 +74,7 @@ class EnsureTenantSession
 
         if ($tenants->count() === 1) {
             $user->setCurrentTenant($tenants->first());
+            app(PermissionRegistrar::class)->setPermissionsTeamId($tenants->first()->id);
 
             return $next($request);
         }

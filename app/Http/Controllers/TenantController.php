@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tenant;
+use App\Services\TenantUrlHelper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -44,6 +45,8 @@ class TenantController extends Controller
 
         $request->user()->setCurrentTenant($tenant);
 
-        return redirect()->route('dashboard');
+        return redirect()->to(
+            app(TenantUrlHelper::class)->tenantUrl($tenant, '/dashboard')
+        );
     }
 }
