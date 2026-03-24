@@ -118,6 +118,8 @@ class AppSettingController extends Controller
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,svg', 'max:2048'],
             'primary_color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'accent_color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'dark_primary_color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'dark_accent_color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'remove_logo' => ['nullable', 'string'],
         ]);
 
@@ -138,6 +140,8 @@ class AppSettingController extends Controller
 
         $tenant->primary_color = ($validated['primary_color'] ?? null) ?: null;
         $tenant->accent_color = ($validated['accent_color'] ?? null) ?: null;
+        $tenant->dark_primary_color = ($validated['dark_primary_color'] ?? null) ?: null;
+        $tenant->dark_accent_color = ($validated['dark_accent_color'] ?? null) ?: null;
         $tenant->save();
 
         return redirect()->route('settings.branding')

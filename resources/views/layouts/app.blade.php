@@ -1,5 +1,12 @@
+@php
+    $brandTenant = session('current_tenant_id') ? \App\Models\Tenant::find(session('current_tenant_id')) : null;
+    $brandPrimary = $brandTenant?->primary_color ?? '#4f46e5';
+    $brandAccent = $brandTenant?->accent_color ?? '#4338ca';
+    $brandDarkPrimary = $brandTenant?->dark_primary_color ?? '#818cf8';
+    $brandDarkAccent = $brandTenant?->dark_accent_color ?? '#6366f1';
+@endphp
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" :class="darkMode ? 'dark' : ''">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,6 +20,59 @@
 
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+        <!-- Branding & Theme -->
+        <style>
+            :root {
+                --brand-primary: {{ $brandPrimary }};
+                --brand-accent: {{ $brandAccent }};
+            }
+
+            /* Light mode brand overrides */
+            .bg-indigo-600 { background-color: var(--brand-primary) !important; }
+            .hover\:bg-indigo-500:hover { background-color: var(--brand-accent) !important; }
+            .text-indigo-600 { color: var(--brand-primary) !important; }
+            .text-indigo-700 { color: var(--brand-primary) !important; }
+            .hover\:text-indigo-900:hover { color: var(--brand-accent) !important; }
+            .hover\:text-indigo-800:hover { color: var(--brand-accent) !important; }
+            .bg-indigo-50 { background-color: color-mix(in srgb, var(--brand-primary) 10%, white) !important; }
+            .border-indigo-500 { border-color: var(--brand-primary) !important; }
+            .border-indigo-400 { border-color: var(--brand-primary) !important; }
+            .focus\:border-indigo-500:focus { border-color: var(--brand-primary) !important; }
+            .focus\:ring-indigo-500:focus { --tw-ring-color: var(--brand-primary) !important; }
+            .text-indigo-500 { color: var(--brand-primary) !important; }
+
+            /* Dark mode overrides */
+            .dark { --brand-primary: {{ $brandDarkPrimary }}; --brand-accent: {{ $brandDarkAccent }}; }
+            .dark body { background-color: #111827; color: #f3f4f6; }
+            .dark .bg-gray-100 { background-color: #111827; }
+            .dark .bg-white { background-color: #1f2937; }
+            .dark .bg-gray-50 { background-color: #1f2937; }
+            .dark .text-gray-900 { color: #f9fafb; }
+            .dark .text-gray-800 { color: #f3f4f6; }
+            .dark .text-gray-700 { color: #d1d5db; }
+            .dark .text-gray-600 { color: #9ca3af; }
+            .dark .text-gray-500 { color: #9ca3af; }
+            .dark .text-gray-400 { color: #6b7280; }
+            .dark .border-gray-200 { border-color: #374151; }
+            .dark .border-gray-300 { border-color: #4b5563; }
+            .dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #374151; }
+            .dark .shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3); }
+            .dark .hover\:bg-gray-50:hover { background-color: #374151; }
+            .dark input, .dark select, .dark textarea {
+                background-color: #374151;
+                border-color: #4b5563;
+                color: #f3f4f6;
+            }
+            .dark thead.bg-gray-50 { background-color: #1f2937; }
+        </style>
+        <script>
+            // Init dark mode before render to prevent flash
+            (function() {
+                var dm = localStorage.getItem('darkMode') === 'true';
+                if (dm) document.documentElement.classList.add('dark');
+            })();
+        </script>
     </head>
     <body class="font-sans antialiased">
         @if(session('admin_impersonating'))
@@ -24,7 +84,7 @@
                 </form>
             </div>
         @endif
-        <div x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true' }" x-init="$watch('sidebarCollapsed', val => { localStorage.setItem('sidebarCollapsed', val); setTimeout(() => window.dispatchEvent(new Event('resize')), 350); })" class="min-h-screen bg-gray-100">
+        <div x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true', darkMode: localStorage.getItem('darkMode') === 'true' }" x-init="$watch('sidebarCollapsed', val => { localStorage.setItem('sidebarCollapsed', val); setTimeout(() => window.dispatchEvent(new Event('resize')), 350); }); $watch('darkMode', val => { localStorage.setItem('darkMode', val); val ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark'); })" class="min-h-screen bg-gray-100">
 
             <!-- Mobile sidebar overlay -->
             <div x-show="sidebarOpen" x-transition:enter="transition-opacity ease-linear duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition-opacity ease-linear duration-300" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-40 bg-gray-600/75 sm:hidden" @click="sidebarOpen = false" x-cloak></div>
@@ -412,6 +472,21 @@
                             @endisset
                         </div>
 
+                        <div class="flex items-center gap-1">
+                        {{-- Theme Toggle --}}
+                        <button @click="darkMode = !darkMode" class="rounded-full p-2 text-gray-400 hover:text-gray-600 focus:outline-none" title="Toggle theme">
+                            <template x-if="!darkMode">
+                                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+                                </svg>
+                            </template>
+                            <template x-if="darkMode">
+                                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                                </svg>
+                            </template>
+                        </button>
+
                         <!-- Notification Bell -->
                         @auth
                         @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::EmailNotifications))
@@ -446,6 +521,7 @@
                         </div>
                         @endif
                         @endauth
+                        </div>
                     </div>
                 </header>
 

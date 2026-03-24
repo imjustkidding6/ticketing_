@@ -24,6 +24,8 @@ class Tenant extends Model
         'logo_path',
         'primary_color',
         'accent_color',
+        'dark_primary_color',
+        'dark_accent_color',
         'is_active',
         'license_id',
         'settings',
