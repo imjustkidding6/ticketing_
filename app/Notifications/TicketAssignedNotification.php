@@ -2,17 +2,14 @@
 
 namespace App\Notifications;
 
+use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Services\TenantUrlHelper;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class TicketAssignedNotification extends Notification implements ShouldQueue
+class TicketAssignedNotification extends Notification
 {
-    use Queueable;
-
     public function __construct(
         public Ticket $ticket,
     ) {}
@@ -27,14 +24,16 @@ class TicketAssignedNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
+        $tenant = Tenant::find($this->ticket->tenant_id);
+        $actionUrl = app(TenantUrlHelper::class)->tenantUrl($tenant, '/tickets/'.$this->ticket->id);
+
         return (new MailMessage)
             ->subject("Ticket Assigned: {$this->ticket->ticket_number}")
-            ->greeting('Ticket Assigned to You')
-            ->line("**{$this->ticket->subject}**")
-            ->line("Ticket Number: {$this->ticket->ticket_number}")
-            ->line('Priority: '.ucfirst($this->ticket->priority))
-            ->action('View Ticket', app(TenantUrlHelper::class)->tenantUrl($this->ticket->tenant, '/tickets/'.$this->ticket->id))
-            ->line('Please review and respond to this ticket.');
+            ->view('emails.ticket-assigned', [
+                'ticket' => $this->ticket->load(['client', 'assignee']),
+                'tenant' => $tenant,
+                'actionUrl' => $actionUrl,
+            ]);
     }
 
     /**

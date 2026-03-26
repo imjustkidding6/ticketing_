@@ -627,6 +627,41 @@ class ReportService
     }
 
     /**
+     * Get billing report.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array{tickets: Collection, summary: array<string, mixed>}
+     */
+    public function getBillingReport(array $filters = []): array
+    {
+        $query = $this->applyFilters(
+            Ticket::query()->with(['client', 'department', 'assignee'])->where('is_billable', true),
+            $filters
+        );
+
+        if (! empty($filters['billing_status'])) {
+            if ($filters['billing_status'] === 'billed') {
+                $query->whereNotNull('billed_at');
+            } elseif ($filters['billing_status'] === 'unbilled') {
+                $query->whereNull('billed_at');
+            }
+        }
+
+        $tickets = $query->latest()->limit(500)->get();
+
+        $summary = [
+            'total_billable' => $tickets->count(),
+            'total_billed' => $tickets->whereNotNull('billed_at')->count(),
+            'total_unbilled' => $tickets->whereNull('billed_at')->count(),
+            'total_amount' => $tickets->sum('billable_amount'),
+            'billed_amount' => $tickets->whereNotNull('billed_at')->sum('billable_amount'),
+            'unbilled_amount' => $tickets->whereNull('billed_at')->sum('billable_amount'),
+        ];
+
+        return compact('tickets', 'summary');
+    }
+
+    /**
      * Get multi-series trend grouped by an entity (department, category, client, agent, product).
      *
      * @param  array<string, mixed>  $filters

@@ -11,9 +11,10 @@ use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\User;
+use App\Notifications\ClientTicketCreatedNotification;
+use App\Notifications\ClientTicketStatusChangedNotification;
 use App\Notifications\TicketAssignedNotification;
 use App\Notifications\TicketCreatedNotification;
-use App\Notifications\TicketStatusChangedNotification;
 use App\Services\TicketService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\AnonymousNotifiable;
@@ -92,7 +93,7 @@ class TicketNotificationTest extends TestCase
             'client_id' => $client->id,
         ]);
 
-        Notification::assertSentTo($clientUser, TicketCreatedNotification::class);
+        Notification::assertSentTo($clientUser, ClientTicketCreatedNotification::class);
     }
 
     public function test_ticket_created_notification_sent_on_demand_for_guest_client(): void
@@ -115,7 +116,7 @@ class TicketNotificationTest extends TestCase
             'client_id' => $client->id,
         ]);
 
-        Notification::assertSentOnDemand(TicketCreatedNotification::class, function ($notification, $channels, $notifiable) use ($client) {
+        Notification::assertSentOnDemand(ClientTicketCreatedNotification::class, function ($notification, $channels, $notifiable) use ($client) {
             return $notifiable->routes['mail'] === $client->email;
         });
     }
@@ -226,7 +227,7 @@ class TicketNotificationTest extends TestCase
 
         $service->changeStatus($ticket, 'in_progress');
 
-        Notification::assertSentTo($clientUser, TicketStatusChangedNotification::class, function ($notification) {
+        Notification::assertSentTo($clientUser, ClientTicketStatusChangedNotification::class, function ($notification) {
             return $notification->oldStatus === 'open' && $notification->newStatus === 'in_progress';
         });
     }
@@ -261,7 +262,7 @@ class TicketNotificationTest extends TestCase
 
         $service->changeStatus($ticket, 'closed');
 
-        Notification::assertSentOnDemand(TicketStatusChangedNotification::class, function ($notification, $channels, $notifiable) use ($client) {
+        Notification::assertSentOnDemand(ClientTicketStatusChangedNotification::class, function ($notification, $channels, $notifiable) use ($client) {
             return $notifiable->routes['mail'] === $client->email;
         });
     }

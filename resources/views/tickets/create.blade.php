@@ -16,7 +16,7 @@
                             <select name="client_id" id="client_id" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                 <option value="">{{ __('Select client') }}</option>
                                 @foreach($clients as $client)
-                                    <option value="{{ $client->id }}" {{ old('client_id') == $client->id ? 'selected' : '' }}>{{ $client->name }}</option>
+                                    <option value="{{ $client->id }}" data-tier="{{ $client->tier }}" {{ old('client_id') == $client->id ? 'selected' : '' }}>{{ $client->name }}</option>
                                 @endforeach
                             </select>
                             @error('client_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
@@ -97,16 +97,21 @@
                         </div>
 
                         {{-- Priority + Assign To --}}
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" x-data="prioritySla()">
                             <div>
                                 <label for="priority" class="block text-sm font-medium text-gray-700">{{ __('Priority') }}</label>
-                                <select name="priority" id="priority" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                    <option value="low" {{ old('priority') === 'low' ? 'selected' : '' }}>{{ __('Low') }}</option>
-                                    <option value="medium" {{ old('priority', 'medium') === 'medium' ? 'selected' : '' }}>{{ __('Medium') }}</option>
-                                    <option value="high" {{ old('priority') === 'high' ? 'selected' : '' }}>{{ __('High') }}</option>
-                                    <option value="critical" {{ old('priority') === 'critical' ? 'selected' : '' }}>{{ __('Critical') }}</option>
+                                <select name="priority" id="priority" required x-model="selectedPriority" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    @foreach(['low', 'medium', 'high', 'critical'] as $p)
+                                        <option value="{{ $p }}" {{ old('priority', 'medium') === $p ? 'selected' : '' }}>{{ ucfirst($p) }}</option>
+                                    @endforeach
                                 </select>
                                 @error('priority') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                                <template x-if="slaInfo">
+                                    <p class="mt-1 text-xs text-indigo-600">
+                                        {{ __('Response:') }} <span x-text="slaInfo.response + 'h'"></span>
+                                        &middot; {{ __('Resolution:') }} <span x-text="slaInfo.resolution + 'h'"></span>
+                                    </p>
+                                </template>
                             </div>
                             <div>
                                 <label for="assigned_to" class="block text-sm font-medium text-gray-700">{{ __('Assign To') }}</label>
@@ -225,6 +230,26 @@
         function taskChecklist() {
             return {
                 tasks: {!! json_encode(old('tasks', [''])) !!}
+            };
+        }
+
+        function prioritySla() {
+            var slaLookup = @json($slaLookup);
+            var clientTiers = @json($clients->pluck('tier', 'id'));
+            return {
+                selectedPriority: '{{ old('priority', 'medium') }}',
+                clientId: '{{ old('client_id', '') }}',
+                get slaInfo() {
+                    var tier = clientTiers[this.clientId] || '';
+                    if (!tier || !slaLookup[tier] || !slaLookup[tier][this.selectedPriority]) return null;
+                    return slaLookup[tier][this.selectedPriority];
+                },
+                init() {
+                    var self = this;
+                    document.getElementById('client_id').addEventListener('change', function() {
+                        self.clientId = this.value;
+                    });
+                }
             };
         }
     </script>

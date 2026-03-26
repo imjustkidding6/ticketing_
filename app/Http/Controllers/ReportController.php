@@ -264,6 +264,48 @@ class ReportController extends Controller
     }
 
     /**
+     * Display billing report.
+     */
+    public function billing(Request $request): View
+    {
+        $filters = $this->extractFilters($request);
+        $filters['billing_status'] = $request->input('billing_status');
+        $result = $this->reportService->getBillingReport($filters);
+
+        return view('reports.billing', [
+            ...$this->getFilterData(),
+            'filters' => $filters,
+            'billingTickets' => $result['tickets'],
+            'summary' => $result['summary'],
+        ]);
+    }
+
+    /**
+     * Export billing report as CSV.
+     */
+    public function exportBilling(Request $request): StreamedResponse
+    {
+        $filters = $this->extractFilters($request);
+        $filters['billing_status'] = $request->input('billing_status');
+        $result = $this->reportService->getBillingReport($filters);
+
+        return $this->reportService->exportToCsv(
+            $result['tickets']->map(fn ($t) => [
+                $t->ticket_number,
+                $t->subject,
+                $t->client?->name ?? '-',
+                $t->department?->name ?? '-',
+                $t->assignee?->name ?? '-',
+                number_format($t->billable_amount ?? 0, 2),
+                $t->billed_at ? $t->billed_at->format('m/d/Y') : 'Unbilled',
+                $t->billable_description ?? '',
+            ])->toArray(),
+            ['Ticket #', 'Subject', 'Client', 'Department', 'Agent', 'Amount', 'Billed Date', 'Notes'],
+            'billing-report-'.($filters['from'] ?? 'all').'-to-'.($filters['to'] ?? 'now').'.csv'
+        );
+    }
+
+    /**
      * Display SLA compliance report.
      */
     public function slaCompliance(Request $request): View

@@ -17,14 +17,12 @@
             <div class="mb-4 flex flex-wrap items-center gap-3">
                 <form method="GET" action="{{ route('clients.index') }}" class="flex flex-wrap items-center gap-3">
                     <input type="text" name="search" value="{{ request('search') }}" placeholder="Search clients..." class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement))
                     <select name="tier" class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="">{{ __('All Tiers') }}</option>
                         <option value="basic" {{ request('tier') === 'basic' ? 'selected' : '' }}>{{ __('Basic') }}</option>
                         <option value="premium" {{ request('tier') === 'premium' ? 'selected' : '' }}>{{ __('Premium') }}</option>
                         <option value="enterprise" {{ request('tier') === 'enterprise' ? 'selected' : '' }}>{{ __('Enterprise') }}</option>
                     </select>
-                    @endif
                     <select name="status" class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="">{{ __('All Statuses') }}</option>
                         <option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>{{ __('Active') }}</option>
@@ -39,9 +37,7 @@
                     <tr>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Client') }}</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Contact') }}</th>
-                        @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement))
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Tier') }}</th>
-                        @endif
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Status') }}</th>
                         <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Actions') }}</th>
                     </tr>
@@ -56,11 +52,9 @@
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                                 {{ $client->contact_person ?? '-' }}
                             </td>
-                            @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement))
                             <td class="whitespace-nowrap px-6 py-4">
                                 <x-badge :type="$client->tier">{{ ucfirst($client->tier) }}</x-badge>
                             </td>
-                            @endif
                             <td class="whitespace-nowrap px-6 py-4">
                                 <x-badge :type="$client->status === 'active' ? 'active' : 'inactive'">{{ $client->status === 'active' ? __('Active') : __('Inactive') }}</x-badge>
                             </td>

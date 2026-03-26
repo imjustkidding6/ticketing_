@@ -26,6 +26,41 @@
                             @error('company_name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
 
+                        {{-- Company Contact Info --}}
+                        <div class="border-t border-gray-200 pt-6">
+                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Company Contact Information') }}</h3>
+                            <p class="mt-1 text-xs text-gray-500">{{ __('Used in service reports (PDF) and email notifications.') }}</p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="company_email" class="block text-sm font-medium text-gray-700">{{ __('Support Email') }}</label>
+                                <input type="email" name="company_email" id="company_email" value="{{ old('company_email', $settings['company_email'] ?? '') }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="support@company.com">
+                                @error('company_email') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label for="company_phone" class="block text-sm font-medium text-gray-700">{{ __('Phone') }}</label>
+                                <input type="text" name="company_phone" id="company_phone" value="{{ old('company_phone', $settings['company_phone'] ?? '') }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="+1 234 567 8900">
+                                @error('company_phone') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="company_address" class="block text-sm font-medium text-gray-700">{{ __('Address') }}</label>
+                            <textarea name="company_address" id="company_address" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="123 Main St, City, State 12345">{{ old('company_address', $settings['company_address'] ?? '') }}</textarea>
+                            @error('company_address') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                        </div>
+
+                        <div>
+                            <label for="company_website" class="block text-sm font-medium text-gray-700">{{ __('Website') }}</label>
+                            <input type="url" name="company_website" id="company_website" value="{{ old('company_website', $settings['company_website'] ?? '') }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="https://www.company.com">
+                            @error('company_website') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                        </div>
+
+                        <div class="border-t border-gray-200 pt-6">
+                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Regional Settings') }}</h3>
+                        </div>
+
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label for="timezone" class="block text-sm font-medium text-gray-700">{{ __('Timezone') }}</label>

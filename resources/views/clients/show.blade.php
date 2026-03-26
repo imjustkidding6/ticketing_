@@ -38,14 +38,34 @@
                                 <dd class="mt-1 text-sm text-gray-900">{{ $client->address }}</dd>
                             </div>
                             @endif
-                            @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement))
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">{{ __('Tier') }}</dt>
                                 <dd class="mt-1">
                                     <x-badge :type="$client->tier">{{ ucfirst($client->tier) }}</x-badge>
                                 </dd>
+                                @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement) && $clientSlaPolicies->isNotEmpty())
+                                    <dd class="mt-2">
+                                        <table class="w-full text-xs">
+                                            <thead>
+                                                <tr class="text-gray-400">
+                                                    <th class="text-left py-1">{{ __('Priority') }}</th>
+                                                    <th class="text-right py-1">{{ __('Response') }}</th>
+                                                    <th class="text-right py-1">{{ __('Resolution') }}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($clientSlaPolicies->sortBy('priority') as $policy)
+                                                    <tr class="text-gray-600 border-t border-gray-200">
+                                                        <td class="py-1 font-medium">{{ ucfirst($policy->priority ?? 'Any') }}</td>
+                                                        <td class="py-1 text-right">{{ $policy->response_time_hours }}h</td>
+                                                        <td class="py-1 text-right">{{ $policy->resolution_time_hours }}h</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </dd>
+                                @endif
                             </div>
-                            @endif
                             @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement))
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">{{ __('Portal Access') }}</dt>

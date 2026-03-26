@@ -7,6 +7,9 @@ use App\Models\Ticket;
 use App\Models\TicketAssignment;
 use App\Models\TicketHistory;
 use App\Models\User;
+use App\Notifications\ClientTicketAssignedNotification;
+use App\Notifications\ClientTicketCreatedNotification;
+use App\Notifications\ClientTicketStatusChangedNotification;
 use App\Notifications\TicketAssignedNotification;
 use App\Notifications\TicketCreatedNotification;
 use App\Notifications\TicketStatusChangedNotification;
@@ -57,14 +60,43 @@ class TicketService
         $this->addHistory($ticket, 'created', description: 'Ticket created.');
 
         if ($this->notificationsEnabled()) {
-            $client = $ticket->client;
+            $ticketId = $ticket->id;
+            $tenantId = $ticket->tenant_id;
+            $creatorId = Auth::id();
 
-            if ($client?->user_id) {
-                $client->user->notify(new TicketCreatedNotification($ticket));
-            } elseif ($client?->email) {
-                Notification::route('mail', $client->email)
-                    ->notify(new TicketCreatedNotification($ticket));
-            }
+            $this->afterResponse(function () use ($ticketId, $tenantId, $creatorId) {
+                TenantMailService::configure($tenantId);
+                $ticket = \App\Models\Ticket::with(['client', 'department'])->find($ticketId);
+
+                if (! $ticket) {
+                    return;
+                }
+
+                // Notify client (client-friendly template)
+                $client = $ticket->client;
+                if ($client?->user_id) {
+                    $client->user->notify(new ClientTicketCreatedNotification($ticket));
+                } elseif ($client?->email) {
+                    Notification::route('mail', $client->email)
+                        ->notify(new ClientTicketCreatedNotification($ticket));
+                }
+
+                // Notify department members (internal template)
+                if ($ticket->department_id) {
+                    $deptUsers = \App\Models\User::query()
+                        ->whereHas('departments', fn ($q) => $q->where('departments.id', $ticket->department_id))
+                        ->whereHas('tenants', fn ($q) => $q->where('tenant_id', $tenantId))
+                        ->where('id', '!=', $creatorId)
+                        ->get();
+
+                    foreach ($deptUsers as $deptUser) {
+                        $deptUser->notify(new TicketCreatedNotification($ticket));
+                    }
+                }
+
+                // Notify admin email
+                $this->notifyAdminEmail($tenantId, new TicketCreatedNotification($ticket));
+            });
         }
 
         return $ticket;
@@ -118,7 +150,35 @@ class TicketService
         $this->addHistory($ticket, 'assigned', 'assigned_to', (string) $oldAssignee, (string) $agent->id, 'Assigned to '.$agent->name);
 
         if ($this->notificationsEnabled()) {
-            $agent->notify(new TicketAssignedNotification($ticket));
+            $ticketId = $ticket->id;
+            $tenantId = $ticket->tenant_id;
+            $agentId = $agent->id;
+            $currentUserId = Auth::id();
+
+            $this->afterResponse(function () use ($ticketId, $tenantId, $agentId) {
+                TenantMailService::configure($tenantId);
+                $ticket = \App\Models\Ticket::with('client')->find($ticketId);
+                $agent = \App\Models\User::find($agentId);
+
+                if (! $ticket || ! $agent) {
+                    return;
+                }
+
+                // Notify the assigned agent
+                $agent->notify(new TicketAssignedNotification($ticket));
+
+                // Notify client (client-friendly template)
+                $client = $ticket->client;
+                if ($client?->user_id && $client->user_id !== $agentId) {
+                    $client->user->notify(new ClientTicketAssignedNotification($ticket));
+                } elseif ($client?->email) {
+                    Notification::route('mail', $client->email)
+                        ->notify(new ClientTicketAssignedNotification($ticket));
+                }
+
+                // Notify admin email
+                $this->notifyAdminEmail($tenantId, new TicketAssignedNotification($ticket));
+            });
         }
     }
 
@@ -165,14 +225,29 @@ class TicketService
         $this->addHistory($ticket, 'status_changed', 'status', $oldStatus, $status, "Status changed from {$oldStatus} to {$status}.");
 
         if ($this->notificationsEnabled()) {
-            $client = $ticket->fresh()->client;
+            $ticketId = $ticket->id;
+            $tenantId = $ticket->tenant_id;
 
-            if ($client?->user_id) {
-                $client->user->notify(new TicketStatusChangedNotification($ticket, $oldStatus, $status));
-            } elseif ($client?->email) {
-                Notification::route('mail', $client->email)
-                    ->notify(new TicketStatusChangedNotification($ticket, $oldStatus, $status));
-            }
+            $this->afterResponse(function () use ($ticketId, $tenantId, $oldStatus, $status) {
+                TenantMailService::configure($tenantId);
+                $ticket = \App\Models\Ticket::with('client')->find($ticketId);
+
+                if (! $ticket) {
+                    return;
+                }
+
+                // Notify client (client-friendly template)
+                $client = $ticket->client;
+                if ($client?->user_id) {
+                    $client->user->notify(new ClientTicketStatusChangedNotification($ticket, $oldStatus, $status));
+                } elseif ($client?->email) {
+                    Notification::route('mail', $client->email)
+                        ->notify(new ClientTicketStatusChangedNotification($ticket, $oldStatus, $status));
+                }
+
+                // Notify admin email
+                $this->notifyAdminEmail($tenantId, new TicketStatusChangedNotification($ticket, $oldStatus, $status));
+            });
         }
     }
 
@@ -269,6 +344,39 @@ class TicketService
 
     private function notificationsEnabled(): bool
     {
-        return $this->planService->currentTenantHasFeature(PlanFeature::EmailNotifications);
+        if (! $this->planService->currentTenantHasFeature(PlanFeature::EmailNotifications)) {
+            return false;
+        }
+
+        TenantMailService::configure();
+
+        return true;
+    }
+
+    /**
+     * Send a notification to the configured admin email.
+     */
+    private function notifyAdminEmail(int $tenantId, \Illuminate\Notifications\Notification $notification): void
+    {
+        $adminEmail = \App\Models\AppSetting::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('key', 'admin_notification_email')
+            ->first()?->getTypedValue();
+
+        if ($adminEmail) {
+            Notification::route('mail', $adminEmail)->notify($notification);
+        }
+    }
+
+    /**
+     * Run a callback after the HTTP response, or immediately in testing.
+     */
+    private function afterResponse(\Closure $callback): void
+    {
+        if (app()->runningUnitTests()) {
+            $callback();
+        } else {
+            dispatch($callback)->afterResponse();
+        }
     }
 }

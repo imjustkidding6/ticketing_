@@ -43,17 +43,45 @@
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement))
-                            <div>
-                                <label for="tier" class="block text-sm font-medium text-gray-700">{{ __('Tier') }}</label>
-                                <select name="tier" id="tier" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                    <option value="basic" {{ old('tier', $client->tier) === 'basic' ? 'selected' : '' }}>{{ __('Basic') }}</option>
-                                    <option value="premium" {{ old('tier', $client->tier) === 'premium' ? 'selected' : '' }}>{{ __('Premium') }}</option>
-                                    <option value="enterprise" {{ old('tier', $client->tier) === 'enterprise' ? 'selected' : '' }}>{{ __('Enterprise') }}</option>
+                            @php $hasSla = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement); @endphp
+                            <div x-data="{ selectedTier: '{{ old('tier', $client->tier) }}' }">
+                                <label for="tier" class="block text-sm font-medium text-gray-700">{{ $hasSla ? __('SLA Tier') : __('Tier') }}</label>
+                                <select name="tier" id="tier" required x-model="selectedTier" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    <option value="basic">{{ __('Basic') }}</option>
+                                    <option value="premium">{{ __('Premium') }}</option>
+                                    <option value="enterprise">{{ __('Enterprise') }}</option>
                                 </select>
                                 @error('tier') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+
+                                @if($hasSla)
+                                @foreach(['basic', 'premium', 'enterprise'] as $tier)
+                                    <div x-show="selectedTier === '{{ $tier }}'" x-cloak class="mt-2 rounded-md bg-gray-50 border border-gray-200 p-3">
+                                        @if(($slaPolicies[$tier] ?? collect())->isNotEmpty())
+                                            <table class="w-full text-xs">
+                                                <thead>
+                                                    <tr class="text-gray-500">
+                                                        <th class="text-left py-1">{{ __('Priority') }}</th>
+                                                        <th class="text-right py-1">{{ __('Response') }}</th>
+                                                        <th class="text-right py-1">{{ __('Resolution') }}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($slaPolicies[$tier]->sortBy('priority') as $policy)
+                                                        <tr class="text-gray-600 border-t border-gray-200">
+                                                            <td class="py-1 font-medium">{{ ucfirst($policy->priority ?? 'Any') }}</td>
+                                                            <td class="py-1 text-right">{{ $policy->response_time_hours }}h</td>
+                                                            <td class="py-1 text-right">{{ $policy->resolution_time_hours }}h</td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        @else
+                                            <p class="text-xs text-gray-400">{{ __('No SLA policies configured for this tier.') }}</p>
+                                        @endif
+                                    </div>
+                                @endforeach
+                                @endif
                             </div>
-                            @endif
                             <div>
                                 <label for="status" class="block text-sm font-medium text-gray-700">{{ __('Status') }}</label>
                                 <select name="status" id="status" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">

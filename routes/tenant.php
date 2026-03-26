@@ -129,6 +129,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::post('settings/ticket', [AppSettingController::class, 'saveTicket']);
     Route::get('settings/notifications', [AppSettingController::class, 'notifications'])->name('settings.notifications')->middleware('feature:email_notifications');
     Route::post('settings/notifications', [AppSettingController::class, 'saveNotifications'])->middleware('feature:email_notifications');
+    Route::post('settings/notifications/test', [AppSettingController::class, 'testEmail'])->name('settings.notifications.test')->middleware('feature:email_notifications');
     Route::get('settings/branding', [AppSettingController::class, 'branding'])->name('settings.branding');
     Route::post('settings/branding', [AppSettingController::class, 'saveBranding']);
 
@@ -147,6 +148,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::get('reports/export/clients', [ReportController::class, 'exportClientReport'])->name('reports.export.clients');
     Route::get('reports/export/agents', [ReportController::class, 'exportAgents'])->name('reports.export.agents');
     Route::get('reports/export/products', [ReportController::class, 'exportProductReport'])->name('reports.export.products');
+    Route::get('reports/billing', [ReportController::class, 'billing'])->name('reports.billing')->middleware('feature:billing');
+    Route::get('reports/export/billing', [ReportController::class, 'exportBilling'])->name('reports.export.billing')->middleware('feature:billing');
     Route::get('reports/sla-compliance', [ReportController::class, 'slaCompliance'])->name('reports.sla-compliance')->middleware('feature:sla_report');
 
     // SLA Policies (Business+ via feature gate)

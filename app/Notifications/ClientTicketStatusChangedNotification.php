@@ -4,11 +4,10 @@ namespace App\Notifications;
 
 use App\Models\Tenant;
 use App\Models\Ticket;
-use App\Services\TenantUrlHelper;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class TicketStatusChangedNotification extends Notification
+class ClientTicketStatusChangedNotification extends Notification
 {
     public function __construct(
         public Ticket $ticket,
@@ -21,26 +20,20 @@ class TicketStatusChangedNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        if ($notifiable instanceof \Illuminate\Notifications\AnonymousNotifiable) {
-            return ['mail'];
-        }
-
-        return ['mail', 'database'];
+        return ['mail'];
     }
 
     public function toMail(object $notifiable): MailMessage
     {
         $tenant = Tenant::find($this->ticket->tenant_id);
-        $actionUrl = app(TenantUrlHelper::class)->tenantUrl($tenant, '/tickets/'.$this->ticket->id);
 
         return (new MailMessage)
-            ->subject("Ticket Updated: {$this->ticket->ticket_number}")
-            ->view('emails.ticket-status-changed', [
-                'ticket' => $this->ticket,
+            ->subject("Ticket Update: {$this->ticket->ticket_number}")
+            ->view('emails.client-ticket-status-changed', [
+                'ticket' => $this->ticket->load('client'),
                 'tenant' => $tenant,
                 'oldStatus' => $this->oldStatus,
                 'newStatus' => $this->newStatus,
-                'actionUrl' => $actionUrl,
             ]);
     }
 
@@ -52,9 +45,7 @@ class TicketStatusChangedNotification extends Notification
         return [
             'ticket_id' => $this->ticket->id,
             'ticket_number' => $this->ticket->ticket_number,
-            'subject' => $this->ticket->subject,
             'action' => 'status_changed',
-            'old_status' => $this->oldStatus,
             'new_status' => $this->newStatus,
         ];
     }

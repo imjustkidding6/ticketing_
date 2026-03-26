@@ -56,7 +56,8 @@ class ServiceReportService
             'generated_at' => now(),
         ]);
 
-        $pdf = Pdf::loadView('reports.service-report-pdf', ['data' => $reportData, 'report' => $report]);
+        $tenant = \App\Models\Tenant::find($ticket->tenant_id);
+        $pdf = Pdf::loadView('reports.service-report-pdf', ['data' => $reportData, 'report' => $report, 'tenant' => $tenant]);
         $path = "service-reports/{$report->report_number}.pdf";
         Storage::put($path, $pdf->output());
 
@@ -74,9 +75,11 @@ class ServiceReportService
             return Storage::download($report->file_path, "{$report->report_number}.pdf");
         }
 
+        $tenant = $report->ticket ? \App\Models\Tenant::find($report->ticket->tenant_id) : null;
         $pdf = Pdf::loadView('reports.service-report-pdf', [
             'data' => $report->report_data,
             'report' => $report,
+            'tenant' => $tenant,
         ]);
 
         return $pdf->download("{$report->report_number}.pdf");

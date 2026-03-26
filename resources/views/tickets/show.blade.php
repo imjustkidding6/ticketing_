@@ -217,9 +217,9 @@
 
                 {{-- Right Column (Sidebar) --}}
                 <div class="lg:col-span-1 space-y-6">
-                    {{-- Assignment --}}
+                    {{-- Assignment & Priority --}}
                     <div class="rounded-xl bg-white p-6 shadow-sm">
-                        <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Assignment') }}</h4>
+                        <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Assignment & Priority') }}</h4>
                         <div class="mt-4 space-y-3">
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">{{ __('Assigned to') }}</dt>
@@ -234,30 +234,50 @@
                                     </form>
                                 @endif
 
+                                @php
+                                    $showSlaPolicy = $ticket->client?->tier ? \App\Models\SlaPolicy::active()
+                                        ->where('client_tier', $ticket->client->tier)
+                                        ->whereNotNull('priority')
+                                        ->get()
+                                        ->keyBy('priority') : collect();
+                                @endphp
+
                                 <form method="POST" action="{{ route('tickets.assign', $ticket) }}">
                                     @csrf
-                                    <label for="sidebar_assigned_to" class="block text-sm font-medium text-gray-500">{{ __('Reassign') }}</label>
-                                    <select name="assigned_to" id="sidebar_assigned_to" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                        <option value="">{{ __('Select agent') }}</option>
-                                        @foreach($agents as $agent)
-                                            <option value="{{ $agent->id }}" {{ $ticket->assigned_to == $agent->id ? 'selected' : '' }}>{{ $agent->name }}</option>
-                                        @endforeach
-                                    </select>
-                                    <button type="submit" class="mt-2 w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Assign') }}</button>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label for="sidebar_assigned_to" class="block text-sm font-medium text-gray-500">{{ __('Assign To') }}</label>
+                                            <select name="assigned_to" id="sidebar_assigned_to" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                                <option value="">{{ __('Select agent') }}</option>
+                                                @foreach($agents as $agent)
+                                                    <option value="{{ $agent->id }}" {{ $ticket->assigned_to == $agent->id ? 'selected' : '' }}>{{ $agent->name }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label for="sidebar_priority" class="block text-sm font-medium text-gray-500">{{ __('Priority') }}</label>
+                                            <select name="priority" id="sidebar_priority" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                                @foreach(['low', 'medium', 'high', 'critical'] as $p)
+                                                    <option value="{{ $p }}" {{ $ticket->priority === $p ? 'selected' : '' }}>
+                                                        {{ ucfirst($p) }}{{ isset($showSlaPolicy[$p]) ? ' — Reso: ' . $showSlaPolicy[$p]->resolution_time_hours . 'h' : '' }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Assign & Update') }}</button>
+                                    </div>
                                 </form>
                             @endif
                         </div>
                     </div>
 
-                    {{-- Status & Priority --}}
+                    {{-- Status --}}
                     <div class="rounded-xl bg-white p-6 shadow-sm">
-                        <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Status & Priority') }}</h4>
-                        <div class="mt-4 space-y-4">
-                            {{-- Quick Status Update --}}
+                        <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Status') }}</h4>
+                        <div class="mt-4">
                             <form method="POST" action="{{ route('tickets.change-status', $ticket) }}">
                                 @csrf
-                                <label for="sidebar_status" class="block text-sm font-medium text-gray-500">{{ __('Status') }}</label>
-                                <select name="status" id="sidebar_status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <select name="status" id="sidebar_status" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                     @php
                                         $availableStatuses = ['open', 'assigned', 'in_progress', 'closed', 'cancelled'];
                                         if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement)) {
@@ -271,20 +291,6 @@
                                     @endforeach
                                 </select>
                                 <button type="submit" class="mt-2 w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Update Status') }}</button>
-                            </form>
-
-                            {{-- Quick Priority Update --}}
-                            <form method="POST" action="{{ route('tickets.change-priority', $ticket) }}">
-                                @csrf
-                                <label for="sidebar_priority" class="block text-sm font-medium text-gray-500">{{ __('Priority') }}</label>
-                                <select name="priority" id="sidebar_priority" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                    @foreach(['low', 'medium', 'high', 'critical'] as $p)
-                                        <option value="{{ $p }}" {{ $ticket->priority === $p ? 'selected' : '' }}>
-                                            {{ ucfirst($p) }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <button type="submit" class="mt-2 w-full rounded-md bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-500">{{ __('Update Priority') }}</button>
                             </form>
                         </div>
                     </div>

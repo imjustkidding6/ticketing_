@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\ClientAgentAssignment;
+use App\Models\SlaPolicy;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,7 +39,9 @@ class ClientController extends Controller
      */
     public function create(): View
     {
-        return view('clients.create');
+        $slaPolicies = SlaPolicy::active()->get()->groupBy('client_tier');
+
+        return view('clients.create', compact('slaPolicies'));
     }
 
     /**
@@ -67,7 +70,9 @@ class ClientController extends Controller
      */
     public function show(Client $client): View
     {
-        return view('clients.show', compact('client'));
+        $clientSlaPolicies = SlaPolicy::active()->where('client_tier', $client->tier)->get();
+
+        return view('clients.show', compact('client', 'clientSlaPolicies'));
     }
 
     /**
@@ -75,7 +80,9 @@ class ClientController extends Controller
      */
     public function edit(Client $client): View
     {
-        return view('clients.edit', compact('client'));
+        $slaPolicies = SlaPolicy::active()->get()->groupBy('client_tier');
+
+        return view('clients.edit', compact('client', 'slaPolicies'));
     }
 
     /**

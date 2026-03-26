@@ -23,10 +23,10 @@
                             @error('description') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" x-data="editPrioritySla()">
                             <div>
                                 <label for="client_id" class="block text-sm font-medium text-gray-700">{{ __('Client') }}</label>
-                                <select name="client_id" id="client_id" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <select name="client_id" id="client_id" required @change="clientId = $event.target.value" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                     <option value="">{{ __('Select client') }}</option>
                                     @foreach($clients as $client)
                                         <option value="{{ $client->id }}" {{ old('client_id', $ticket->client_id) == $client->id ? 'selected' : '' }}>{{ $client->name }}</option>
@@ -36,13 +36,18 @@
                             </div>
                             <div>
                                 <label for="priority" class="block text-sm font-medium text-gray-700">{{ __('Priority') }}</label>
-                                <select name="priority" id="priority" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                    <option value="low" {{ old('priority', $ticket->priority) === 'low' ? 'selected' : '' }}>{{ __('Low') }}</option>
-                                    <option value="medium" {{ old('priority', $ticket->priority) === 'medium' ? 'selected' : '' }}>{{ __('Medium') }}</option>
-                                    <option value="high" {{ old('priority', $ticket->priority) === 'high' ? 'selected' : '' }}>{{ __('High') }}</option>
-                                    <option value="critical" {{ old('priority', $ticket->priority) === 'critical' ? 'selected' : '' }}>{{ __('Critical') }}</option>
+                                <select name="priority" id="priority" required x-model="selectedPriority" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    @foreach(['low', 'medium', 'high', 'critical'] as $p)
+                                        <option value="{{ $p }}" {{ old('priority', $ticket->priority) === $p ? 'selected' : '' }}>{{ ucfirst($p) }}</option>
+                                    @endforeach
                                 </select>
                                 @error('priority') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                                <template x-if="slaInfo">
+                                    <p class="mt-1 text-xs text-indigo-600">
+                                        {{ __('Response:') }} <span x-text="slaInfo.response + 'h'"></span>
+                                        &middot; {{ __('Resolution:') }} <span x-text="slaInfo.resolution + 'h'"></span>
+                                    </p>
+                                </template>
                             </div>
                         </div>
 
@@ -188,6 +193,20 @@
                     var idx = this.selectedProductIds.indexOf(id);
                     if (idx === -1) this.selectedProductIds.push(id);
                     else this.selectedProductIds.splice(idx, 1);
+                }
+            };
+        }
+
+        function editPrioritySla() {
+            var slaLookup = @json($slaLookup);
+            var clientTiers = @json($clients->pluck('tier', 'id'));
+            return {
+                selectedPriority: '{{ old('priority', $ticket->priority) }}',
+                clientId: '{{ old('client_id', $ticket->client_id) }}',
+                get slaInfo() {
+                    var tier = clientTiers[this.clientId] || '';
+                    if (!tier || !slaLookup[tier] || !slaLookup[tier][this.selectedPriority]) return null;
+                    return slaLookup[tier][this.selectedPriority];
                 }
             };
         }

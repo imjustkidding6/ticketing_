@@ -17,10 +17,11 @@ class KnowledgeBaseTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function createBusinessTenant(): Tenant
+    private function createEnterpriseTenant(): Tenant
     {
-        $plan = Plan::factory()->business()->create([
-            'features' => PlanFeature::forPlan('business'),
+        $plan = Plan::factory()->create([
+            'slug' => 'enterprise',
+            'features' => PlanFeature::forPlan('enterprise'),
         ]);
         $license = License::factory()->active()->forPlan($plan)->create();
 
@@ -51,7 +52,7 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_categories_index_requires_auth(): void
     {
-        $tenant = $this->createBusinessTenant();
+        $tenant = $this->createEnterpriseTenant();
 
         $this->get(app(TenantUrlHelper::class)->tenantUrl($tenant, '/knowledge-base/categories'))
             ->assertRedirect('/login');
@@ -68,7 +69,7 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_categories_index_works_for_business_plan(): void
     {
-        $tenant = $this->createBusinessTenant();
+        $tenant = $this->createEnterpriseTenant();
         $this->setupTenantContext($tenant);
 
         KbCategory::factory()->create(['tenant_id' => $tenant->id]);
@@ -80,7 +81,7 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_can_create_category(): void
     {
-        $tenant = $this->createBusinessTenant();
+        $tenant = $this->createEnterpriseTenant();
         $this->setupTenantContext($tenant);
 
         $this->post($this->tenantUrl('/knowledge-base/categories'), [
@@ -99,7 +100,7 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_can_update_category(): void
     {
-        $tenant = $this->createBusinessTenant();
+        $tenant = $this->createEnterpriseTenant();
         $this->setupTenantContext($tenant);
 
         $category = KbCategory::factory()->create(['tenant_id' => $tenant->id]);
@@ -118,7 +119,7 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_cannot_delete_category_with_articles(): void
     {
-        $tenant = $this->createBusinessTenant();
+        $tenant = $this->createEnterpriseTenant();
         $this->setupTenantContext($tenant);
 
         $category = KbCategory::factory()->create(['tenant_id' => $tenant->id]);
@@ -136,7 +137,7 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_can_delete_empty_category(): void
     {
-        $tenant = $this->createBusinessTenant();
+        $tenant = $this->createEnterpriseTenant();
         $this->setupTenantContext($tenant);
 
         $category = KbCategory::factory()->create(['tenant_id' => $tenant->id]);
@@ -150,7 +151,7 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_can_create_article(): void
     {
-        $tenant = $this->createBusinessTenant();
+        $tenant = $this->createEnterpriseTenant();
         $user = $this->setupTenantContext($tenant);
 
         $category = KbCategory::factory()->create(['tenant_id' => $tenant->id]);
@@ -177,7 +178,7 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_publishing_sets_published_at(): void
     {
-        $tenant = $this->createBusinessTenant();
+        $tenant = $this->createEnterpriseTenant();
         $this->setupTenantContext($tenant);
 
         $category = KbCategory::factory()->create(['tenant_id' => $tenant->id]);
@@ -200,7 +201,7 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_search_returns_published_articles(): void
     {
-        $tenant = $this->createBusinessTenant();
+        $tenant = $this->createEnterpriseTenant();
         $this->setupTenantContext($tenant);
 
         $category = KbCategory::factory()->create(['tenant_id' => $tenant->id]);
@@ -226,7 +227,7 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_search_returns_empty_for_short_query(): void
     {
-        $tenant = $this->createBusinessTenant();
+        $tenant = $this->createEnterpriseTenant();
         $this->setupTenantContext($tenant);
 
         $this->getJson($this->tenantUrl('/knowledge-base/search?q=ab'))
@@ -236,7 +237,7 @@ class KnowledgeBaseTest extends TestCase
 
     public function test_article_show_increments_views(): void
     {
-        $tenant = $this->createBusinessTenant();
+        $tenant = $this->createEnterpriseTenant();
         $this->setupTenantContext($tenant);
 
         $category = KbCategory::factory()->create(['tenant_id' => $tenant->id]);

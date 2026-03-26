@@ -107,13 +107,24 @@ class TicketController extends Controller
      */
     public function create(): View
     {
-        $clients = Client::active()->orderBy('name')->get();
+        $clients = Client::active()->orderBy('name')->get(['id', 'name', 'tier']);
         $departments = Department::active()->ordered()->get();
         $categories = TicketCategory::active()->ordered()->get();
         $products = Product::active()->ordered()->get();
         $agents = User::query()->orderBy('name')->get();
 
-        return view('tickets.create', compact('clients', 'departments', 'categories', 'products', 'agents'));
+        // Build SLA lookup: { tier: { priority: { response, resolution } } }
+        $slaLookup = \App\Models\SlaPolicy::active()
+            ->whereNotNull('client_tier')
+            ->whereNotNull('priority')
+            ->get()
+            ->groupBy('client_tier')
+            ->map(fn ($policies) => $policies->keyBy('priority')->map(fn ($p) => [
+                'response' => $p->response_time_hours,
+                'resolution' => $p->resolution_time_hours,
+            ]));
+
+        return view('tickets.create', compact('clients', 'departments', 'categories', 'products', 'agents', 'slaLookup'));
     }
 
     /**
@@ -171,13 +182,23 @@ class TicketController extends Controller
     public function edit(Ticket $ticket): View
     {
         $ticket->load('products');
-        $clients = Client::active()->orderBy('name')->get();
+        $clients = Client::active()->orderBy('name')->get(['id', 'name', 'tier']);
         $departments = Department::active()->ordered()->get();
         $categories = TicketCategory::active()->ordered()->get();
         $products = Product::active()->ordered()->get();
         $agents = User::query()->orderBy('name')->get();
 
-        return view('tickets.edit', compact('ticket', 'clients', 'departments', 'categories', 'products', 'agents'));
+        $slaLookup = \App\Models\SlaPolicy::active()
+            ->whereNotNull('client_tier')
+            ->whereNotNull('priority')
+            ->get()
+            ->groupBy('client_tier')
+            ->map(fn ($policies) => $policies->keyBy('priority')->map(fn ($p) => [
+                'response' => $p->response_time_hours,
+                'resolution' => $p->resolution_time_hours,
+            ]));
+
+        return view('tickets.edit', compact('ticket', 'clients', 'departments', 'categories', 'products', 'agents', 'slaLookup'));
     }
 
     /**
@@ -205,7 +226,13 @@ class TicketController extends Controller
     {
         $validated = $request->validate([
             'assigned_to' => ['required', \Illuminate\Validation\Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'priority' => ['nullable', 'in:low,medium,high,critical'],
         ]);
+
+        // Update priority if changed
+        if (! empty($validated['priority']) && $validated['priority'] !== $ticket->priority) {
+            $this->ticketService->changePriority($ticket, $validated['priority']);
+        }
 
         $agent = User::findOrFail($validated['assigned_to']);
         $this->ticketService->assignTicket($ticket, $agent);
