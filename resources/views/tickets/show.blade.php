@@ -340,8 +340,132 @@
                         </dl>
                     </div>
                     @endif
+
+                    {{-- Spam Management --}}
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SpamManagement))
+                    <div class="rounded-xl bg-white p-6 shadow-sm">
+                        <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Spam Management') }}</h4>
+                        <div class="mt-4">
+                            @if($ticket->is_spam)
+                                <div class="rounded-md bg-red-50 p-3 mb-3">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="h-5 w-5 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                        </svg>
+                                        <span class="text-sm font-semibold text-red-700">{{ __('Marked as Spam') }}</span>
+                                    </div>
+                                    @if($ticket->spam_reason)
+                                        <p class="mt-1 text-sm text-red-600 ml-7">{{ $ticket->spam_reason }}</p>
+                                    @endif
+                                    @if($ticket->marked_spam_at)
+                                        <p class="mt-1 text-xs text-red-500 ml-7">{{ $ticket->marked_spam_at->format('m/d/Y, g:i A') }}</p>
+                                    @endif
+                                </div>
+                                <form method="POST" action="{{ route('tickets.unmark-spam', $ticket) }}">
+                                    @csrf
+                                    <button type="submit" class="w-full rounded-md bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100">
+                                        {{ __('Remove Spam Flag') }}
+                                    </button>
+                                </form>
+                            @else
+                                <form method="POST" action="{{ route('tickets.mark-spam', $ticket) }}">
+                                    @csrf
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label for="spam_reason" class="block text-sm font-medium text-gray-500">{{ __('Reason (optional)') }}</label>
+                                            <textarea name="spam_reason" id="spam_reason" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="{{ __('Why is this spam?') }}"></textarea>
+                                        </div>
+                                        <button type="submit" class="w-full rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100" onclick="return confirm('{{ __('Mark this ticket as spam?') }}')">
+                                            {{ __('Mark as Spam') }}
+                                        </button>
+                                    </div>
+                                </form>
+                            @endif
+                        </div>
+                    </div>
+                    @endif
                 </div>
             </div>
+
+            {{-- Activity History / Audit Logs --}}
+            @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AuditLogs) && $ticket->history->count() > 0)
+            <div class="mt-6 rounded-xl bg-white p-6 shadow-sm">
+                <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">{{ __('Activity History') }}</h4>
+                <div class="flow-root">
+                    <ul class="-mb-8">
+                        @foreach($ticket->history as $entry)
+                        <li>
+                            <div class="relative pb-8">
+                                @if(!$loop->last)
+                                    <span class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+                                @endif
+                                <div class="relative flex items-start space-x-3">
+                                    <div class="relative">
+                                        @if($entry->action === 'created')
+                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 ring-8 ring-white">
+                                                <svg class="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                                </svg>
+                                            </div>
+                                        @elseif($entry->action === 'status_changed')
+                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 ring-8 ring-white">
+                                                <svg class="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                                                </svg>
+                                            </div>
+                                        @elseif($entry->action === 'assigned')
+                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 ring-8 ring-white">
+                                                <svg class="h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                                                </svg>
+                                            </div>
+                                        @elseif(in_array($entry->action, ['marked_spam', 'unmarked_spam']))
+                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 ring-8 ring-white">
+                                                <svg class="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                                </svg>
+                                            </div>
+                                        @elseif(in_array($entry->action, ['billing_updated', 'marked_billable']))
+                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 ring-8 ring-white">
+                                                <svg class="h-4 w-4 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                                                </svg>
+                                            </div>
+                                        @else
+                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 ring-8 ring-white">
+                                                <svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                                                </svg>
+                                            </div>
+                                        @endif
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="text-sm text-gray-900">
+                                            @if($entry->description)
+                                                {{ $entry->description }}
+                                            @elseif($entry->field_name)
+                                                <span class="font-medium">{{ ucfirst(str_replace('_', ' ', $entry->field_name)) }}</span>
+                                                changed
+                                                @if($entry->old_value)
+                                                    from <span class="font-medium">{{ $entry->old_value }}</span>
+                                                @endif
+                                                to <span class="font-medium">{{ $entry->new_value }}</span>
+                                            @else
+                                                {{ ucfirst(str_replace('_', ' ', $entry->action)) }}
+                                            @endif
+                                        </div>
+                                        <div class="mt-0.5 text-xs text-gray-500">
+                                            {{ $entry->user?->name ?? __('System') }} &middot; {{ $entry->created_at->format('m/d/Y, g:i A') }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                        @endforeach
+                    </ul>
+                </div>
+            </div>
+            @endif
         </div>
     </div>
 </x-app-layout>

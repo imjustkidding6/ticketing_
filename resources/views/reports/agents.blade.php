@@ -2,10 +2,12 @@
     <x-slot name="header">
         <div class="flex items-center justify-between w-full">
             <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('Agent Report') }}</h2>
+            @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::DetailedReporting))
             <a href="{{ route('reports.export.agents', $filters) }}" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
                 <svg class="h-4 w-4 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
                 {{ __('Export CSV') }}
             </a>
+            @endif
         </div>
     </x-slot>
 
