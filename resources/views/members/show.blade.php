@@ -138,8 +138,110 @@
                     @endif
                 </div>
 
-                <!-- Right Column: Recent Activity & Assigned Tickets -->
+                <!-- Right Column: Performance, Recent Activity & Assigned Tickets -->
                 <div class="lg:col-span-2 space-y-6">
+                    <!-- Performance Metrics -->
+                    <div id="performance" class="rounded-xl bg-white p-5 shadow-sm">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Performance Metrics') }}</h3>
+                            <form method="GET" action="{{ route('members.show', $member) }}" class="flex items-center gap-2">
+                                <input type="date" name="perf_from" value="{{ $perfFrom }}" class="rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <span class="text-xs text-gray-400">{{ __('to') }}</span>
+                                <input type="date" name="perf_to" value="{{ $perfTo }}" class="rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <button type="submit" class="rounded-md bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200">{{ __('Apply') }}</button>
+                            </form>
+                        </div>
+
+                        <!-- Key Metrics -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                            <div class="rounded-lg bg-indigo-50 p-3 text-center">
+                                <p class="text-xl font-bold text-indigo-700">{{ $performance['total_assigned'] }}</p>
+                                <p class="text-xs text-indigo-500">{{ __('Total Assigned') }}</p>
+                            </div>
+                            <div class="rounded-lg bg-green-50 p-3 text-center">
+                                <p class="text-xl font-bold text-green-700">{{ $performance['closed'] }}</p>
+                                <p class="text-xs text-green-500">{{ __('Closed') }}</p>
+                            </div>
+                            <div class="rounded-lg bg-blue-50 p-3 text-center">
+                                <p class="text-xl font-bold text-blue-700">{{ $performance['avg_resolution_hours'] }}h</p>
+                                <p class="text-xs text-blue-500">{{ __('Avg Resolution') }}</p>
+                            </div>
+                            <div class="rounded-lg bg-amber-50 p-3 text-center">
+                                <p class="text-xl font-bold text-amber-700">{{ $performance['avg_response_minutes'] }}m</p>
+                                <p class="text-xs text-amber-500">{{ __('Avg Response') }}</p>
+                            </div>
+                        </div>
+
+                        <!-- Closure Rate -->
+                        @php
+                            $closureRate = $performance['total_assigned'] > 0
+                                ? round(($performance['closed'] / $performance['total_assigned']) * 100, 1)
+                                : 0;
+                        @endphp
+                        <div class="mb-5">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs font-medium text-gray-600">{{ __('Closure Rate') }}</span>
+                                <span class="text-xs font-semibold text-gray-900">{{ $closureRate }}%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="h-2 rounded-full {{ $closureRate >= 80 ? 'bg-green-500' : ($closureRate >= 50 ? 'bg-amber-500' : 'bg-red-500') }}" style="width: {{ min($closureRate, 100) }}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <!-- By Priority -->
+                            <div>
+                                <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{{ __('By Priority') }}</h4>
+                                <div class="space-y-1.5">
+                                    @foreach(['critical' => 'bg-red-500', 'high' => 'bg-orange-500', 'medium' => 'bg-yellow-500', 'low' => 'bg-green-500'] as $priority => $color)
+                                        @php $count = $performance['by_priority'][$priority] ?? 0; @endphp
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center gap-2">
+                                                <span class="h-2 w-2 rounded-full {{ $color }}"></span>
+                                                <span class="text-xs text-gray-600">{{ ucfirst($priority) }}</span>
+                                            </div>
+                                            <span class="text-xs font-semibold text-gray-900">{{ $count }}</span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+
+                            <!-- By Status -->
+                            <div>
+                                <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{{ __('By Status') }}</h4>
+                                <div class="space-y-1.5">
+                                    @foreach(['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled'] as $status)
+                                        @php $count = $performance['by_status'][$status] ?? 0; @endphp
+                                        @if($count > 0)
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-xs text-gray-600">{{ ucfirst(str_replace('_', ' ', $status)) }}</span>
+                                            <span class="text-xs font-semibold text-gray-900">{{ $count }}</span>
+                                        </div>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Overdue & Open -->
+                        @if($performance['overdue'] > 0 || $performance['open'] > 0)
+                        <div class="mt-4 flex items-center gap-4 border-t border-gray-100 pt-3">
+                            @if($performance['open'] > 0)
+                                <div class="flex items-center gap-1.5">
+                                    <span class="h-2 w-2 rounded-full bg-blue-500"></span>
+                                    <span class="text-xs text-gray-600">{{ $performance['open'] }} {{ __('open') }}</span>
+                                </div>
+                            @endif
+                            @if($performance['overdue'] > 0)
+                                <div class="flex items-center gap-1.5">
+                                    <span class="h-2 w-2 rounded-full bg-red-500"></span>
+                                    <span class="text-xs font-medium text-red-600">{{ $performance['overdue'] }} {{ __('overdue') }}</span>
+                                </div>
+                            @endif
+                        </div>
+                        @endif
+                    </div>
+
                     <!-- Recent Tickets Created -->
                     <div class="rounded-xl bg-white p-5 shadow-sm">
                         <h3 class="text-sm font-semibold text-gray-900 mb-4">{{ __('Recent Tickets Created') }}</h3>

@@ -26,7 +26,9 @@ class EscalationController extends Controller
         ]);
 
         $toAgent = ! empty($validated['assigned_to'])
-            ? User::find($validated['assigned_to'])
+            ? User::query()
+                ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+                ->find($validated['assigned_to'])
             : null;
 
         $this->escalationService->escalate(

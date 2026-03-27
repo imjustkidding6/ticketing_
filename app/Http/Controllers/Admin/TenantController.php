@@ -86,6 +86,8 @@ class TenantController extends Controller
         $plan = Plan::findOrFail($validated['plan_id']);
         $tenant->changePlan($plan);
 
+        app(\App\Services\PlanService::class)->clearCache($tenant);
+
         return redirect()->route('admin.tenants.show', $tenant)
             ->with('success', "Subscription changed to {$plan->name} plan.");
     }

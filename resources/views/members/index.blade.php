@@ -139,7 +139,8 @@
 
                             <!-- Actions -->
                             <div class="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3">
-                                <a href="{{ route('members.show', $member = $user) }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">{{ __('View') }}</a>
+                                <a href="{{ route('members.show', $user) }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">{{ __('View') }}</a>
+                                <a href="{{ route('members.show', $user) }}#performance" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">{{ __('Performance') }}</a>
                                 @if(!$isCurrentUser && $pivotRole !== 'owner')
                                     <a href="{{ route('members.edit', $user) }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">{{ __('Edit') }}</a>
                                     <form method="POST" action="{{ route('members.destroy', $user) }}" class="inline" onsubmit="return confirm('{{ __('Are you sure you want to remove this user?') }}')">

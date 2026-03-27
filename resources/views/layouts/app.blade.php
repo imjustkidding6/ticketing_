@@ -368,15 +368,6 @@
                                 </svg>
                                 {{ __('App Settings') }}
                             </a>
-                            {{-- Business+ --}}
-                            @if($planService->currentTenantHasFeature(\App\Enums\PlanFeature::EmailNotifications))
-                            <a href="{{ route('settings.notifications') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('settings.notifications') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
-                                <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('settings.notifications') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                                </svg>
-                                {{ __('Notification Settings') }}
-                            </a>
-                            @endif
                             @if($planService->currentTenantHasFeature(\App\Enums\PlanFeature::CannedResponses))
                             <a href="{{ route('canned-responses.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('canned-responses.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('canned-responses.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">

@@ -31,6 +31,7 @@ class AgentScheduleController extends Controller
     public function team(): View
     {
         $agents = User::query()
+            ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
             ->whereHas('schedules')
             ->with(['schedules' => fn ($q) => $q->orderBy('day_of_week')->orderBy('start_time')])
             ->orderBy('name')

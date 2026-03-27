@@ -69,7 +69,10 @@ class ReportController extends Controller
         return [
             'departments' => Department::active()->ordered()->get(['id', 'name']),
             'categories' => TicketCategory::active()->ordered()->get(['id', 'name']),
-            'agents' => User::query()->orderBy('name')->get(['id', 'name']),
+            'agents' => User::query()
+                ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+                ->orderBy('name')
+                ->get(['id', 'name']),
             'clients' => Client::active()->orderBy('name')->get(['id', 'name']),
             'products' => Product::active()->ordered()->get(['id', 'name']),
         ];

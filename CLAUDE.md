@@ -138,6 +138,54 @@ This is a Laravel 12 application with Vite frontend bundler, Tailwind CSS v4, an
 | mysql   | 3306 | Database |
 | redis   | 6379 | Cache/Sessions |
 
+## Multi-Tenancy Rules (CRITICAL)
+
+This is a multi-tenant SaaS application. Data isolation between tenants is a security requirement. **Every query must be tenant-scoped.**
+
+### How Tenant Scoping Works
+
+- **Models with `BelongsToTenant` trait** (Ticket, Client, Department, Product, etc.) are **automatically scoped** via `TenantScope` global scope — they filter by `tenant_id` column. These are safe by default.
+- **The `User` model does NOT use `BelongsToTenant`** — it uses a many-to-many pivot table (`tenant_user`). **User queries are NEVER automatically scoped** and must ALWAYS be manually filtered.
+
+### Mandatory Pattern for User Queries
+
+Every time you query the `User` model in tenant-scoped context (controllers, services, views), you **MUST** filter by tenant:
+
+```php
+// CORRECT — always use this pattern
+User::query()
+    ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+    ->orderBy('name')
+    ->get();
+
+// CORRECT — for find/findOrFail, chain after tenant filter
+User::query()
+    ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+    ->findOrFail($userId);
+
+// WRONG — leaks users from other tenants
+User::query()->orderBy('name')->get();
+User::findOrFail($userId);
+User::find($userId);
+User::all();
+```
+
+### Checklist Before Completing Any Feature
+
+1. **Search for unscoped User queries**: Grep for `User::query()`, `User::find`, `User::all`, `User::where` in any file you touched — verify each has tenant filtering.
+2. **Blade dropdowns**: Any `<select>` that lists agents/users must be populated from a tenant-scoped query.
+3. **Validation rules**: `Rule::exists('users', 'id')` alone is NOT sufficient — the controller must also verify the user belongs to the current tenant before using the ID.
+4. **Reports & exports**: Any report that aggregates by user/agent must filter users by tenant.
+5. **Admin controllers** (`app/Http/Controllers/Admin/`) are exempt — they operate across tenants intentionally.
+
+### Feature Gating
+
+- Features are gated via `PlanFeature` enum in `app/Enums/PlanFeature.php`
+- Route middleware: `->middleware('feature:feature_name')`
+- View checks: `@if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::FeatureName))`
+- Plans: Starter (no gated features), Business (10 features), Enterprise (all 18 features)
+- See `PlanFeature::businessFeatures()` and `PlanFeature::enterpriseFeatures()` for the full list
+
 ## AWS Deployment
 
 The production Docker image is ready for deployment to:

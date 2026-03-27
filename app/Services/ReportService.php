@@ -275,6 +275,7 @@ class ReportService
         };
 
         return User::query()
+            ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
             ->whereHas('tickets', fn ($q) => $ticketFilter($q))
             ->withCount([
                 'tickets as total_tickets' => fn ($q) => $ticketFilter($q),
@@ -300,6 +301,7 @@ class ReportService
                 $avgHours = $closedTickets->avg(fn ($t) => $t->created_at->diffInHours($t->closed_at));
 
                 return [
+                    'id' => $agent->id,
                     'name' => $agent->name,
                     'total' => $agent->total_tickets,
                     'open' => $agent->open_tickets,
@@ -604,6 +606,7 @@ class ReportService
         $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
 
         return User::query()
+            ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
             ->withCount(['tickets as total' => function ($q) use ($filters, $from, $to) {
                 $q->whereBetween('tickets.created_at', [$from, $to]);
 

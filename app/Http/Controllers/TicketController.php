@@ -97,7 +97,10 @@ class TicketController extends Controller
             ->withQueryString();
 
         $departments = Department::active()->ordered()->get();
-        $agents = User::query()->orderBy('name')->get();
+        $agents = User::query()
+            ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return view('tickets.index', compact('tickets', 'departments', 'agents'));
     }
@@ -111,7 +114,10 @@ class TicketController extends Controller
         $departments = Department::active()->ordered()->get();
         $categories = TicketCategory::active()->ordered()->get();
         $products = Product::active()->ordered()->get();
-        $agents = User::query()->orderBy('name')->get();
+        $agents = User::query()
+            ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         // Build SLA lookup: { tier: { priority: { response, resolution } } }
         $slaLookup = \App\Models\SlaPolicy::active()
@@ -186,7 +192,10 @@ class TicketController extends Controller
         $departments = Department::active()->ordered()->get();
         $categories = TicketCategory::active()->ordered()->get();
         $products = Product::active()->ordered()->get();
-        $agents = User::query()->orderBy('name')->get();
+        $agents = User::query()
+            ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         $slaLookup = \App\Models\SlaPolicy::active()
             ->whereNotNull('client_tier')
@@ -234,7 +243,9 @@ class TicketController extends Controller
             $this->ticketService->changePriority($ticket, $validated['priority']);
         }
 
-        $agent = User::findOrFail($validated['assigned_to']);
+        $agent = User::query()
+            ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+            ->findOrFail($validated['assigned_to']);
         $this->ticketService->assignTicket($ticket, $agent);
 
         return redirect()->route('tickets.show', $ticket)

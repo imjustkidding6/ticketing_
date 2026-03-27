@@ -127,6 +127,10 @@ class ClientController extends Controller
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
+        $agent = User::query()
+            ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+            ->findOrFail($validated['agent_id']);
+
         $assignmentMonth = now()->startOfMonth()->toDateString();
 
         // Deactivate existing assignments for this client this month
@@ -136,13 +140,11 @@ class ClientController extends Controller
 
         ClientAgentAssignment::create([
             'client_id' => $client->id,
-            'agent_id' => $validated['agent_id'],
+            'agent_id' => $agent->id,
             'assignment_month' => $assignmentMonth,
             'is_active' => true,
             'notes' => $validated['notes'] ?? null,
         ]);
-
-        $agent = User::findOrFail($validated['agent_id']);
 
         return redirect()->route('clients.show', $client)
             ->with('success', "Agent {$agent->name} assigned to this client.");
