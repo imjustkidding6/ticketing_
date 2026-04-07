@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Services\TenantUrlHelper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -28,7 +29,31 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        $user = $request->user();
+
+        if ($user->isAdmin()) {
+            return redirect()->route('admin.dashboard');
+        }
+
+        $tenants = $user->tenants()
+            ->where('is_active', true)
+            ->whereNull('suspended_at')
+            ->get();
+
+        if ($tenants->count() === 1) {
+            $tenant = $tenants->first();
+            $user->setCurrentTenant($tenant);
+
+            return redirect()->to(
+                app(TenantUrlHelper::class)->tenantUrl($tenant, '/dashboard')
+            );
+        }
+
+        if ($tenants->count() > 1) {
+            return redirect()->route('tenant.select');
+        }
+
+        return redirect()->route('dashboard.no-tenant');
     }
 
     /**

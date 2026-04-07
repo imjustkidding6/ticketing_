@@ -56,6 +56,9 @@ FROM php:8.2-fpm-alpine AS production
 RUN apk add --no-cache \
     nginx \
     supervisor \
+    curl \
+    nodejs \
+    npm \
     libpng-dev \
     oniguruma-dev \
     libxml2-dev \
@@ -82,11 +85,18 @@ COPY --chown=www-data:www-data . .
 # Install PHP dependencies (production only)
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Copy production configs
-COPY docker/nginx/default.conf /etc/nginx/http.d/default.conf
-COPY docker/php/php.ini /usr/local/etc/php/conf.d/app.ini
+# Build frontend assets
+RUN npm ci --production=false && npm run build && rm -rf node_modules
 
-# Create supervisor config for nginx + php-fpm
+# Copy production configs
+COPY docker/nginx/default-prod.conf /etc/nginx/http.d/default.conf
+COPY docker/php/php-prod.ini /usr/local/etc/php/conf.d/app.ini
+
+# Copy entrypoint script
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Create supervisor config for nginx + php-fpm + queue worker + scheduler
 RUN mkdir -p /etc/supervisor.d
 COPY <<EOF /etc/supervisor.d/supervisord.ini
 [supervisord]
@@ -110,6 +120,26 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
+
+[program:queue-worker]
+command=php /var/www/html/artisan queue:work --sleep=3 --tries=3 --max-time=3600 --memory=128
+autostart=%(ENV_ENABLE_QUEUE_WORKER)s
+autorestart=true
+numprocs=2
+process_name=%(program_name)s_%(process_num)02d
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+
+[program:scheduler]
+command=sh -c "while true; do php /var/www/html/artisan schedule:run --verbose --no-interaction; sleep 60; done"
+autostart=%(ENV_ENABLE_SCHEDULER)s
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
 EOF
 
 # Set proper permissions
@@ -117,12 +147,11 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Cache Laravel config/routes/views
-RUN php artisan config:cache \
-    && php artisan route:cache \
-    && php artisan view:cache
+# Default environment for Supervisor toggles
+ENV ENABLE_QUEUE_WORKER=false
+ENV ENABLE_SCHEDULER=false
 
 # Expose port 80
 EXPOSE 80
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor.d/supervisord.ini"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

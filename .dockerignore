@@ -49,4 +49,5 @@ Dockerfile
 
 # Other
 .editorconfig
+.claude
 Makefile

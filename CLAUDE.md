@@ -4,155 +4,149 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Development Commands
 
-### Local Development (without Docker)
-
 ```bash
-# One-time setup (install deps, generate key, migrate, build frontend)
-composer run setup
+# Local development
+composer run dev          # Start all dev servers (web, queue, logs, vite)
+composer test             # Run PHPUnit tests
+npm run dev               # Frontend HMR
+npm run build             # Production frontend build
+php artisan migrate       # Run migrations
+php artisan db:seed       # Run seeders
 
-# Start all development servers concurrently (web, queue, logs, vite)
-composer run dev
+# Testing
+php artisan test --compact                          # Run all tests
+php artisan test --compact --filter=TicketController # Run specific test class
+php artisan test --compact --filter=test_method_name # Run specific test method
+npx playwright test --reporter=list                 # Run E2E browser tests
 
-# Run tests
-composer test
-
-# Frontend only
-npm run dev      # Development with HMR
-npm run build    # Production build
-
-# Database
-php artisan migrate
-php artisan db:seed
+# Docker (alternative)
+make up / make down / make test / make migrate / make fresh
 ```
-
-### Docker Development
-
-```bash
-# Start all containers (app, nginx, mysql, redis)
-make up
-# or: docker compose up -d
-
-# Stop all containers
-make down
-# or: docker compose down
-
-# View logs
-make logs
-
-# Open shell in app container
-make shell
-
-# Run migrations
-make migrate
-
-# Run tests
-make test
-
-# Fresh migrate with seeders
-make fresh
-
-# Run any artisan command
-make artisan cmd="make:model Post"
-
-# Build production image
-docker build -t ticketing:prod --target=production .
-
-# Test production locally
-docker compose -f docker-compose.prod.yml up --build
-```
-
-### First Time Docker Setup
-
-1. Copy environment file:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Start containers:
-   ```bash
-   make up
-   ```
-
-3. Install dependencies:
-   ```bash
-   make composer-install
-   ```
-
-4. Generate app key:
-   ```bash
-   make artisan cmd="key:generate"
-   ```
-
-5. Run migrations:
-   ```bash
-   make migrate
-   ```
-
-6. Build frontend (run on host, or uncomment node service in docker-compose.yml):
-   ```bash
-   npm install && npm run build
-   ```
-
-7. Visit http://localhost:8080
 
 ## Architecture
 
-This is a Laravel 12 application with Vite frontend bundler, Tailwind CSS v4, and Livewire.
+Multi-tenant SaaS ticketing system. Laravel 12, Tailwind CSS v4, Alpine.js, Blade templates.
 
-**Backend (PHP/Laravel):**
-- MVC pattern: Models in `app/Models/`, Controllers in `app/Http/Controllers/`
-- Livewire components in `app/Livewire/`
-- Routes defined in `routes/web.php`
-- Queue jobs use database driver
-- Sessions and cache use database driver (or Redis in Docker)
+### Routing Structure
 
-**Frontend:**
-- Entry points: `resources/js/app.js` and `resources/css/app.css`
-- Blade templates in `resources/views/`
-- Livewire component views in `resources/views/livewire/`
-- Layout components in `resources/views/layouts/`
-- Axios for HTTP requests (configured in `resources/js/bootstrap.js`)
+Routes are registered in `bootstrap/app.php`:
+- `routes/web.php` — Auth, admin panel, home, profile, tenant switching
+- `routes/tenant.php` — All tenant-scoped routes under `/{slug}/` prefix with regex `[a-z0-9][a-z0-9\-]*[a-z0-9]`
 
-**Livewire:**
-- Components are in `app/Livewire/`
-- Views are in `resources/views/livewire/`
-- Use `<livewire:component-name />` or `@livewire('component-name')` in Blade
-- Example component: Counter (`/demo` route)
+Tenant routes resolve the tenant from the URL slug via `EnsureTenantSession` middleware, which sets `session('current_tenant_id')` and syncs the Spatie Permission team context.
 
-**Docker:**
-- Multi-stage Dockerfile (development + production)
-- Development: PHP-FPM + Nginx + MySQL + Redis
-- Production: Alpine-based with Nginx bundled
-- Config files in `docker/nginx/` and `docker/php/`
+### Multi-Tenancy (CRITICAL)
 
-**Testing:**
-- PHPUnit with in-memory SQLite
-- Test suites in `tests/Unit/` and `tests/Feature/`
-- Run with `make test` (Docker) or `composer test` (local)
+Data isolation between tenants is a security requirement.
 
-## Docker Services
+**Auto-scoped models** use the `BelongsToTenant` trait (`app/Models/Traits/BelongsToTenant.php`) which applies `TenantScope` globally. This covers: Ticket, Client, Department, Product, TicketCategory, SlaPolicy, etc. These are safe by default.
 
-| Service | Port | Description |
-|---------|------|-------------|
-| nginx   | 8080 | Web server |
-| mysql   | 3306 | Database |
-| redis   | 6379 | Cache/Sessions |
+**The User model is NOT auto-scoped.** It uses a many-to-many `tenant_user` pivot. Every User query in tenant context MUST include:
 
-## AWS Deployment
+```php
+// CORRECT
+User::query()
+    ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+    ->get();
 
-The production Docker image is ready for deployment to:
-- Amazon ECS (Elastic Container Service)
-- AWS Elastic Beanstalk (Docker platform)
-- Amazon EKS (Kubernetes)
-
-Build and push to ECR:
-```bash
-docker build -t ticketing:prod --target=production .
-docker tag ticketing:prod <aws-account-id>.dkr.ecr.<region>.amazonaws.com/ticketing:latest
-docker push <aws-account-id>.dkr.ecr.<region>.amazonaws.com/ticketing:latest
+// WRONG — leaks users across tenants
+User::all();
+User::find($id);
 ```
 
-===
+**Public portal controllers** (ClientPortalController, KbPortalController) operate outside the tenant session. They must use `withoutGlobalScopes()` and manually filter by `tenant_id`:
+```php
+Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->get();
+```
+
+**Admin controllers** (`app/Http/Controllers/Admin/`) intentionally operate across tenants.
+
+### Feature Gating (3-Tier Plans)
+
+Features are gated via `PlanFeature` enum (`app/Enums/PlanFeature.php`):
+- **Starter** — No gated features (core functionality only, no public portal)
+- **Business** — 10 features: `audit_logs`, `billing`, `spam_management`, `service_reports`, `attachments`, `agent_schedule`, `sla_management`, `sla_report`, `email_notifications`, `detailed_reporting`
+- **Enterprise** — All Business + 8: `ticket_merging`, `ticket_reopening`, `custom_roles`, `department_management`, `agent_escalation`, `client_comments`, `knowledge_base`, `canned_responses`
+
+Enforcement points:
+- **Routes:** `->middleware('feature:feature_name')` — returns 403 for missing features
+- **Views:** `@if(app(PlanService::class)->currentTenantHasFeature(PlanFeature::FeatureName))`
+- **Plan-level gates:** Public portal pages (`/{slug}/`, submit-ticket, track-ticket) are Business+ only. Starter tenants get 404.
+- **Cache:** `PlanService` caches features for 300s. Call `PlanService::clearCache($tenant)` after plan changes.
+
+### Permissions
+
+Uses Spatie Permission with `tenant_id` as `team_foreign_key` (configured in `config/permission.php`).
+
+Three default roles per tenant: `admin` (16 permissions), `manager` (14), `agent` (5). Seeded via `TenantRoleService::setupDefaultRoles()`.
+
+Controllers enforce permissions via `$this->checkPermission('permission name')` (defined in base `Controller.php`). Owners bypass all permission checks.
+
+### Middleware Stack
+
+| Alias | Class | Purpose |
+|-------|-------|---------|
+| `tenant` | `EnsureTenantSession` | Resolves tenant from URL slug, sets session, syncs Spatie team |
+| `feature` | `CheckPlanFeature` | Validates tenant plan has required feature(s) |
+| `admin` | `AdminMiddleware` | Requires `is_admin` flag on user |
+| `portal` | `EnsureClientPortalAccess` | Validates authenticated client belongs to tenant |
+
+### Key Services
+
+| Service | Purpose |
+|---------|---------|
+| `PlanService` | Feature access checks with caching |
+| `TicketService` | Ticket CRUD, notifications, `addHistory()` for audit logging |
+| `EscalationService` | Tier-based ticket escalation with validation |
+| `TicketMergeService` | Merge/unmerge ticket operations |
+| `TenantRoleService` | Default role/permission setup, role sync |
+| `TenantMailService` | Per-tenant SMTP configuration |
+| `ReportService` | Report data aggregation and CSV exports |
+
+### Testing
+
+- **PHPUnit:** Uses MySQL (not SQLite). Test database: `ticketing_test` on `127.0.0.1:3306`. Tests use `RefreshDatabase` trait.
+- **Playwright E2E:** Config in `playwright.config.ts`. Tests in `tests/e2e/`. Runs with `headless: false` and `slowMo: 500` for visibility.
+- **Test helpers** in `tests/TestCase.php`: `withTenant($tenant)` sets test context, `tenantUrl($path)` generates tenant-prefixed URLs.
+- **Common test pattern** (used across all feature tests):
+```php
+private function createBusinessTenant(): Tenant {
+    $plan = Plan::factory()->create(['slug' => 'business', 'features' => PlanFeature::forPlan('business')]);
+    $license = License::factory()->active()->forPlan($plan)->create();
+    return Tenant::factory()->create(['license_id' => $license->id]);
+}
+
+private function setupTenantContext(Tenant $tenant): User {
+    $user = User::factory()->create();
+    $tenant->addUser($user, 'member');
+    $this->actingAs($user)->withTenant($tenant)->withSession(['current_tenant_id' => $tenant->id]);
+    return $user;
+}
+```
+- **17 factories** available in `database/factories/` for all major models.
+
+### Public Portal
+
+Public-facing pages live under `/{slug}/` (not `/portal/`). The `/portal/` route prefix was removed.
+
+| Route | Controller Method | Plan |
+|-------|-------------------|------|
+| `/{slug}/` | `publicLanding` | Business+ |
+| `/{slug}/submit-ticket` | `publicSubmitForm` / `publicSubmitStore` | Business+ |
+| `/{slug}/track-ticket` | `publicTrackForm` | Business+ |
+| `/{slug}/track-ticket/{token}` | `publicTrackByToken` | Business+ |
+| `/{slug}/track-ticket/{token}/reply` | `publicReply` | Enterprise (client_comments) |
+| `/{slug}/kb/*` | `KbPortalController` | Enterprise (knowledge_base) |
+
+Starter tenants return 404 for all public portal URLs (enforced via `abortIfStarter()` in `ClientPortalController`).
+
+### Escalation System
+
+Agent tiering (Enterprise only): 3 tiers (tier_1, tier_2, tier_3). Escalation enforced:
+- Can only escalate **up** (not same or lower tier)
+- Assigned agent must have `support_tier` >= target tier
+- Owner bypasses tier restrictions
+- Agent dropdown in UI filters by tier using JS
 
 <laravel-boost-guidelines>
 === foundation rules ===
@@ -266,7 +260,6 @@ This project has domain-specific skills available. You MUST activate the relevan
 - Always use explicit return type declarations for methods and functions.
 - Use appropriate PHP type hints for method parameters.
 
-<!-- Explicit Return Types and Method Params -->
 ```php
 protected function isAccessible(User $user, ?string $path = null): bool
 {

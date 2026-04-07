@@ -3,11 +3,8 @@
 @section('title', 'Plans')
 
 @section('content')
-    <div class="mb-4 flex justify-between items-center">
+    <div class="mb-4">
         <p class="text-gray-600">Manage subscription plans</p>
-        <a href="{{ route('admin.plans.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700">
-            Add Plan
-        </a>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">

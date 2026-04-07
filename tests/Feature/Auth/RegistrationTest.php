@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Models\License;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantUrlHelper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -26,6 +27,7 @@ class RegistrationTest extends TestCase
         $response = $this->post('/register', [
             'license_key' => $license->license_key,
             'company_name' => 'Test Company',
+            'app_slug' => 'test-company',
             'name' => 'Test User',
             'email' => 'test@example.com',
             'password' => 'password',
@@ -33,9 +35,17 @@ class RegistrationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
 
-        $this->assertDatabaseHas('tenants', ['name' => 'Test Company']);
+        $tenant = Tenant::where('slug', 'test-company')->first();
+        $this->assertNotNull($tenant);
+
+        $expectedUrl = app(TenantUrlHelper::class)->tenantUrl($tenant, '/dashboard');
+        $response->assertRedirect($expectedUrl);
+
+        $this->assertDatabaseHas('tenants', [
+            'name' => 'Test Company',
+            'slug' => 'test-company',
+        ]);
         $this->assertDatabaseHas('users', ['email' => 'test@example.com']);
 
         $license->refresh();
@@ -47,6 +57,7 @@ class RegistrationTest extends TestCase
         $response = $this->post('/register', [
             'license_key' => 'INVALID-KEY-1234-5678',
             'company_name' => 'Test Company',
+            'app_slug' => 'test-company',
             'name' => 'Test User',
             'email' => 'test@example.com',
             'password' => 'password',
@@ -64,6 +75,7 @@ class RegistrationTest extends TestCase
         $response = $this->post('/register', [
             'license_key' => $license->license_key,
             'company_name' => 'Test Company',
+            'app_slug' => 'test-company',
             'name' => 'Test User',
             'email' => 'test@example.com',
             'password' => 'password',
@@ -81,6 +93,7 @@ class RegistrationTest extends TestCase
         $this->post('/register', [
             'license_key' => $license->license_key,
             'company_name' => 'Test Company',
+            'app_slug' => 'test-company',
             'name' => 'Test User',
             'email' => 'test@example.com',
             'password' => 'password',
@@ -91,5 +104,60 @@ class RegistrationTest extends TestCase
         $tenant = Tenant::where('name', 'Test Company')->first();
 
         $this->assertTrue($tenant->isOwner($user));
+    }
+
+    public function test_registration_fails_with_invalid_slug(): void
+    {
+        $license = License::factory()->pending()->create();
+
+        $response = $this->post('/register', [
+            'license_key' => $license->license_key,
+            'company_name' => 'Test Company',
+            'app_slug' => 'a',
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ]);
+
+        $response->assertSessionHasErrors('app_slug');
+        $this->assertGuest();
+    }
+
+    public function test_registration_fails_with_reserved_slug(): void
+    {
+        $license = License::factory()->pending()->create();
+
+        $response = $this->post('/register', [
+            'license_key' => $license->license_key,
+            'company_name' => 'Admin Company',
+            'app_slug' => 'admin',
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ]);
+
+        $response->assertSessionHasErrors('app_slug');
+        $this->assertGuest();
+    }
+
+    public function test_registration_fails_with_duplicate_slug(): void
+    {
+        Tenant::factory()->create(['slug' => 'taken-slug']);
+        $license = License::factory()->pending()->create();
+
+        $response = $this->post('/register', [
+            'license_key' => $license->license_key,
+            'company_name' => 'My Company',
+            'app_slug' => 'taken-slug',
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ]);
+
+        $response->assertSessionHasErrors('app_slug');
+        $this->assertGuest();
     }
 }
