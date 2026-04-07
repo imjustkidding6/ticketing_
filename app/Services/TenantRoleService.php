@@ -88,10 +88,11 @@ class TenantRoleService
      */
     public function setupDefaultRoles(Tenant $tenant): void
     {
+        $this->setTenantContext($tenant);
         $this->ensurePermissionsExist();
 
         foreach (self::ROLE_PERMISSIONS as $roleName => $permissions) {
-            $role = Role::findOrCreate($roleName, 'web', $tenant->id);
+            $role = Role::findOrCreate($roleName, 'web');
             $role->syncPermissions($permissions);
         }
     }

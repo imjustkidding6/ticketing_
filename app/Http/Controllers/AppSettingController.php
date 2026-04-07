@@ -16,6 +16,8 @@ class AppSettingController extends Controller
      */
     public function general(): View
     {
+        $this->checkPermission('manage settings');
+
         $settings = AppSetting::getByGroup('general');
 
         return view('settings.general', compact('settings'));

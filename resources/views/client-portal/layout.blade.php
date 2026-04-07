@@ -29,7 +29,7 @@
                 <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6">
                     <div class="flex h-16 items-center justify-between">
                         <div class="flex items-center gap-4">
-                            <a href="{{ route('portal.index', ['tenant' => $tenant->slug]) }}" class="flex items-center gap-2">
+                            <a href="{{ route('tenant.landing', ['slug' => $tenant->slug]) }}" class="flex items-center gap-2">
                                 @if($tenant->logo_path)
                                     <img src="{{ $tenant->logoUrl() }}" alt="{{ $tenant->name }}" class="h-10 w-auto">
                                 @else
@@ -44,26 +44,15 @@
                             </a>
                         </div>
 
+                        @if(empty($hideNav))
                         <nav class="flex items-center gap-4">
-                            <a href="{{ route('portal.index', ['tenant' => $tenant->slug]) }}" class="text-sm font-medium text-white/80 hover:text-white">{{ __('Home') }}</a>
-                            @if($hasKnowledgeBase)
-                                <a href="{{ route('portal.knowledge-base.index', ['tenant' => $tenant->slug]) }}" class="text-sm font-medium text-white/80 hover:text-white">{{ __('Knowledge Base') }}</a>
-                            @endif
+                            <a href="{{ route('tenant.landing', ['slug' => $tenant->slug]) }}" class="text-sm font-medium text-white/80 hover:text-white">{{ __('Home') }}</a>
                             <a href="{{ route('tenant.track-ticket', ['slug' => $tenant->slug]) }}" class="text-sm font-medium text-white/80 hover:text-white">{{ __('Track Ticket') }}</a>
-                            @auth
-                                <a href="{{ route('portal.dashboard', ['tenant' => $tenant->slug]) }}" class="text-sm font-medium text-white/80 hover:text-white">{{ __('Dashboard') }}</a>
-                                <a href="{{ route('portal.tickets.create', ['tenant' => $tenant->slug]) }}" class="inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm" style="background-color: var(--portal-accent);">
-                                    {{ __('New Ticket') }}
-                                </a>
-                                <form method="POST" action="{{ route('portal.logout', ['tenant' => $tenant->slug]) }}" class="inline">
-                                    @csrf
-                                    <button type="submit" class="text-sm font-medium text-white/80 hover:text-white">{{ __('Log Out') }}</button>
-                                </form>
-                            @else
-                                <a href="{{ route('portal.login', ['tenant' => $tenant->slug]) }}" class="text-sm font-medium text-white/80 hover:text-white">{{ __('Login') }}</a>
-                                <a href="{{ route('portal.register', ['tenant' => $tenant->slug]) }}" class="inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm" style="background-color: var(--portal-accent);">{{ __('Register') }}</a>
-                            @endauth
+                            <a href="{{ route('tenant.submit-ticket', ['slug' => $tenant->slug]) }}" class="inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm" style="background-color: var(--portal-accent);">
+                                {{ __('New Ticket') }}
+                            </a>
                         </nav>
+                        @endif
                     </div>
                 </div>
             </header>

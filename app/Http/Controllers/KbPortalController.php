@@ -17,15 +17,23 @@ class KbPortalController extends Controller
         private PlanService $planService,
     ) {}
 
-    public function index(Tenant $tenant): View
+    private function resolveTenant(string $slug): Tenant
     {
-        if ($tenant->isSuspended()) {
-            abort(404);
-        }
+        $tenant = Tenant::where('slug', $slug)
+            ->where('is_active', true)
+            ->whereNull('suspended_at')
+            ->firstOrFail();
 
         if (! $this->planService->tenantHasFeature($tenant, PlanFeature::KnowledgeBase)) {
             abort(404);
         }
+
+        return $tenant;
+    }
+
+    public function index(string $slug): View
+    {
+        $tenant = $this->resolveTenant($slug);
 
         $categories = KbCategory::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
@@ -37,15 +45,9 @@ class KbPortalController extends Controller
         return view('client-portal.knowledge-base.index', compact('tenant', 'categories'));
     }
 
-    public function category(Tenant $tenant, string $categorySlug): View
+    public function category(string $slug, string $categorySlug): View
     {
-        if ($tenant->isSuspended()) {
-            abort(404);
-        }
-
-        if (! $this->planService->tenantHasFeature($tenant, PlanFeature::KnowledgeBase)) {
-            abort(404);
-        }
+        $tenant = $this->resolveTenant($slug);
 
         $category = KbCategory::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
@@ -63,15 +65,9 @@ class KbPortalController extends Controller
         return view('client-portal.knowledge-base.category', compact('tenant', 'category', 'articles'));
     }
 
-    public function article(Tenant $tenant, string $categorySlug, string $articleSlug): View
+    public function article(string $slug, string $categorySlug, string $articleSlug): View
     {
-        if ($tenant->isSuspended()) {
-            abort(404);
-        }
-
-        if (! $this->planService->tenantHasFeature($tenant, PlanFeature::KnowledgeBase)) {
-            abort(404);
-        }
+        $tenant = $this->resolveTenant($slug);
 
         $category = KbCategory::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
@@ -100,8 +96,10 @@ class KbPortalController extends Controller
         return view('client-portal.knowledge-base.article', compact('tenant', 'category', 'article', 'relatedArticles'));
     }
 
-    public function search(Tenant $tenant, Request $request): JsonResponse
+    public function search(string $slug, Request $request): JsonResponse
     {
+        $tenant = Tenant::where('slug', $slug)->where('is_active', true)->firstOrFail();
+
         if (! $this->planService->tenantHasFeature($tenant, PlanFeature::KnowledgeBase)) {
             return response()->json([]);
         }
@@ -128,7 +126,7 @@ class KbPortalController extends Controller
                 'title' => $a->title,
                 'excerpt' => $a->excerpt,
                 'url' => $a->category ? route('portal.knowledge-base.article', [
-                    'tenant' => $tenant->slug,
+                    'slug' => $tenant->slug,
                     'categorySlug' => $a->category->slug,
                     'articleSlug' => $a->slug,
                 ]) : null,

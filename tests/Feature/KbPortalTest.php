@@ -40,7 +40,7 @@ class KbPortalTest extends TestCase
     {
         $tenant = $this->createStarterTenant();
 
-        $this->get(route('portal.knowledge-base.index', ['tenant' => $tenant->slug]))
+        $this->get(route('portal.knowledge-base.index', ['slug' => $tenant->slug]))
             ->assertNotFound();
     }
 
@@ -49,7 +49,7 @@ class KbPortalTest extends TestCase
         $tenant = $this->createEnterpriseTenant();
         $tenant->update(['suspended_at' => now()]);
 
-        $this->get(route('portal.knowledge-base.index', ['tenant' => $tenant->slug]))
+        $this->get(route('portal.knowledge-base.index', ['slug' => $tenant->slug]))
             ->assertNotFound();
     }
 
@@ -67,7 +67,7 @@ class KbPortalTest extends TestCase
             'kb_category_id' => $category->id,
         ]);
 
-        $this->get(route('portal.knowledge-base.index', ['tenant' => $tenant->slug]))
+        $this->get(route('portal.knowledge-base.index', ['slug' => $tenant->slug]))
             ->assertOk()
             ->assertSee('Getting Started');
     }
@@ -94,7 +94,7 @@ class KbPortalTest extends TestCase
         ]);
 
         $this->get(route('portal.knowledge-base.category', [
-            'tenant' => $tenant->slug,
+            'slug' => $tenant->slug,
             'categorySlug' => $category->slug,
         ]))
             ->assertOk()
@@ -114,7 +114,7 @@ class KbPortalTest extends TestCase
         ]);
 
         $this->get(route('portal.knowledge-base.article', [
-            'tenant' => $tenant->slug,
+            'slug' => $tenant->slug,
             'categorySlug' => $category->slug,
             'articleSlug' => $article->slug,
         ]))
@@ -135,7 +135,7 @@ class KbPortalTest extends TestCase
         ]);
 
         $this->get(route('portal.knowledge-base.article', [
-            'tenant' => $tenant->slug,
+            'slug' => $tenant->slug,
             'categorySlug' => $category->slug,
             'articleSlug' => $article->slug,
         ]))
@@ -154,7 +154,7 @@ class KbPortalTest extends TestCase
         ]);
 
         $this->getJson(route('portal.knowledge-base.search', [
-            'tenant' => $tenant->slug,
+            'slug' => $tenant->slug,
             'q' => 'Password',
         ]))
             ->assertOk()

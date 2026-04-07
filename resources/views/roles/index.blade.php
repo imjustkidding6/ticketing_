@@ -24,11 +24,24 @@
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white">
                         @forelse($roles as $role)
+                            @php $isDefault = in_array($role->name, ['admin', 'manager', 'agent']); @endphp
                             <tr>
-                                <td class="px-6 py-4 text-sm font-medium text-gray-900">{{ $role->name }}</td>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900">
+                                    {{ ucfirst($role->name) }}
+                                    @if($isDefault)
+                                        <span class="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">{{ __('Default') }}</span>
+                                    @endif
+                                </td>
                                 <td class="px-6 py-4 text-sm text-gray-500">{{ $role->permissions_count }} {{ __('permissions') }}</td>
                                 <td class="whitespace-nowrap px-6 py-4 text-right text-sm">
                                     <a href="{{ route('roles.edit', $role) }}" class="text-indigo-600 hover:text-indigo-900">{{ __('Edit') }}</a>
+                                    @if(!$isDefault)
+                                        <form method="POST" action="{{ route('roles.destroy', $role) }}" class="inline ml-3" onsubmit="return confirm('{{ __('Delete this role?') }}')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="text-red-600 hover:text-red-900">{{ __('Delete') }}</button>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         @empty

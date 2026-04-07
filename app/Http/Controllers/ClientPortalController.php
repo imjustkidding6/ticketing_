@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Enums\PlanFeature;
 use App\Models\Client;
 use App\Models\Department;
+use App\Models\Product;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
+use App\Models\TicketComment;
 use App\Models\User;
 use App\Notifications\TicketCreatedNotification;
 use App\Services\PlanService;
@@ -18,6 +20,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ClientPortalController extends Controller
@@ -29,6 +32,8 @@ class ClientPortalController extends Controller
 
     /**
      * Public landing page for the tenant portal.
+     *
+     * @deprecated This method serves the old /portal/{tenant}/ routes. Use publicLanding() instead.
      */
     public function index(Tenant $tenant): View|RedirectResponse
     {
@@ -36,23 +41,17 @@ class ClientPortalController extends Controller
             abort(404);
         }
 
-        $departments = Department::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->active()
-            ->ordered()
-            ->get();
+        $this->abortIfStarter($tenant);
 
-        $categories = TicketCategory::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->active()
-            ->ordered()
-            ->get();
+        [$departments, $categories] = $this->loadDepartmentsAndCategories($tenant);
 
         return view('client-portal.index', compact('tenant', 'departments', 'categories'));
     }
 
     /**
      * Handle guest ticket submission (no login required).
+     *
+     * @deprecated This method is not referenced by any route. Use publicSubmitStore() instead.
      */
     public function storeGuestTicket(Request $request, Tenant $tenant): RedirectResponse
     {
@@ -70,22 +69,7 @@ class ClientPortalController extends Controller
             'category_id' => ['nullable', 'integer'],
         ]);
 
-        $client = Client::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->where('email', $validated['email'])
-            ->first();
-
-        if (! $client) {
-            $client = Client::withoutGlobalScopes()->create([
-                'tenant_id' => $tenant->id,
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'contact_person' => $validated['name'],
-                'tier' => Client::TIER_BASIC,
-                'status' => Client::STATUS_ACTIVE,
-            ]);
-        }
-
+        $client = $this->findOrCreateGuestClient($tenant, $validated['email'], $validated['name']);
         $trackingToken = Str::random(64);
 
         $ticket = $this->ticketService->createTicket([
@@ -100,10 +84,7 @@ class ClientPortalController extends Controller
             'tracking_token' => $trackingToken,
         ]);
 
-        if ($this->planService->tenantHasFeature($tenant, PlanFeature::EmailNotifications)) {
-            Notification::route('mail', $client->email)
-                ->notify(new TicketCreatedNotification($ticket));
-        }
+        $this->notifyClientOfNewTicket($tenant, $client->email, $ticket);
 
         return redirect()->route('tenant.track-ticket.token', [
             'slug' => $tenant->slug,
@@ -147,6 +128,8 @@ class ClientPortalController extends Controller
 
     /**
      * Track a ticket by number and email (public, no auth required).
+     *
+     * @deprecated This method serves the old /portal/{tenant}/ routes. Use publicTrackForm() instead.
      */
     public function trackTicket(Request $request, Tenant $tenant): View
     {
@@ -171,6 +154,8 @@ class ClientPortalController extends Controller
 
     /**
      * Track a ticket by its unique tracking token.
+     *
+     * @deprecated This method serves the old /portal/{tenant}/ routes. Use publicTrackByToken() instead.
      */
     public function trackByToken(Tenant $tenant, string $token): View
     {
@@ -188,6 +173,8 @@ class ClientPortalController extends Controller
      */
     public function showLogin(Tenant $tenant): View
     {
+        $this->abortIfStarter($tenant);
+
         return view('client-portal.login', compact('tenant'));
     }
 
@@ -231,6 +218,8 @@ class ClientPortalController extends Controller
      */
     public function showRegister(Tenant $tenant): View
     {
+        $this->abortIfStarter($tenant);
+
         return view('client-portal.register', compact('tenant'));
     }
 
@@ -241,7 +230,7 @@ class ClientPortalController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', \Illuminate\Validation\Rule::unique('users', 'email')->whereNull('deleted_at')],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->whereNull('deleted_at')],
             'phone' => ['nullable', 'string', 'max:50'],
             'company' => ['nullable', 'string', 'max:255'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
@@ -285,6 +274,7 @@ class ClientPortalController extends Controller
      */
     public function dashboard(Request $request, Tenant $tenant): View
     {
+        $this->abortIfStarter($tenant);
         $client = $request->get('portal_client');
 
         $recentTickets = $client->tickets()
@@ -308,20 +298,10 @@ class ClientPortalController extends Controller
      */
     public function createTicket(Request $request, Tenant $tenant): View
     {
-        $departments = Department::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->active()
-            ->ordered()
-            ->get();
+        [$departments, $categories] = $this->loadDepartmentsAndCategories($tenant);
 
-        $categories = TicketCategory::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->active()
-            ->ordered()
-            ->get();
-
-        $kbSearchUrl = $this->planService->tenantHasFeature($tenant, \App\Enums\PlanFeature::KnowledgeBase)
-            ? route('portal.knowledge-base.search', ['tenant' => $tenant->slug])
+        $kbSearchUrl = $this->planService->tenantHasFeature($tenant, PlanFeature::KnowledgeBase)
+            ? route('portal.knowledge-base.search', ['slug' => $tenant->slug])
             : null;
 
         return view('client-portal.create-ticket', compact('tenant', 'departments', 'categories', 'kbSearchUrl'));
@@ -358,16 +338,14 @@ class ClientPortalController extends Controller
     }
 
     /**
-     * Resolve a tenant from a slug string for public (non-authenticated) pages.
+     * Public landing page for the tenant (under /{slug}/).
      */
-    private function resolvePublicTenant(string $slug): Tenant
+    public function publicLanding(string $slug): View|RedirectResponse
     {
-        $tenant = Tenant::where('slug', $slug)
-            ->where('is_active', true)
-            ->whereNull('suspended_at')
-            ->firstOrFail();
+        $tenant = $this->resolvePublicTenant($slug);
+        $this->abortIfStarter($tenant);
 
-        return $tenant;
+        return view('tenant.landing', compact('tenant'));
     }
 
     /**
@@ -376,7 +354,208 @@ class ClientPortalController extends Controller
     public function publicSubmitForm(string $slug): View
     {
         $tenant = $this->resolvePublicTenant($slug);
+        $this->abortIfStarter($tenant);
 
+        [$departments, $categories] = $this->loadDepartmentsAndCategories($tenant);
+
+        $products = Product::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('is_active', true)
+            ->ordered()
+            ->get();
+
+        $kbSearchUrl = $this->planService->tenantHasFeature($tenant, PlanFeature::KnowledgeBase)
+            ? route('portal.knowledge-base.search', ['slug' => $tenant->slug])
+            : null;
+
+        return view('tenant.submit-ticket', compact('tenant', 'departments', 'categories', 'products', 'kbSearchUrl'));
+    }
+
+    /**
+     * Handle public guest ticket submission (under /{slug}/submit-ticket).
+     */
+    public function publicSubmitStore(Request $request, string $slug): RedirectResponse
+    {
+        $tenant = $this->resolvePublicTenant($slug);
+        $this->abortIfStarter($tenant);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255'],
+            'subject' => ['required', 'string', 'max:255'],
+            'description' => ['required', 'string'],
+            'priority' => ['required', 'in:low,medium,high,critical'],
+            'department_id' => ['required', 'integer'],
+            'category_id' => ['nullable', 'integer'],
+            'incident_date' => ['nullable', 'date'],
+            'product_ids' => ['nullable', 'array'],
+            'product_ids.*' => ['integer'],
+        ]);
+
+        $client = $this->findOrCreateGuestClient($tenant, $validated['email'], $validated['name']);
+        $trackingToken = Str::random(64);
+
+        $ticket = $this->ticketService->createTicket([
+            'tenant_id' => $tenant->id,
+            'subject' => $validated['subject'],
+            'description' => $validated['description'],
+            'priority' => $validated['priority'],
+            'department_id' => $validated['department_id'],
+            'category_id' => $validated['category_id'],
+            'incident_date' => $validated['incident_date'] ?? null,
+            'client_id' => $client->id,
+            'created_by' => null,
+            'tracking_token' => $trackingToken,
+        ]);
+
+        if (! empty($validated['product_ids'])) {
+            $ticket->products()->sync($validated['product_ids']);
+        }
+
+        $this->notifyClientOfNewTicket($tenant, $client->email, $ticket);
+
+        return redirect()->route('tenant.track-ticket.token', [
+            'slug' => $tenant->slug,
+            'token' => $trackingToken,
+        ])->with('success', 'Your ticket has been submitted successfully! Ticket number: '.$ticket->ticket_number);
+    }
+
+    /**
+     * Public track ticket form (no auth required, under /{slug}/track-ticket).
+     */
+    public function publicTrackForm(Request $request, string $slug): View|RedirectResponse
+    {
+        $tenant = $this->resolvePublicTenant($slug);
+        $this->abortIfStarter($tenant);
+
+        if (! $request->filled('ticket_number') || ! $request->filled('email')) {
+            return view('tenant.track-ticket', ['tenant' => $tenant, 'searched' => false]);
+        }
+
+        $ticket = Ticket::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('ticket_number', $request->input('ticket_number'))
+            ->whereHas('client', fn ($query) => $query->withoutGlobalScopes()->where('email', $request->input('email')))
+            ->first();
+
+        if (! $ticket) {
+            return view('tenant.track-ticket', ['tenant' => $tenant, 'searched' => true]);
+        }
+
+        if (! $ticket->tracking_token) {
+            $ticket->update(['tracking_token' => Str::random(64)]);
+        }
+
+        return redirect()->route('tenant.track-ticket.token', [
+            'slug' => $tenant->slug,
+            'token' => $ticket->tracking_token,
+        ]);
+    }
+
+    /**
+     * Public track ticket by token (under /{slug}/track-ticket/{token}).
+     */
+    public function publicTrackByToken(string $slug, string $token): View
+    {
+        $tenant = $this->resolvePublicTenant($slug);
+        $this->abortIfStarter($tenant);
+
+        $ticket = Ticket::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('tracking_token', $token)
+            ->with(['department', 'category', 'client', 'comments' => fn ($q) => $q->where('is_public', true)->with('user')->oldest()])
+            ->firstOrFail();
+
+        $canReply = $this->planService->tenantHasFeature($tenant, PlanFeature::ClientComments)
+            && ! in_array($ticket->status, ['closed', 'cancelled']);
+
+        return view('tenant.track-result', compact('tenant', 'ticket', 'canReply'));
+    }
+
+    /**
+     * Handle public client reply on a ticket (under /{slug}/track-ticket/{token}/reply).
+     */
+    public function publicReply(Request $request, string $slug, string $token): RedirectResponse
+    {
+        $tenant = $this->resolvePublicTenant($slug);
+        $this->abortIfStarter($tenant);
+
+        if (! $this->planService->tenantHasFeature($tenant, PlanFeature::ClientComments)) {
+            abort(403);
+        }
+
+        $ticket = Ticket::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('tracking_token', $token)
+            ->firstOrFail();
+
+        if (in_array($ticket->status, ['closed', 'cancelled'])) {
+            return redirect()->route('tenant.track-ticket.token', ['slug' => $slug, 'token' => $token])
+                ->with('error', 'This ticket is closed and cannot receive new replies.');
+        }
+
+        $validated = $request->validate([
+            'content' => ['required', 'string', 'max:5000'],
+            'attachments' => ['nullable', 'array', 'max:3'],
+            'attachments.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,pdf,doc,docx,txt'],
+        ]);
+
+        $attachments = [];
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $path = $file->store('comment-attachments', 'public');
+                $attachments[] = [
+                    'name' => $file->getClientOriginalName(),
+                    'path' => $path,
+                    'size' => $file->getSize(),
+                    'mime' => $file->getMimeType(),
+                ];
+            }
+        }
+
+        TicketComment::create([
+            'tenant_id' => $tenant->id,
+            'ticket_id' => $ticket->id,
+            'user_id' => null,
+            'content' => $validated['content'],
+            'type' => 'public',
+            'is_public' => true,
+            'attachments' => ! empty($attachments) ? $attachments : null,
+        ]);
+
+        return redirect()->route('tenant.track-ticket.token', ['slug' => $slug, 'token' => $token])
+            ->with('success', 'Your reply has been submitted.');
+    }
+
+    /**
+     * Abort if tenant is on the Starter plan (no public portal access).
+     */
+    private function abortIfStarter(Tenant $tenant): void
+    {
+        $planSlug = $tenant->plan()?->slug;
+        if ($planSlug === 'start' || $planSlug === null) {
+            abort(404);
+        }
+    }
+
+    /**
+     * Resolve a tenant from a slug string for public (non-authenticated) pages.
+     */
+    private function resolvePublicTenant(string $slug): Tenant
+    {
+        return Tenant::where('slug', $slug)
+            ->where('is_active', true)
+            ->whereNull('suspended_at')
+            ->firstOrFail();
+    }
+
+    /**
+     * Load active, ordered departments and categories for a tenant.
+     *
+     * @return array{0: \Illuminate\Database\Eloquent\Collection, 1: \Illuminate\Database\Eloquent\Collection}
+     */
+    private function loadDepartmentsAndCategories(Tenant $tenant): array
+    {
         $departments = Department::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->active()
@@ -389,106 +568,36 @@ class ClientPortalController extends Controller
             ->ordered()
             ->get();
 
-        return view('tenant.submit-ticket', compact('tenant', 'departments', 'categories'));
+        return [$departments, $categories];
     }
 
     /**
-     * Handle public guest ticket submission (under /{slug}/submit-ticket).
+     * Find an existing client by email for the tenant, or create a new guest client.
      */
-    public function publicSubmitStore(Request $request, string $slug): RedirectResponse
+    private function findOrCreateGuestClient(Tenant $tenant, string $email, string $name): Client
     {
-        $tenant = $this->resolvePublicTenant($slug);
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255'],
-            'subject' => ['required', 'string', 'max:255'],
-            'description' => ['required', 'string'],
-            'priority' => ['required', 'in:low,medium,high,critical'],
-            'department_id' => ['required', 'integer'],
-            'category_id' => ['nullable', 'integer'],
-        ]);
-
-        $client = Client::withoutGlobalScopes()
+        return Client::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
-            ->where('email', $validated['email'])
-            ->first();
-
-        if (! $client) {
-            $client = Client::withoutGlobalScopes()->create([
+            ->where('email', $email)
+            ->first()
+            ?? Client::withoutGlobalScopes()->create([
                 'tenant_id' => $tenant->id,
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'contact_person' => $validated['name'],
+                'name' => $name,
+                'email' => $email,
+                'contact_person' => $name,
                 'tier' => Client::TIER_BASIC,
                 'status' => Client::STATUS_ACTIVE,
             ]);
-        }
+    }
 
-        $trackingToken = Str::random(64);
-
-        $ticket = $this->ticketService->createTicket([
-            'tenant_id' => $tenant->id,
-            'subject' => $validated['subject'],
-            'description' => $validated['description'],
-            'priority' => $validated['priority'],
-            'department_id' => $validated['department_id'],
-            'category_id' => $validated['category_id'],
-            'client_id' => $client->id,
-            'created_by' => null,
-            'tracking_token' => $trackingToken,
-        ]);
-
+    /**
+     * Send a ticket-created notification to the client if the tenant has the feature enabled.
+     */
+    private function notifyClientOfNewTicket(Tenant $tenant, string $email, Ticket $ticket): void
+    {
         if ($this->planService->tenantHasFeature($tenant, PlanFeature::EmailNotifications)) {
-            Notification::route('mail', $client->email)
+            Notification::route('mail', $email)
                 ->notify(new TicketCreatedNotification($ticket));
         }
-
-        return redirect()->route('tenant.track-ticket.token', [
-            'slug' => $tenant->slug,
-            'token' => $trackingToken,
-        ])->with('success', 'Your ticket has been submitted successfully! Ticket number: '.$ticket->ticket_number);
-    }
-
-    /**
-     * Public track ticket form (no auth required, under /{slug}/track-ticket).
-     */
-    public function publicTrackForm(Request $request, string $slug): View
-    {
-        $tenant = $this->resolvePublicTenant($slug);
-
-        $ticket = null;
-        $searched = false;
-
-        if ($request->filled('ticket_number') && $request->filled('email')) {
-            $searched = true;
-
-            $ticket = Ticket::withoutGlobalScopes()
-                ->where('tenant_id', $tenant->id)
-                ->where('ticket_number', $request->input('ticket_number'))
-                ->whereHas('client', function ($query) use ($request) {
-                    $query->withoutGlobalScopes()->where('email', $request->input('email'));
-                })
-                ->with(['department', 'category'])
-                ->first();
-        }
-
-        return view('tenant.track-ticket', compact('tenant', 'ticket', 'searched'));
-    }
-
-    /**
-     * Public track ticket by token (under /{slug}/track-ticket/{token}).
-     */
-    public function publicTrackByToken(string $slug, string $token): View
-    {
-        $tenant = $this->resolvePublicTenant($slug);
-
-        $ticket = Ticket::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->where('tracking_token', $token)
-            ->with(['department', 'category'])
-            ->firstOrFail();
-
-        return view('tenant.track-result', compact('tenant', 'ticket'));
     }
 }

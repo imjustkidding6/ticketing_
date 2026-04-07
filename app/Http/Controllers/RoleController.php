@@ -10,14 +10,13 @@ use Spatie\Permission\Models\Role;
 
 class RoleController extends Controller
 {
-    /**
-     * Display a listing of roles.
-     */
+    private const DEFAULT_ROLES = ['admin', 'manager', 'agent'];
+
     public function index(): View
     {
-        $tenantId = session('current_tenant_id');
+        $this->checkPermission('manage roles');
 
-        $roles = Role::where('team_id', $tenantId)
+        $roles = Role::where('tenant_id', session('current_tenant_id'))
             ->withCount('permissions')
             ->orderBy('name')
             ->get();
@@ -25,33 +24,29 @@ class RoleController extends Controller
         return view('roles.index', compact('roles'));
     }
 
-    /**
-     * Show the form for creating a new role.
-     */
     public function create(): View
     {
+        $this->checkPermission('manage roles');
+
         $permissions = Permission::orderBy('name')->get();
 
         return view('roles.create', compact('permissions'));
     }
 
-    /**
-     * Store a newly created role.
-     */
     public function store(Request $request): RedirectResponse
     {
+        $this->checkPermission('manage roles');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'permissions' => ['nullable', 'array'],
             'permissions.*' => ['exists:permissions,id'],
         ]);
 
-        $tenantId = session('current_tenant_id');
-
         $role = Role::create([
             'name' => $validated['name'],
             'guard_name' => 'web',
-            'team_id' => $tenantId,
+            'tenant_id' => session('current_tenant_id'),
         ]);
 
         if (! empty($validated['permissions'])) {
@@ -62,22 +57,20 @@ class RoleController extends Controller
             ->with('success', 'Role created successfully.');
     }
 
-    /**
-     * Show the form for editing a role.
-     */
     public function edit(Role $role): View
     {
+        $this->checkPermission('manage roles');
+
         $permissions = Permission::orderBy('name')->get();
         $rolePermissions = $role->permissions->pluck('id')->toArray();
 
         return view('roles.edit', compact('role', 'permissions', 'rolePermissions'));
     }
 
-    /**
-     * Update the specified role.
-     */
     public function update(Request $request, Role $role): RedirectResponse
     {
+        $this->checkPermission('manage roles');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'permissions' => ['nullable', 'array'],
@@ -96,11 +89,15 @@ class RoleController extends Controller
             ->with('success', 'Role updated successfully.');
     }
 
-    /**
-     * Delete a role.
-     */
     public function destroy(Role $role): RedirectResponse
     {
+        $this->checkPermission('manage roles');
+
+        if (in_array($role->name, self::DEFAULT_ROLES)) {
+            return redirect()->route('roles.index')
+                ->with('error', 'Default roles cannot be deleted.');
+        }
+
         $role->delete();
 
         return redirect()->route('roles.index')

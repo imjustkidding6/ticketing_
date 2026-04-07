@@ -83,6 +83,8 @@ class ReportController extends Controller
      */
     public function overview(Request $request): View
     {
+        $this->checkPermission('view reports');
+
         $filters = $this->extractFilters($request);
 
         $volume = $this->reportService->getTicketVolumeReport($filters);

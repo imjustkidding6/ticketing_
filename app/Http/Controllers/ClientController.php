@@ -17,6 +17,8 @@ class ClientController extends Controller
      */
     public function index(Request $request): View
     {
+        $this->checkPermission('manage clients');
+
         $clients = Client::query()
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {

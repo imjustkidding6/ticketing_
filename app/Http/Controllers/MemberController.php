@@ -76,6 +76,8 @@ class MemberController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $this->checkPermission('manage users');
+
         $tenant = Auth::user()->currentTenant();
         $this->roleService->setTenantContext($tenant);
 
@@ -195,6 +197,8 @@ class MemberController extends Controller
      */
     public function update(Request $request, User $member): RedirectResponse
     {
+        $this->checkPermission('manage users');
+
         $tenant = Auth::user()->currentTenant();
         $this->roleService->setTenantContext($tenant);
 
@@ -260,6 +264,8 @@ class MemberController extends Controller
      */
     public function destroy(User $member): RedirectResponse
     {
+        $this->checkPermission('manage users');
+
         $tenant = Auth::user()->currentTenant();
 
         abort_unless($tenant->hasUser($member), 404);

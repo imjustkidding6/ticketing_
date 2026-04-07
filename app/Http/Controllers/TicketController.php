@@ -68,6 +68,8 @@ class TicketController extends Controller
      */
     public function index(Request $request): View
     {
+        $this->checkPermission('view tickets');
+
         $tickets = $this->scopeByUserDepartments(Ticket::query())
             ->with(['client', 'category', 'department', 'creator', 'assignee'])
             ->notSpam()
@@ -110,6 +112,8 @@ class TicketController extends Controller
      */
     public function create(): View
     {
+        $this->checkPermission('create tickets');
+
         $clients = Client::active()->orderBy('name')->get(['id', 'name', 'tier']);
         $departments = Department::active()->ordered()->get();
         $categories = TicketCategory::active()->ordered()->get();
@@ -177,9 +181,25 @@ class TicketController extends Controller
         $agents = \App\Models\User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'support_tier']);
 
-        return view('tickets.show', compact('ticket', 'agents'));
+        $mergeableTickets = collect();
+        if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketMerging)) {
+            $mergeableTickets = Ticket::query()
+                ->where('id', '!=', $ticket->id)
+                ->where('is_merged', false)
+                ->whereNotIn('status', ['closed', 'cancelled'])
+                ->orderByDesc('created_at')
+                ->limit(100)
+                ->get(['id', 'ticket_number', 'subject']);
+        }
+
+        $cannedResponses = collect();
+        if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::CannedResponses)) {
+            $cannedResponses = \App\Models\CannedResponse::query()->ordered()->get(['id', 'name', 'category', 'content']);
+        }
+
+        return view('tickets.show', compact('ticket', 'agents', 'mergeableTickets', 'cannedResponses'));
     }
 
     /**
@@ -187,6 +207,8 @@ class TicketController extends Controller
      */
     public function edit(Ticket $ticket): View
     {
+        $this->checkPermission('update tickets');
+
         $ticket->load('products');
         $clients = Client::active()->orderBy('name')->get(['id', 'name', 'tier']);
         $departments = Department::active()->ordered()->get();
@@ -233,6 +255,7 @@ class TicketController extends Controller
      */
     public function assign(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('assign tickets');
         $validated = $request->validate([
             'assigned_to' => ['required', \Illuminate\Validation\Rule::exists('users', 'id')->whereNull('deleted_at')],
             'priority' => ['nullable', 'in:low,medium,high,critical'],
@@ -365,6 +388,8 @@ class TicketController extends Controller
      */
     public function reopen(Ticket $ticket): RedirectResponse
     {
+        $this->ticketService->addHistory($ticket, 'reopened', 'status', $ticket->status, 'open', 'Ticket reopened (reopened ' . ($ticket->reopened_count + 1) . ' time(s))');
+
         $ticket->update([
             'closed_at' => null,
             'reopened_count' => $ticket->reopened_count + 1,
@@ -395,6 +420,10 @@ class TicketController extends Controller
      */
     public function destroy(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('delete tickets');
+
+        $this->ticketService->addHistory($ticket, 'deleted', null, null, null, 'Ticket deleted' . ($request->input('reason') ? ': ' . $request->input('reason') : ''));
+
         $ticket->update([
             'deleted_by' => Auth::id(),
             'deletion_reason' => $request->input('reason'),
@@ -453,6 +482,8 @@ class TicketController extends Controller
     {
         $ticket->restore();
         $ticket->update(['deleted_by' => null, 'deletion_reason' => null]);
+
+        $this->ticketService->addHistory($ticket, 'restored', null, null, null, 'Ticket restored from trash');
 
         return redirect()->route('tickets.trashed')
             ->with('success', "Ticket {$ticket->ticket_number} restored.");

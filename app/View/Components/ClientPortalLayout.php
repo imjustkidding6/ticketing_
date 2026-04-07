@@ -14,6 +14,7 @@ class ClientPortalLayout extends Component
 
     public function __construct(
         public Tenant $tenant,
+        public bool $hideNav = false,
     ) {
         $this->hasKnowledgeBase = app(PlanService::class)->tenantHasFeature($tenant, PlanFeature::KnowledgeBase);
     }

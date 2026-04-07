@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AgentScheduleController;
 use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\CannedResponseController;
@@ -35,10 +36,45 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Public pages (no auth required)
+Route::get('/', [ClientPortalController::class, 'publicLanding'])->name('tenant.landing');
 Route::get('submit-ticket', [ClientPortalController::class, 'publicSubmitForm'])->name('tenant.submit-ticket');
 Route::post('submit-ticket', [ClientPortalController::class, 'publicSubmitStore'])->name('tenant.submit-ticket.store');
 Route::get('track-ticket', [ClientPortalController::class, 'publicTrackForm'])->name('tenant.track-ticket');
 Route::get('track-ticket/{token}', [ClientPortalController::class, 'publicTrackByToken'])->name('tenant.track-ticket.token');
+Route::post('track-ticket/{token}/reply', [ClientPortalController::class, 'publicReply'])->name('tenant.track-ticket.reply');
+
+// Knowledge Base portal (public, feature-gated at controller level)
+Route::get('kb', [App\Http\Controllers\KbPortalController::class, 'index'])->name('portal.knowledge-base.index');
+Route::get('kb/search', [App\Http\Controllers\KbPortalController::class, 'search'])->name('portal.knowledge-base.search');
+Route::get('kb/{categorySlug}', [App\Http\Controllers\KbPortalController::class, 'category'])->name('portal.knowledge-base.category');
+Route::get('kb/{categorySlug}/{articleSlug}', [App\Http\Controllers\KbPortalController::class, 'article'])->name('portal.knowledge-base.article');
+
+// Public API for cascading selects (no auth required, scoped by slug)
+Route::get('api/public/categories', function (\Illuminate\Http\Request $request, string $slug) {
+    $tenant = \App\Models\Tenant::where('slug', $slug)->where('is_active', true)->firstOrFail();
+    $query = \App\Models\TicketCategory::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_active', true)->orderBy('sort_order');
+    if ($request->filled('department_id')) {
+        $query->where('department_id', $request->department_id);
+    }
+
+    return $query->get(['id', 'name']);
+})->name('api.public.categories');
+
+Route::get('api/public/products', function (\Illuminate\Http\Request $request, string $slug) {
+    $tenant = \App\Models\Tenant::where('slug', $slug)->where('is_active', true)->firstOrFail();
+    $query = \App\Models\Product::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_active', true)->orderBy('sort_order');
+    if ($request->filled('category_id')) {
+        $query->where('category_id', $request->category_id);
+    } elseif ($request->filled('department_id')) {
+        $categoryIds = \App\Models\TicketCategory::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('department_id', $request->department_id)
+            ->pluck('id');
+        $query->whereIn('category_id', $categoryIds);
+    }
+
+    return $query->get(['id', 'name']);
+})->name('api.public.products');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified', 'tenant'])->name('dashboard');
@@ -103,6 +139,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::post('tickets/{ticket}/comments', [TicketCommentController::class, 'store'])->name('tickets.comments.store')->middleware('feature:client_comments');
     Route::put('tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update'])->name('tickets.comments.update')->middleware('feature:client_comments');
     Route::delete('tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'destroy'])->name('tickets.comments.destroy')->middleware('feature:client_comments');
+    Route::get('tickets/{ticket}/comments/{comment}/attachment/{index}', [TicketCommentController::class, 'downloadAttachment'])->name('tickets.comments.attachment')->middleware('feature:client_comments');
 
     // Escalation (Enterprise via feature gate)
     Route::post('tickets/{ticket}/escalate', [EscalationController::class, 'escalate'])->name('tickets.escalate')->middleware('feature:agent_escalation');
@@ -151,6 +188,9 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::get('reports/billing', [ReportController::class, 'billing'])->name('reports.billing')->middleware('feature:billing');
     Route::get('reports/export/billing', [ReportController::class, 'exportBilling'])->name('reports.export.billing')->middleware('feature:billing');
     Route::get('reports/sla-compliance', [ReportController::class, 'slaCompliance'])->name('reports.sla-compliance')->middleware('feature:sla_report');
+
+    // Activity Logs (Business+ via feature gate)
+    Route::get('activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index')->middleware('feature:audit_logs');
 
     // SLA Policies (Business+ via feature gate)
     Route::resource('sla', SlaPolicyController::class)->except(['show'])->middleware('feature:sla_management');

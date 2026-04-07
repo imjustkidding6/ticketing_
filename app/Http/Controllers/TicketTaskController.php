@@ -4,12 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\Ticket;
 use App\Models\TicketTask;
+use App\Services\TicketService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class TicketTaskController extends Controller
 {
+    public function __construct(
+        private TicketService $ticketService,
+    ) {}
     /**
      * Store a new task for a ticket.
      */
@@ -22,6 +26,8 @@ class TicketTaskController extends Controller
         ]);
 
         $ticket->tasks()->create($validated);
+
+        $this->ticketService->addHistory($ticket, 'task_added', null, null, null, 'Task added: ' . $validated['description']);
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Task added successfully.');
@@ -40,6 +46,8 @@ class TicketTaskController extends Controller
 
         $task->update($validated);
 
+        $this->ticketService->addHistory($ticket, 'task_updated', null, null, null, 'Task updated: ' . $validated['description']);
+
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Task updated successfully.');
     }
@@ -54,7 +62,10 @@ class TicketTaskController extends Controller
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
+        $oldStatus = $task->status;
         $task->updateStatus($validated['status'], Auth::user(), $validated['notes'] ?? null);
+
+        $this->ticketService->addHistory($ticket, 'task_status_changed', 'task_status', $oldStatus, $validated['status'], "Task '{$task->description}' changed from {$oldStatus} to {$validated['status']}");
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Task status updated.');
@@ -134,6 +145,8 @@ class TicketTaskController extends Controller
      */
     public function destroy(Ticket $ticket, TicketTask $task): RedirectResponse
     {
+        $this->ticketService->addHistory($ticket, 'task_deleted', null, null, null, 'Task removed: ' . $task->description);
+
         $task->delete();
 
         return redirect()->route('tickets.show', $ticket)

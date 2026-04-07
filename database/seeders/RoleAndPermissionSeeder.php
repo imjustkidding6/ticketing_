@@ -17,7 +17,10 @@ class RoleAndPermissionSeeder extends Seeder
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
         foreach (TenantRoleService::PERMISSIONS as $permission) {
-            Permission::findOrCreate($permission, 'web');
+            Permission::firstOrCreate([
+                'name' => $permission,
+                'guard_name' => 'web',
+            ]);
         }
     }
 }
