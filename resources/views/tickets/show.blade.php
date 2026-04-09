@@ -306,6 +306,9 @@
                                     <textarea name="content" id="comment_content" rows="3" required class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="{{ __('Write a comment...') }}"></textarea>
                                     <div>
                                         <input type="file" name="attachments[]" multiple class="block w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200">
+                                        @if($errors->has('attachments') || $errors->has('attachments.*'))
+                                            <p class="mt-1 text-sm text-red-600">{{ __('File type not allowed for security reasons') }}</p>
+                                        @endif
                                         <p class="mt-1 text-xs text-gray-400">{{ __('Max 5 files, 10MB each. Images, PDF, docs, zip.') }}</p>
                                     </div>
                                     <div class="flex items-center justify-between">

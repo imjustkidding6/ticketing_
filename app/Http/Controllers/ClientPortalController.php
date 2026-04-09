@@ -16,15 +16,29 @@ use App\Services\PlanService;
 use App\Services\TicketService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class ClientPortalController extends Controller
 {
+    private const DANGEROUS_EXTENSIONS = ['php', 'exe', 'sh', 'bat', 'cmd', 'js', 'py', 'rb'];
+
+    private const ALLOWED_COMMENT_ATTACHMENT_MIME_TYPES = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain',
+    ];
+
     public function __construct(
         private TicketService $ticketService,
         private PlanService $planService,
@@ -497,18 +511,28 @@ class ClientPortalController extends Controller
         $validated = $request->validate([
             'content' => ['required', 'string', 'max:5000'],
             'attachments' => ['nullable', 'array', 'max:3'],
-            'attachments.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,pdf,doc,docx,txt'],
+            'attachments.*' => [
+                'file',
+                'max:10240',
+                'mimes:jpg,jpeg,png,gif,pdf,doc,docx,txt',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value instanceof UploadedFile && $this->hasDangerousExtension($value)) {
+                        $fail('File type not allowed for security reasons');
+                    }
+                },
+            ],
         ]);
 
         $attachments = [];
         if ($request->hasFile('attachments')) {
-            foreach ($request->file('attachments') as $file) {
-                $path = $file->store('comment-attachments', 'public');
+            foreach ($request->file('attachments') as $index => $file) {
+                $detectedMime = $this->validateSafeAttachment($file, "attachments.{$index}", self::ALLOWED_COMMENT_ATTACHMENT_MIME_TYPES);
+                $path = $file->store('tenants/' . $tenant->id . '/comment-attachments', 'public');
                 $attachments[] = [
                     'name' => $file->getClientOriginalName(),
                     'path' => $path,
                     'size' => $file->getSize(),
-                    'mime' => $file->getMimeType(),
+                    'mime' => $detectedMime,
                 ];
             }
         }
@@ -569,6 +593,64 @@ class ClientPortalController extends Controller
             ->get();
 
         return [$departments, $categories];
+    }
+
+    private function validateSafeAttachment(UploadedFile $file, string $field, array $allowedMimeTypes): string
+    {
+        if ($this->hasDangerousExtension($file)) {
+            throw ValidationException::withMessages([
+                $field => 'File type not allowed for security reasons',
+            ]);
+        }
+
+        $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->file($file->getPathname());
+        $declaredMime = $file->getClientMimeType();
+
+        if (! is_string($detectedMime)) {
+            throw ValidationException::withMessages([
+                $field => 'The uploaded file content type is not allowed.',
+            ]);
+        }
+
+        $normalizedDetectedMime = $this->normalizeMimeType($detectedMime);
+        $normalizedDeclaredMime = is_string($declaredMime) ? $this->normalizeMimeType($declaredMime) : null;
+
+        if (
+            ! in_array($normalizedDetectedMime, $allowedMimeTypes, true)
+            || ! is_string($normalizedDeclaredMime)
+            || ! in_array($normalizedDeclaredMime, $allowedMimeTypes, true)
+            || $normalizedDeclaredMime !== $normalizedDetectedMime
+        ) {
+            throw ValidationException::withMessages([
+                $field => 'The uploaded file content does not match its declared type.',
+            ]);
+        }
+
+        return $normalizedDetectedMime;
+    }
+
+    private function hasDangerousExtension(UploadedFile $file): bool
+    {
+        $segments = array_filter(
+            array_map('trim', explode('.', strtolower($file->getClientOriginalName()))),
+            static fn (string $segment): bool => $segment !== ''
+        );
+
+        foreach ($segments as $segment) {
+            if (in_array($segment, self::DANGEROUS_EXTENSIONS, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeMimeType(string $mimeType): string
+    {
+        return match (strtolower(trim($mimeType))) {
+            'image/jpg' => 'image/jpeg',
+            default => strtolower(trim($mimeType)),
+        };
     }
 
     /**

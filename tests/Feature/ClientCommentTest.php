@@ -10,6 +10,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class ClientCommentTest extends TestCase
@@ -155,5 +156,29 @@ class ClientCommentTest extends TestCase
         $comment->refresh();
         $this->assertEquals('Updated content', $comment->content);
         $this->assertNotNull($comment->edited_at);
+    }
+
+    public function test_comment_rejects_attachment_when_declared_and_actual_mime_do_not_match(): void
+    {
+        $tenant = $this->createEnterpriseTenant();
+        $user = $this->setupTenantContext($tenant);
+
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'upl');
+        if ($tempPath === false) {
+            $this->fail('Unable to create temporary upload file for test.');
+        }
+
+        file_put_contents($tempPath, "<?php echo 'malicious';");
+        $file = new UploadedFile($tempPath, 'shell.pdf', 'application/pdf', null, true);
+
+        $this->post($this->tenantUrl("/tickets/{$ticket->id}/comments"), [
+            'content' => 'Attempt with bad attachment',
+            'type' => 'public',
+            'attachments' => [$file],
+        ])->assertSessionHasErrors('attachments.0');
+
+        @unlink($tempPath);
     }
 }

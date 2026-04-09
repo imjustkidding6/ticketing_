@@ -37,7 +37,7 @@ class TicketService
         unset($data['tasks']);
 
         $data['ticket_number'] = Ticket::generateTicketNumber();
-        $data['created_by'] = $data['created_by'] ?? Auth::id();
+        $data['created_by'] = $data['created_by'] ?? (Auth::check() ? Auth::id() : null);
         $data['status'] = 'open';
 
         $ticket = Ticket::create($data);
