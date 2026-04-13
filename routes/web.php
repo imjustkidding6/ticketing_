@@ -56,6 +56,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::resource('plans', PlanController::class)->only(['index', 'edit', 'update']);
     Route::resource('licenses', LicenseController::class)->except(['destroy']);
     Route::post('licenses/{license}/revoke', [LicenseController::class, 'revoke'])->name('licenses.revoke');
+    Route::resource('licenses', LicenseController::class);
+    Route::post('licenses/{license}/revoke', [LicenseController::class, 'revoke'])->name('licenses.revoke');
 
     Route::get('tenants', [AdminTenantController::class, 'index'])->name('tenants.index');
     Route::get('tenants/{tenant}', [AdminTenantController::class, 'show'])->name('tenants.show');

@@ -65,10 +65,17 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                             <a href="{{ route('admin.licenses.show', $license) }}" class="text-indigo-600 hover:text-indigo-900">View</a>
                             <a href="{{ route('admin.licenses.edit', $license) }}" class="text-gray-600 hover:text-gray-900">Edit</a>
+                            
                             @if($license->status !== 'revoked')
                                 <form action="{{ route('admin.licenses.revoke', $license) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to revoke this license?')">
                                     @csrf
-                                    <button type="submit" class="text-red-600 hover:text-red-900">Revoke</button>
+                                    <button type="submit" class="text-amber-500">Revoke</button>
+                                </form>
+                            @else
+                                <form action="{{ route('admin.licenses.destroy', $license) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to permanently delete this license?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="text-red-600">Delete</button>
                                 </form>
                             @endif
                         </td>

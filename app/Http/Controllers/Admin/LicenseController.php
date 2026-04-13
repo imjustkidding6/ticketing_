@@ -83,6 +83,14 @@ class LicenseController extends Controller
             ->with('success', 'License updated successfully.');
     }
 
+        public function destroy(License $license): RedirectResponse
+    {
+        $license->delete();
+
+        return redirect()->route('admin.licenses.index')
+            ->with('success', 'License deleted successfully.');
+    }
+
     public function revoke(License $license): RedirectResponse
     {
         $license->revoke();
