@@ -238,6 +238,12 @@ class TicketController extends Controller
     public function update(UpdateTicketRequest $request, Ticket $ticket): RedirectResponse
     {
         $data = $request->validated();
+        $submittedVersion = $request->input('ticket_lock_version');
+        if ($submittedVersion && (string) $ticket->updated_at->timestamp !== (string) $submittedVersion) {
+            return redirect()->route('tickets.edit', $ticket)
+                ->withInput()
+                ->with('error', 'This ticket has been modified by another user. Please review the changes and try again.');
+        }
 
         if ($request->hasFile('attachments')) {
             $existing = $ticket->attachments ?? [];

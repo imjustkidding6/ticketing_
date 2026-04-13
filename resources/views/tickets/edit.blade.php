@@ -9,6 +9,7 @@
                 <form method="POST" action="{{ route('tickets.update', $ticket) }}">
                     @csrf
                     @method('PUT')
+                    <input type="hidden" name="ticket_lock_version" value="{{ $ticket->updated_at->timestamp }}">
 
                     <div class="space-y-6">
                         <div>
