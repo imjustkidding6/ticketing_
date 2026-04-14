@@ -126,7 +126,7 @@ class AppSettingController extends Controller
     }
 
     /**
-     * Send a test email using the configured SMTP settings.
+     * Send a test email using the configured SMTP settings or log driver.
      */
     public function testEmail(Request $request): RedirectResponse
     {
@@ -137,6 +137,9 @@ class AppSettingController extends Controller
         $settings = AppSetting::getByGroup('notifications');
         $tenant = Tenant::findOrFail(session('current_tenant_id'));
 
+        // Check if custom SMTP is configured (in database settings, not defaults)
+        $hasCustomSmtp = !empty($settings['mail_host'] ?? null);
+        
         $host = $settings['mail_host'] ?? config('mail.mailers.smtp.host');
         $port = $settings['mail_port'] ?? config('mail.mailers.smtp.port');
         $username = $settings['mail_username'] ?? config('mail.mailers.smtp.username');
@@ -150,35 +153,53 @@ class AppSettingController extends Controller
         }
 
         try {
-            config([
-                'mail.mailers.tenant_smtp' => [
-                    'transport' => 'smtp',
-                    'host' => $host,
-                    'port' => (int) $port,
-                    'username' => $username,
-                    'password' => $password,
-                    'encryption' => $encryption,
-                ],
-                'mail.from.address' => $fromAddress,
-                'mail.from.name' => $fromName,
-            ]);
-
             $generalSettings = AppSetting::getByGroup('general');
             $companyName = $generalSettings['company_name'] ?? $tenant->name;
 
-            \Illuminate\Support\Facades\Mail::mailer('tenant_smtp')->send([], [], function ($message) use ($validated, $fromAddress, $fromName, $companyName) {
-                $message->to($validated['test_email'])
-                    ->from($fromAddress, $fromName)
-                    ->subject('Test Email from '.$companyName)
-                    ->html(
-                        '<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:30px;">'
-                        .'<h2 style="color:#10b981;">Email Configuration Successful!</h2>'
-                        .'<p>This is a test email from <strong>'.$companyName.'</strong>.</p>'
-                        .'<p>Your SMTP settings are working correctly.</p>'
-                        .'<p style="color:#6b7280;font-size:12px;margin-top:20px;">Sent at '.now()->format('M d, Y g:i A').'</p>'
-                        .'</div>'
-                    );
-            });
+            // Only use custom SMTP if explicitly configured in settings
+            if ($hasCustomSmtp) {
+                config([
+                    'mail.mailers.tenant_smtp' => [
+                        'transport' => 'smtp',
+                        'host' => $host,
+                        'port' => (int) $port,
+                        'username' => $username,
+                        'password' => $password,
+                        'encryption' => $encryption,
+                    ],
+                    'mail.from.address' => $fromAddress,
+                    'mail.from.name' => $fromName,
+                ]);
+
+                \Illuminate\Support\Facades\Mail::mailer('tenant_smtp')->send([], [], function ($message) use ($validated, $fromAddress, $fromName, $companyName) {
+                    $message->to($validated['test_email'])
+                        ->from($fromAddress, $fromName)
+                        ->subject('Test Email from '.$companyName)
+                        ->html(
+                            '<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:30px;">'
+                            .'<h2 style="color:#10b981;">Email Configuration Successful!</h2>'
+                            .'<p>This is a test email from <strong>'.$companyName.'</strong>.</p>'
+                            .'<p>Your SMTP settings are working correctly.</p>'
+                            .'<p style="color:#6b7280;font-size:12px;margin-top:20px;">Sent at '.now()->format('M d, Y g:i A').'</p>'
+                            .'</div>'
+                        );
+                });
+            } else {
+                // Use default mail driver (log, sendmail, etc.) when no custom SMTP is configured
+                \Illuminate\Support\Facades\Mail::send([], [], function ($message) use ($validated, $fromAddress, $fromName, $companyName) {
+                    $message->to($validated['test_email'])
+                        ->from($fromAddress, $fromName)
+                        ->subject('Test Email from '.$companyName)
+                        ->html(
+                            '<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:30px;">'
+                            .'<h2 style="color:#10b981;">Email Configuration Successful!</h2>'
+                            .'<p>This is a test email from <strong>'.$companyName.'</strong>.</p>'
+                            .'<p>Your email settings are working correctly.</p>'
+                            .'<p style="color:#6b7280;font-size:12px;margin-top:20px;">Sent at '.now()->format('M d, Y g:i A').'</p>'
+                            .'</div>'
+                        );
+                });
+            }
 
             return redirect()->route('settings.notifications')
                 ->with('success', 'Test email sent successfully to '.$validated['test_email']);
