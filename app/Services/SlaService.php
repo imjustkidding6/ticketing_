@@ -66,6 +66,28 @@ class SlaService
             ->get();
     }
 
+    
+    public function markBreachNotified(Ticket $ticket): bool
+    {
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($ticket) {
+            /** @var Ticket|null $fresh */
+            $fresh = Ticket::withoutGlobalScopes()
+                ->whereKey($ticket->id)
+                ->whereNull('sla_breach_notified_at')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $fresh) {
+                // Another process already marked this ticket — skip.
+                return false;
+            }
+
+            $fresh->update(['sla_breach_notified_at' => now()]);
+
+            return true;
+        });
+    }
+
     /**
      * Get SLA compliance report.
      *
