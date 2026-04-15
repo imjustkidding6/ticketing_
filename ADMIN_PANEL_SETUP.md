@@ -11,6 +11,11 @@ The admin panel is accessed at `/admin` and provides management of the multi-ten
 ### Seed the Database
 
 ```bash
+# Docker
+make migrate
+make seed
+
+# Local (no Docker)
 php artisan migrate
 php artisan db:seed
 ```

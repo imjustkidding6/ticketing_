@@ -7,7 +7,7 @@ A multi-tenant SaaS helpdesk platform built with Laravel 12. Manage support tick
 | Layer | Technology |
 |-------|-----------|
 | Backend | Laravel 12, PHP 8.2+ |
-| Frontend | Tailwind CSS 3, Alpine.js, Vite 7 |
+| Frontend | Tailwind CSS 4, Alpine.js, Vite 7 |
 | Database | MySQL 8 |
 | Cache/Queue | Redis (prod), Database (dev) |
 | Auth | Laravel Breeze + Spatie Permission v6 |
@@ -55,14 +55,13 @@ Features are gated via `CheckPlanFeature` middleware (`feature:feature_name`).
 | User Type | Login URL | Redirects To |
 |-----------|-----------|-------------|
 | Admin (system owner) | `/admin/login` | `/admin` (Admin Console) |
-| Tenant user (agent/manager) | `/login` | `/dashboard` (auto-resolves tenant) |
-| Client (portal) | `/portal/{slug}/login` | `/portal/{slug}/dashboard` |
+| Tenant user (agent/manager) | `/login` | `/{slug}/dashboard` (auto-resolves tenant) |
 
 Admins who accidentally use `/login` are auto-redirected to `/admin`.
 
 ### Client Portal (Public)
 
-Each tenant has a public portal at `/portal/{tenant-slug}/`:
+Each tenant has a public portal at `/{tenant-slug}/`:
 
 - **Guest ticket submission** — No login required. Name + email + details. Auto-creates Client record.
 - **Ticket tracking** — By ticket number + email, or via unique tracking token URL.
@@ -95,24 +94,16 @@ resources/views/
 
 routes/
 ├── web.php             # Main app + admin routes
-├── portal.php          # Client portal routes
+├── tenant.php          # Tenant routes (/{slug}/...)
 ├── auth.php            # Authentication routes
 └── console.php         # Console commands
 ```
 
 ## Setup
 
-### Prerequisites
-
-- PHP 8.2+
-- Composer
-- Node.js 18+
-- MySQL 8
-
-### Installation
+### Docker (Recommended)
 
 ```bash
-# Clone and install
 git clone <repo-url> && cd ticketing
 cp .env.example .env
 
@@ -142,21 +133,14 @@ make up
 git clone <repo-url> && cd ticketing
 composer install
 npm install
-
-# Environment
-cp .env.example .env
 php artisan key:generate
-
-# Database
 php artisan migrate
 php artisan db:seed
-
-# Build frontend
 npm run build
-
-# Start development
 composer run dev
 ```
+
+Visit http://localhost:8000
 
 ### Default Credentials (after seeding)
 
@@ -174,15 +158,6 @@ composer run dev
 | Enterprise plan | Agent | enterprise-agent@example.com | password |
 | Enterprise plan | Client | enterprise-client@example.com | password |
 
-### Docker (optional)
-
-```bash
-make up          # Start containers
-make migrate     # Run migrations
-make test        # Run tests
-make shell       # Open app shell
-```
-
 ## Development Commands
 
 ```bash
@@ -190,7 +165,11 @@ make shell       # Open app shell
 composer run dev
 
 # Run tests
-php artisan test --compact
+make test        # Docker
+php artisan test --compact  # Local
+
+# If tests fail with "Vite manifest not found", run:
+npm run build
 
 # Code formatting
 php vendor/bin/pint --dirty
@@ -327,7 +306,6 @@ npm run build    # Production
 - Progressive Web App support
 - Mobile-optimized agent interface
 - Push notifications for ticket updates
-
 ## License
 
 Proprietary. All rights reserved.
