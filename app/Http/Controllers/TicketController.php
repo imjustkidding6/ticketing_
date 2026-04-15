@@ -64,11 +64,18 @@ class TicketController extends Controller
     }
 
     /**
-     * Display a listing of tickets.
+     * Maximum page number allowed for offset-based pagination.
+     * Beyond this, OFFSET costs become prohibitive on large datasets.
      */
+    private const MAX_PAGE = 100;
+
     public function index(Request $request): View
     {
         $this->checkPermission('view tickets');
+
+        // OFFSET 100 000+ scans and discards rows; cursor pagination would
+        $page = min((int) $request->input('page', 1), self::MAX_PAGE);
+        $request->merge(['page' => $page]);
 
         $tickets = $this->scopeByUserDepartments(Ticket::query())
             ->with(['client', 'category', 'department', 'creator', 'assignee'])
@@ -94,7 +101,7 @@ class TicketController extends Controller
                         ->orWhere('description', 'like', "%{$search}%");
                 });
             })
-            ->latest()
+            ->orderBy('id', 'desc')
             ->paginate(20)
             ->withQueryString();
 
