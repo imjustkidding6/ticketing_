@@ -1,5 +1,9 @@
 .PHONY: help up down build rebuild shell bash mysql redis migrate seed fresh test tinker logs npm-dev npm-build composer-install artisan
 
+COMPOSE_PROJECT_NAME ?= ticketing
+DB_PASSWORD ?= secret
+COMPOSE = docker-compose -p $(COMPOSE_PROJECT_NAME)
+
 # Default target
 help:
 	@echo "Docker Laravel Development Commands"
@@ -35,51 +39,54 @@ help:
 
 # Docker commands
 up:
-	docker-compose up -d
+	$(COMPOSE) up -d
 
 down:
-	docker-compose down
+	$(COMPOSE) down
 
 build:
-	docker-compose build
+	$(COMPOSE) build
 
 rebuild:
-	docker-compose build --no-cache
+	$(COMPOSE) build --no-cache
 
 logs:
-	docker-compose logs -f
+	$(COMPOSE) logs -f
 
 # Shell access
 shell:
-	docker-compose exec app bash
+	$(COMPOSE) exec app bash
 
 bash: shell
 
 mysql:
-	docker-compose exec mysql mysql -u ticketing -psecret ticketing
+	$(COMPOSE) exec mysql mysql -u ticketing -psecret ticketing
 
 redis:
-	docker-compose exec redis redis-cli
+	$(COMPOSE) exec redis redis-cli
 
 # Laravel commands
-migrate:
-	docker-compose exec app php artisan migrate
+wait-db:
+	$(COMPOSE) exec mysql sh -c 'until mysqladmin ping -h localhost -uroot -p"$${MYSQL_ROOT_PASSWORD}" --silent; do sleep 2; done'
+
+migrate: wait-db
+	$(COMPOSE) exec app php artisan migrate
 
 seed:
-	docker-compose exec app php artisan db:seed
+	$(COMPOSE) exec app php artisan db:seed
 
 fresh:
-	docker-compose exec app php artisan migrate:fresh --seed
+	$(COMPOSE) exec app php artisan migrate:fresh --seed
 
-test:
-	docker-compose exec app php artisan test
+test: wait-db
+	$(COMPOSE) exec app php artisan test
 
 tinker:
-	docker-compose exec app php artisan tinker
+	$(COMPOSE) exec app php artisan tinker
 
 # Dependencies
 composer-install:
-	docker-compose exec app composer install
+	$(COMPOSE) exec app composer install
 
 npm-dev:
 	npm run dev
@@ -90,4 +97,4 @@ npm-build:
 # Utility - run any artisan command
 # Usage: make artisan cmd="make:model Post"
 artisan:
-	docker-compose exec app php artisan $(cmd)
+	$(COMPOSE) exec app php artisan $(cmd)

@@ -38,6 +38,8 @@ services:
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-ticketing}
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_USER: ${DB_USERNAME:-ticketing}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
