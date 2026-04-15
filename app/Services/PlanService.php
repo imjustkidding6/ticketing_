@@ -13,44 +13,54 @@ class PlanService
      */
     public function tenantHasFeature(Tenant $tenant, PlanFeature|string $feature): bool
     {
-        $featureValue = $feature instanceof PlanFeature ? $feature->value : $feature;
-        $features = $this->getTenantFeatures($tenant);
+        if (! $this->hasValidLicense($tenant)) {
+            return false;
+        }
 
-        return in_array($featureValue, $features, true);
+        $featureValue = $feature instanceof PlanFeature
+            ? $feature->value
+            : $feature;
+
+        return in_array($featureValue, $this->getPlanFeatures($tenant), true);
     }
 
     /**
-     * Get all features available for a tenant.
-     *
+     * Get plan features (cached for 5 minutes as a safety net).
      * @return list<string>
      */
-    public function getTenantFeatures(Tenant $tenant): array
+    protected function getPlanFeatures(Tenant $tenant): array
     {
         return Cache::remember(
-            "tenant_{$tenant->id}_features",
-            300,
+            $this->planCacheKey($tenant),
+            now()->addMinutes(5),
             function () use ($tenant) {
                 $plan = $tenant->plan();
 
-                if (! $plan) {
-                    return [];
-                }
-
-                return $plan->features ?? [];
+                return $plan?->features ?? [];
             }
         );
     }
 
     /**
-     * Clear the cached features for a tenant.
+     * Validate tenant license (NOT cached).
      */
-    public function clearCache(Tenant $tenant): void
+    protected function hasValidLicense(Tenant $tenant): bool
     {
-        Cache::forget("tenant_{$tenant->id}_features");
+        $license = $tenant->license;
+
+        return $license !== null && $license->isValid();
     }
 
     /**
-     * Check if the current session tenant has a feature.
+     * Clear cached plan features.
+     */
+    public function clearCache(Tenant $tenant): void
+    {
+        Cache::forget($this->planCacheKey($tenant));
+    }
+
+    /**
+     * Check feature for the current session tenant.
      */
     public function currentTenantHasFeature(PlanFeature|string $feature): bool
     {
@@ -67,5 +77,10 @@ class PlanService
         }
 
         return $this->tenantHasFeature($tenant, $feature);
+    }
+
+    protected function planCacheKey(Tenant $tenant): string
+    {
+        return "tenant_{$tenant->id}_plan_features";
     }
 }

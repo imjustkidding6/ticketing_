@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Distributor;
 use App\Models\License;
 use App\Models\Plan;
+use App\Services\PlanService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -77,7 +78,13 @@ class LicenseController extends Controller
             'grace_days' => ['required', 'integer', 'min:0', 'max:90'],
         ]);
 
+        $tenant = $license->tenant;
+
         $license->update($validated);
+
+        if ($tenant) {
+            app(PlanService::class)->clearCache($tenant);
+        }
 
         return redirect()->route('admin.licenses.index')
             ->with('success', 'License updated successfully.');
@@ -85,7 +92,14 @@ class LicenseController extends Controller
 
     public function revoke(License $license): RedirectResponse
     {
+        $license->loadMissing('tenant');
+        $tenant = $license->tenant;
+
         $license->revoke();
+
+        if ($tenant) {
+            app(PlanService::class)->clearCache($tenant);
+        }
 
         return redirect()->route('admin.licenses.index')
             ->with('success', 'License revoked successfully.');
