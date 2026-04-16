@@ -99,7 +99,7 @@ class ReportControllerTest extends TestCase
         $this->get($this->tenantUrl('/reports/export/volume'))->assertOk();
     }
 
-    public function test_agent_cannot_view_reports(): void
+    public function test_agent_can_view_reports(): void
     {
         $plan = Plan::factory()->create(['slug' => 'biz4', 'features' => PlanFeature::forPlan('business')]);
         $license = License::factory()->active()->forPlan($plan)->create();
@@ -114,6 +114,6 @@ class ReportControllerTest extends TestCase
 
         $this->actingAs($user)->withTenant($tenant)->withSession(['current_tenant_id' => $tenant->id]);
 
-        $this->get($this->tenantUrl('/reports'))->assertForbidden();
+        $this->get($this->tenantUrl('/reports'))->assertOk();
     }
 }

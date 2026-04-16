@@ -15,6 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
                 ->prefix('{slug}')
                 ->where(['slug' => '[a-z0-9][a-z0-9\-]*[a-z0-9]'])
                 ->group(base_path('routes/tenant.php'));
+
+            Route::middleware('web')
+                ->group(base_path('routes/portal.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
