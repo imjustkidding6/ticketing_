@@ -35,19 +35,21 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// Public pages (no auth required)
-Route::get('/', [ClientPortalController::class, 'publicLanding'])->name('tenant.landing');
-Route::get('submit-ticket', [ClientPortalController::class, 'publicSubmitForm'])->name('tenant.submit-ticket');
-Route::post('submit-ticket', [ClientPortalController::class, 'publicSubmitStore'])->name('tenant.submit-ticket.store');
-Route::get('track-ticket', [ClientPortalController::class, 'publicTrackForm'])->name('tenant.track-ticket');
-Route::get('track-ticket/{token}', [ClientPortalController::class, 'publicTrackByToken'])->name('tenant.track-ticket.token');
-Route::post('track-ticket/{token}/reply', [ClientPortalController::class, 'publicReply'])->name('tenant.track-ticket.reply');
+// Public pages (no auth required) - Rate limited
+Route::middleware('throttle:10,1')->group(function () {
+    Route::get('/', [ClientPortalController::class, 'publicLanding'])->name('tenant.landing');
+    Route::get('submit-ticket', [ClientPortalController::class, 'publicSubmitForm'])->name('tenant.submit-ticket');
+    Route::post('submit-ticket', [ClientPortalController::class, 'publicSubmitStore'])->name('tenant.submit-ticket.store');
+    Route::get('track-ticket', [ClientPortalController::class, 'publicTrackForm'])->name('tenant.track-ticket');
+    Route::get('track-ticket/{token}', [ClientPortalController::class, 'publicTrackByToken'])->name('tenant.track-ticket.token');
+    Route::post('track-ticket/{token}/reply', [ClientPortalController::class, 'publicReply'])->name('tenant.track-ticket.reply');
 
-// Knowledge Base portal (public, feature-gated at controller level)
-Route::get('kb', [App\Http\Controllers\KbPortalController::class, 'index'])->name('portal.knowledge-base.index');
-Route::get('kb/search', [App\Http\Controllers\KbPortalController::class, 'search'])->name('portal.knowledge-base.search');
-Route::get('kb/{categorySlug}', [App\Http\Controllers\KbPortalController::class, 'category'])->name('portal.knowledge-base.category');
-Route::get('kb/{categorySlug}/{articleSlug}', [App\Http\Controllers\KbPortalController::class, 'article'])->name('portal.knowledge-base.article');
+    // Knowledge Base portal (public, feature-gated at controller level)
+    Route::get('kb', [App\Http\Controllers\KbPortalController::class, 'index'])->name('portal.knowledge-base.index');
+    Route::get('kb/search', [App\Http\Controllers\KbPortalController::class, 'search'])->name('portal.knowledge-base.search');
+    Route::get('kb/{categorySlug}', [App\Http\Controllers\KbPortalController::class, 'category'])->name('portal.knowledge-base.category');
+    Route::get('kb/{categorySlug}/{articleSlug}', [App\Http\Controllers\KbPortalController::class, 'article'])->name('portal.knowledge-base.article');
+});
 
 // Public API for cascading selects (no auth required, scoped by slug)
 Route::get('api/public/categories', function (\Illuminate\Http\Request $request, string $slug) {
