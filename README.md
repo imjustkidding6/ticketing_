@@ -114,6 +114,32 @@ routes/
 ```bash
 # Clone and install
 git clone <repo-url> && cd ticketing
+cp .env.example .env
+
+make up
+make composer-install
+make artisan cmd="key:generate"
+make migrate
+make seed
+
+# Build frontend assets (host machine)
+npm install
+npm run build
+```
+
+Visit http://localhost:8080
+
+If you change database credentials or see MySQL auth errors, recreate volumes:
+
+```bash
+docker compose -p ticketing down -v
+make up
+```
+
+### Local (No Docker)
+
+```bash
+git clone <repo-url> && cd ticketing
 composer install
 npm install
 
@@ -134,10 +160,19 @@ composer run dev
 
 ### Default Credentials (after seeding)
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@example.com | password |
-| Tenant User | test@example.com | password |
+| Scope | Role | Email | Password |
+|-------|------|-------|----------|
+| System | Admin | admin@example.com | password |
+| Demo tenant | Tenant User | test@example.com | password |
+| Start plan | Tenant Admin | start-admin@example.com | password |
+| Start plan | Agent | start-agent@example.com | password |
+| Start plan | Client | start-client@example.com | password |
+| Business plan | Tenant Admin | business-admin@example.com | password |
+| Business plan | Agent | business-agent@example.com | password |
+| Business plan | Client | business-client@example.com | password |
+| Enterprise plan | Tenant Admin | enterprise-admin@example.com | password |
+| Enterprise plan | Agent | enterprise-agent@example.com | password |
+| Enterprise plan | Client | enterprise-client@example.com | password |
 
 ### Docker (optional)
 

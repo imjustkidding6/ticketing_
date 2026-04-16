@@ -350,7 +350,7 @@ nvm use 20
 **Containers won't start:**
 ```bash
 # Check for port conflicts
-docker-compose down
+docker compose down
 make rebuild
 make up
 ```

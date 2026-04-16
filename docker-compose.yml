@@ -9,6 +9,21 @@ services:
     volumes:
       - .:/var/www/html
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/app.ini
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /var/www/html
+          ignore:
+            - node_modules/
+            - vendor/
+            - storage/
+        - action: rebuild
+          path: composer.json
+        - action: rebuild
+          path: package.json
+        - action: rebuild
+          path: Dockerfile
     networks:
       - ticketing
     depends_on:
