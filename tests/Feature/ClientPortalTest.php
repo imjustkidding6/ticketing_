@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -140,6 +141,33 @@ class ClientPortalTest extends TestCase
             'is_public' => true,
             'user_id' => null,
         ]);
+    }
+
+    public function test_public_reply_rejects_attachment_with_dangerous_intermediate_extension(): void
+    {
+        $tenant = $this->createTenant('enterprise');
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        Ticket::factory()->create([
+            'tenant_id' => $tenant->id,
+            'client_id' => $client->id,
+            'created_by' => null,
+            'tracking_token' => 'dangerous-extension-token',
+        ]);
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'upl');
+        if ($tempPath === false) {
+            $this->fail('Unable to create temporary upload file for test.');
+        }
+
+        file_put_contents($tempPath, "%PDF-1.4\n% test");
+        $file = new UploadedFile($tempPath, 'shell.php.pdf', 'application/pdf', null, true);
+
+        $this->post("/{$tenant->slug}/track-ticket/dangerous-extension-token/reply", [
+            'content' => 'Client reply test',
+            'attachments' => [$file],
+        ])->assertSessionHasErrors('attachments.0');
+
+        @unlink($tempPath);
     }
 
     public function test_public_api_categories(): void
