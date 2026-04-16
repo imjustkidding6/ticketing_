@@ -219,83 +219,100 @@
         </div>
     </div>
 
-    <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {{-- Top Tenants by Usage --}}
-        <div class="bg-white shadow rounded-lg">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">Top Tenants by Activity</h3>
-            </div>
-            <div class="overflow-x-auto">
-                @if($topTenants->isNotEmpty())
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tenant</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Users</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Tickets</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase"></th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200">
-                            @foreach($topTenants as $tenant)
-                                <tr>
-                                    <td class="px-6 py-3 text-sm font-medium text-gray-900">{{ $tenant->name }}</td>
-                                    <td class="px-6 py-3 text-sm text-gray-500">{{ $tenant->license?->plan?->name ?? '-' }}</td>
-                                    <td class="px-6 py-3 text-sm text-gray-900 text-right">{{ $tenant->users_count }}</td>
-                                    <td class="px-6 py-3 text-sm text-gray-900 text-right">{{ $tenant->ticket_count }}</td>
-                                    <td class="px-6 py-3 text-right">
-                                        <a href="{{ route('admin.tenants.show', $tenant) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">View</a>
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                @else
-                    <div class="p-6">
-                        <p class="text-sm text-gray-500 text-center">No active tenants yet.</p>
-                    </div>
-                @endif
+    {{-- Combined Tenants Table --}}
+    @php
+        $topIds    = $topTenants->pluck('id');
+        $recentIds = $recentTenants->pluck('id');
+        $allTenants = $topTenants->merge($recentTenants)->unique('id')->map(function ($tenant) use ($topIds, $recentIds) {
+            $inTop    = $topIds->contains($tenant->id);
+            $inRecent = $recentIds->contains($tenant->id);
+            $tenant->view_type = ($inTop && $inRecent) ? 'both' : ($inTop ? 'top' : 'recent');
+            return $tenant;
+        });
+    @endphp
+
+    <div class="mt-6 bg-white shadow rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">Tenants</h3>
+            <div class="flex gap-1 p-1 bg-gray-100 rounded-lg text-sm">
+                <button onclick="setTenantFilter('all')" id="tenant-btn-all"
+                    class="tenant-filter-btn px-3 py-1 rounded-md bg-white text-gray-900 font-medium transition-all">All</button>
+                <button onclick="setTenantFilter('top')" id="tenant-btn-top"
+                    class="tenant-filter-btn px-3 py-1 rounded-md text-gray-500 transition-all">Top activity</button>
+                <button onclick="setTenantFilter('recent')" id="tenant-btn-recent"
+                    class="tenant-filter-btn px-3 py-1 rounded-md text-gray-500 transition-all">Recently created</button>
             </div>
         </div>
-
-        {{-- Recent Tenants --}}
-        <div class="bg-white shadow rounded-lg">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">Recently Created Tenants</h3>
-            </div>
-            <div class="overflow-x-auto">
-                @if($recentTenants->isNotEmpty())
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tenant</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase"></th>
+        <div class="overflow-x-auto">
+            @if($allTenants->isNotEmpty())
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tenant</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
+                            <th id="tenant-th-users" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Users</th>
+                            <th id="tenant-th-tickets" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Tickets</th>
+                            <th id="tenant-th-created" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden">Created</th>
+                            <th class="px-6 py-3"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tenant-table-body" class="divide-y divide-gray-200">
+                        @foreach($allTenants as $tenant)
+                            <tr data-type="{{ $tenant->view_type }}">
+                                <td class="px-6 py-3 text-sm font-medium text-gray-900">{{ $tenant->name }}</td>
+                                <td class="px-6 py-3 text-sm text-gray-500">{{ $tenant->license?->plan?->name ?? '-' }}</td>
+                                <td class="px-6 py-3 text-sm text-gray-900 text-right td-users">{{ $tenant->users_count }}</td>
+                                <td class="px-6 py-3 text-sm text-gray-900 text-right td-tickets">{{ $tenant->ticket_count }}</td>
+                                <td class="px-6 py-3 text-sm text-gray-500 td-created hidden">{{ $tenant->created_at->diffForHumans() }}</td>
+                                <td class="px-6 py-3 text-right">
+                                    <a href="{{ route('admin.tenants.show', $tenant) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">View</a>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200">
-                            @foreach($recentTenants as $tenant)
-                                <tr>
-                                    <td class="px-6 py-3 text-sm font-medium text-gray-900">{{ $tenant->name }}</td>
-                                    <td class="px-6 py-3 text-sm text-gray-500">{{ $tenant->license?->plan?->name ?? '-' }}</td>
-                                    <td class="px-6 py-3 text-sm text-gray-500">{{ $tenant->created_at->diffForHumans() }}</td>
-                                    <td class="px-6 py-3 text-right">
-                                        <a href="{{ route('admin.tenants.show', $tenant) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">View</a>
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                @else
-                    <div class="p-6">
-                        <p class="text-sm text-gray-500 text-center">No tenants yet.</p>
-                    </div>
-                @endif
-            </div>
+                        @endforeach
+                    </tbody>
+                </table>
+                <div id="tenant-empty-state" class="hidden p-6 text-center text-sm text-gray-500">No tenants found.</div>
+            @else
+                <div class="p-6">
+                    <p class="text-sm text-gray-500 text-center">No tenants yet.</p>
+                </div>
+            @endif
         </div>
     </div>
+
+    <script>
+        function setTenantFilter(filter) {
+            document.querySelectorAll('.tenant-filter-btn').forEach(btn => {
+                btn.classList.remove('bg-white', 'text-gray-900', 'font-medium');
+                btn.classList.add('text-gray-500');
+            });
+            const active = document.getElementById('tenant-btn-' + filter);
+            active.classList.add('bg-white', 'text-gray-900', 'font-medium');
+            active.classList.remove('text-gray-500');
+
+            const showActivity = filter !== 'recent';
+            const showCreated  = filter !== 'top';
+
+            document.getElementById('tenant-th-users').classList.toggle('hidden', !showActivity);
+            document.getElementById('tenant-th-tickets').classList.toggle('hidden', !showActivity);
+            document.getElementById('tenant-th-created').classList.toggle('hidden', !showCreated);
+
+            let visible = 0;
+            document.querySelectorAll('#tenant-table-body tr').forEach(row => {
+                const type  = row.dataset.type;
+                const match = filter === 'all' || type === filter || type === 'both';
+                row.classList.toggle('hidden', !match);
+                if (match) {
+                    visible++;
+                    row.querySelectorAll('.td-users, .td-tickets').forEach(el => el.classList.toggle('hidden', !showActivity));
+                    row.querySelectorAll('.td-created').forEach(el => el.classList.toggle('hidden', !showCreated));
+                }
+            });
+
+            const emptyState = document.getElementById('tenant-empty-state');
+            if (emptyState) emptyState.classList.toggle('hidden', visible > 0);
+        }
+    </script>
 
     {{-- Quick Actions --}}
     <div class="mt-6">
