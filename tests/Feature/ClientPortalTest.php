@@ -21,17 +21,17 @@ class ClientPortalTest extends TestCase
 
     private function createTenant(string $planSlug): Tenant
     {
-        $plan = Plan::factory()->create(['slug' => $planSlug . '_' . Str::random(4), 'features' => PlanFeature::forPlan($planSlug)]);
+        $plan = Plan::factory()->create(['slug' => $planSlug.'_'.Str::random(4), 'features' => PlanFeature::forPlan($planSlug)]);
         $license = License::factory()->active()->forPlan($plan)->create();
 
         return Tenant::factory()->create(['license_id' => $license->id]);
     }
 
-    public function test_landing_page_starter_gets_404(): void
+    public function test_landing_page_starter_accessible(): void
     {
         $tenant = $this->createTenant('start');
 
-        $this->get("/{$tenant->slug}/")->assertNotFound();
+        $this->get("/{$tenant->slug}/")->assertOk();
     }
 
     public function test_landing_page_business_accessible(): void
@@ -41,11 +41,11 @@ class ClientPortalTest extends TestCase
         $this->get("/{$tenant->slug}/")->assertOk();
     }
 
-    public function test_submit_ticket_starter_gets_404(): void
+    public function test_submit_ticket_starter_accessible(): void
     {
         $tenant = $this->createTenant('start');
 
-        $this->get("/{$tenant->slug}/submit-ticket")->assertNotFound();
+        $this->get("/{$tenant->slug}/submit-ticket")->assertOk();
     }
 
     public function test_submit_ticket_form_loads(): void

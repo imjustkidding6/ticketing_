@@ -527,7 +527,7 @@ class ClientPortalController extends Controller
         if ($request->hasFile('attachments')) {
             foreach ($request->file('attachments') as $index => $file) {
                 $detectedMime = $this->validateSafeAttachment($file, "attachments.{$index}", self::ALLOWED_COMMENT_ATTACHMENT_MIME_TYPES);
-                $path = $file->store('tenants/' . $tenant->id . '/comment-attachments', 'public');
+                $path = $file->store('tenants/'.$tenant->id.'/comment-attachments', 'public');
                 $attachments[] = [
                     'name' => $file->getClientOriginalName(),
                     'path' => $path,
@@ -552,14 +552,11 @@ class ClientPortalController extends Controller
     }
 
     /**
-     * Abort if tenant is on the Starter plan (no public portal access).
+     * Starter plan has access to the public portal; method retained for compatibility.
      */
     private function abortIfStarter(Tenant $tenant): void
     {
-        $planSlug = $tenant->plan()?->slug;
-        if ($planSlug === 'start' || $planSlug === null) {
-            abort(404);
-        }
+        // No-op: portal access is available for all plans.
     }
 
     /**

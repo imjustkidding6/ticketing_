@@ -58,6 +58,8 @@ enum PlanFeature: string
             self::SlaReport,
             self::EmailNotifications,
             self::DetailedReporting,
+            self::KnowledgeBase,
+            self::CannedResponses,
         ];
     }
 
@@ -76,8 +78,6 @@ enum PlanFeature: string
             self::DepartmentManagement,
             self::AgentEscalation,
             self::ClientComments,
-            self::KnowledgeBase,
-            self::CannedResponses,
         ];
     }
 
@@ -144,9 +144,9 @@ enum PlanFeature: string
             self::CustomRoles,
             self::DepartmentManagement,
             self::AgentEscalation,
-            self::ClientComments,
+            self::ClientComments => 'enterprise',
             self::KnowledgeBase,
-            self::CannedResponses => 'enterprise',
+            self::CannedResponses => 'business',
         };
     }
 }

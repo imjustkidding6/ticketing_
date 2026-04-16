@@ -15,11 +15,11 @@ class KbPortalTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function createEnterpriseTenant(): Tenant
+    private function createBusinessTenant(): Tenant
     {
         $plan = Plan::factory()->create([
-            'slug' => 'enterprise',
-            'features' => PlanFeature::forPlan('enterprise'),
+            'slug' => 'business',
+            'features' => PlanFeature::forPlan('business'),
         ]);
         $license = License::factory()->active()->forPlan($plan)->create();
 
@@ -46,7 +46,7 @@ class KbPortalTest extends TestCase
 
     public function test_portal_kb_returns_404_for_suspended_tenant(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
         $tenant->update(['suspended_at' => now()]);
 
         $this->get(route('portal.knowledge-base.index', ['slug' => $tenant->slug]))
@@ -55,7 +55,7 @@ class KbPortalTest extends TestCase
 
     public function test_portal_kb_index_shows_categories(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
 
         $category = KbCategory::factory()->create([
             'tenant_id' => $tenant->id,
@@ -74,7 +74,7 @@ class KbPortalTest extends TestCase
 
     public function test_portal_category_shows_published_articles(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
 
         $category = KbCategory::factory()->create([
             'tenant_id' => $tenant->id,
@@ -104,7 +104,7 @@ class KbPortalTest extends TestCase
 
     public function test_portal_article_increments_views(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
 
         $category = KbCategory::factory()->create(['tenant_id' => $tenant->id]);
         $article = KbArticle::factory()->published()->create([
@@ -126,7 +126,7 @@ class KbPortalTest extends TestCase
 
     public function test_portal_article_returns_404_for_unpublished(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
 
         $category = KbCategory::factory()->create(['tenant_id' => $tenant->id]);
         $article = KbArticle::factory()->unpublished()->create([
@@ -144,7 +144,7 @@ class KbPortalTest extends TestCase
 
     public function test_portal_search_returns_matching_articles(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
 
         $category = KbCategory::factory()->create(['tenant_id' => $tenant->id]);
         KbArticle::factory()->published()->create([
@@ -165,8 +165,8 @@ class KbPortalTest extends TestCase
     public function test_portal_search_respects_tenant_scoping(): void
     {
         $plan = Plan::factory()->create([
-            'slug' => 'enterprise',
-            'features' => PlanFeature::forPlan('enterprise'),
+            'slug' => 'business',
+            'features' => PlanFeature::forPlan('business'),
         ]);
         $license1 = License::factory()->active()->forPlan($plan)->create();
         $license2 = License::factory()->active()->forPlan($plan)->create();

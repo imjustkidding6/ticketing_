@@ -16,11 +16,11 @@ class CannedResponseTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function createEnterpriseTenant(): Tenant
+    private function createBusinessTenant(): Tenant
     {
         $plan = Plan::factory()->create([
-            'slug' => 'enterprise',
-            'features' => PlanFeature::forPlan('enterprise'),
+            'slug' => 'business',
+            'features' => PlanFeature::forPlan('business'),
         ]);
         $license = License::factory()->active()->forPlan($plan)->create();
 
@@ -51,7 +51,7 @@ class CannedResponseTest extends TestCase
 
     public function test_index_requires_auth(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
 
         $this->get(app(TenantUrlHelper::class)->tenantUrl($tenant, '/canned-responses'))
             ->assertRedirect('/login');
@@ -68,7 +68,7 @@ class CannedResponseTest extends TestCase
 
     public function test_index_works_for_business_plan(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
         $this->setupTenantContext($tenant);
 
         $this->get($this->tenantUrl('/canned-responses'))
@@ -78,7 +78,7 @@ class CannedResponseTest extends TestCase
 
     public function test_can_create_canned_response(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
         $user = $this->setupTenantContext($tenant);
 
         $this->post($this->tenantUrl('/canned-responses'), [
@@ -99,7 +99,7 @@ class CannedResponseTest extends TestCase
 
     public function test_can_update_canned_response(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
         $this->setupTenantContext($tenant);
 
         $response = CannedResponse::factory()->create(['tenant_id' => $tenant->id]);
@@ -117,7 +117,7 @@ class CannedResponseTest extends TestCase
 
     public function test_can_delete_canned_response(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
         $this->setupTenantContext($tenant);
 
         $response = CannedResponse::factory()->create(['tenant_id' => $tenant->id]);
@@ -131,7 +131,7 @@ class CannedResponseTest extends TestCase
 
     public function test_index_filters_by_category(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
         $this->setupTenantContext($tenant);
 
         CannedResponse::factory()->create([
@@ -154,7 +154,7 @@ class CannedResponseTest extends TestCase
 
     public function test_index_filters_by_search(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
         $this->setupTenantContext($tenant);
 
         CannedResponse::factory()->create([
@@ -177,7 +177,7 @@ class CannedResponseTest extends TestCase
 
     public function test_list_endpoint_returns_json(): void
     {
-        $tenant = $this->createEnterpriseTenant();
+        $tenant = $this->createBusinessTenant();
         $this->setupTenantContext($tenant);
 
         CannedResponse::factory()->create([
@@ -196,8 +196,8 @@ class CannedResponseTest extends TestCase
     public function test_list_endpoint_respects_tenant_scoping(): void
     {
         $plan = Plan::factory()->create([
-            'slug' => 'enterprise',
-            'features' => PlanFeature::forPlan('enterprise'),
+            'slug' => 'business',
+            'features' => PlanFeature::forPlan('business'),
         ]);
 
         $license1 = License::factory()->active()->forPlan($plan)->create();

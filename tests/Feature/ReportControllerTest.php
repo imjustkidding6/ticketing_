@@ -93,10 +93,10 @@ class ReportControllerTest extends TestCase
         $this->get($this->tenantUrl('/reports/sla-compliance'))->assertOk();
     }
 
-    public function test_export_requires_detailed_reporting(): void
+    public function test_export_available_for_starter(): void
     {
         $this->setupContext('start');
-        $this->get($this->tenantUrl('/reports/export/volume'))->assertForbidden();
+        $this->get($this->tenantUrl('/reports/export/volume'))->assertOk();
     }
 
     public function test_agent_cannot_view_reports(): void
