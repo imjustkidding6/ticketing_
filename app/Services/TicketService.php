@@ -48,10 +48,16 @@ class TicketService
 
         foreach ($tasks as $index => $taskDescription) {
             if (! empty(trim($taskDescription))) {
-                $ticket->tasks()->create([
+                $taskAttributes = [
                     'description' => trim($taskDescription),
                     'sort_order' => $index,
-                ]);
+                ];
+
+                if (! empty($ticket->assigned_to)) {
+                    $taskAttributes['assigned_to'] = $ticket->assigned_to;
+                }
+
+                $ticket->tasks()->create($taskAttributes);
             }
         }
 

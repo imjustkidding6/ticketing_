@@ -125,6 +125,42 @@
                 </div>
             </div>
 
+            @if(Auth::user()?->hasRole('agent') && Auth::user()?->tenant?->license?->plan?->name === 'Business')
+                <div class="mt-6 rounded-xl bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-gray-900">{{ __('My Tasks') }}</h3>
+                    </div>
+
+                    @if($myBusinessTasks->count() > 0)
+                        <ul class="mt-4 divide-y divide-gray-200">
+                            @foreach($myBusinessTasks as $ticket)
+                                <li class="py-3">
+                                    <a href="{{ route('tickets.show', $ticket) }}" class="flex items-start justify-between gap-3 rounded-md -mx-2 px-2 py-1 hover:bg-gray-50">
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-medium text-indigo-600">{{ $ticket->ticket_number }}</div>
+                                            <div class="text-sm text-gray-900 truncate">{{ Str::limit($ticket->subject, 60) }}</div>
+                                            <div class="text-xs text-gray-500">{{ $ticket->created_at->format('M d, Y') }}</div>
+                                        </div>
+                                        <div class="shrink-0 flex items-center gap-2">
+                                            <x-badge :type="$ticket->priority">{{ ucfirst($ticket->priority) }}</x-badge>
+                                            <x-badge :type="$ticket->status">{{ ucfirst(str_replace('_', ' ', $ticket->status)) }}</x-badge>
+                                        </div>
+                                    </a>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <p class="mt-4 text-sm text-gray-500">{{ __('No tasks assigned to you') }}</p>
+                    @endif
+
+                    <div class="mt-4 border-t border-gray-200 pt-4">
+                        <a href="{{ route('tickets.index', ['assigned_to' => Auth::id()]) }}" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                            {{ __('View All My Tickets') }}
+                        </a>
+                    </div>
+                </div>
+            @endif
+
             {{-- ── Activity Feed ── --}}
             <div class="mt-6 grid gap-6 lg:grid-cols-2">
                 {{-- My Activity Feed --}}
@@ -158,10 +194,12 @@
                 <div class="rounded-xl bg-white p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-gray-900">{{ __('Quick Actions') }}</h3>
                     <div class="mt-4 grid grid-cols-2 gap-3">
-                        <a href="{{ route('tickets.create') }}" class="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-indigo-300">
-                            <svg class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                            {{ __('Create Ticket') }}
-                        </a>
+                        @unless(Auth::user()?->hasRole('agent'))
+                            <a href="{{ route('tickets.create') }}" class="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-indigo-300">
+                                <svg class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                                {{ __('Create Ticket') }}
+                            </a>
+                        @endunless
                         <a href="{{ route('tickets.index', ['assigned_to' => Auth::id()]) }}" class="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-indigo-300">
                             <svg class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" /></svg>
                             {{ __('My Tickets') }}

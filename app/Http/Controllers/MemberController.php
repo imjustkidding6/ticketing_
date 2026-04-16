@@ -8,6 +8,7 @@ use App\Services\AgentPerformanceService;
 use App\Services\TenantRoleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -165,7 +166,8 @@ class MemberController extends Controller
         $pivotRole = $member->pivot?->role ?? $member->roleInTenant($tenant);
 
         // Performance metrics
-        $perfFrom = $request->input('perf_from', now()->subDays(30)->toDateString());
+        $earliestTicketDate = $member->tickets()->min('created_at');
+        $perfFrom = $request->input('perf_from', $earliestTicketDate ? Carbon::parse($earliestTicketDate)->toDateString() : now()->subDays(30)->toDateString());
         $perfTo = $request->input('perf_to', now()->toDateString());
         $performance = $this->performanceService->getAgentPerformanceReport($member, $perfFrom, $perfTo);
 

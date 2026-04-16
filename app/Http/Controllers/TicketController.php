@@ -112,6 +112,10 @@ class TicketController extends Controller
      */
     public function create(): View
     {
+        if (Auth::user()?->hasRole('agent')) {
+            abort(403, 'Agents cannot create tickets.');
+        }
+
         $this->checkPermission('create tickets');
 
         $clients = Client::active()->orderBy('name')->get(['id', 'name', 'tier']);
@@ -142,6 +146,10 @@ class TicketController extends Controller
      */
     public function store(StoreTicketRequest $request): RedirectResponse
     {
+        if (Auth::user()?->hasRole('agent')) {
+            abort(403, 'Agents cannot create tickets.');
+        }
+
         $data = $request->validated();
 
         if ($request->hasFile('attachments')) {
@@ -237,6 +245,10 @@ class TicketController extends Controller
      */
     public function update(UpdateTicketRequest $request, Ticket $ticket): RedirectResponse
     {
+        if (Auth::user()?->hasRole('agent') && Auth::user()?->tenant?->license?->plan?->name === 'Starter') {
+            abort(403, 'Action not allowed on Starter plan');
+        }
+
         $data = $request->validated();
 
         if ($request->hasFile('attachments')) {

@@ -2,12 +2,14 @@
     <x-slot name="header">
         <div class="flex items-center justify-between w-full">
             <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('Tickets') }}</h2>
-            <a href="{{ route('tickets.create') }}" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
-                <svg class="-ml-0.5 mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                {{ __('New Ticket') }}
-            </a>
+            @unless(Auth::user()?->hasRole('agent'))
+                <a href="{{ route('tickets.create') }}" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                    <svg class="-ml-0.5 mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    {{ __('New Ticket') }}
+                </a>
+            @endunless
         </div>
     </x-slot>
 
@@ -91,11 +93,13 @@
                             </td>
                             <td class="whitespace-nowrap px-6 py-4 text-right text-sm">
                                 <a href="{{ route('tickets.show', $ticket) }}" class="text-indigo-600 hover:text-indigo-900">{{ __('View') }}</a>
-                                <a href="{{ route('tickets.edit', $ticket) }}" class="ml-3 text-indigo-600 hover:text-indigo-900">{{ __('Edit') }}</a>
+                                @if(!Auth::user()?->hasRole('agent'))
+                                    <a href="{{ route('tickets.edit', $ticket) }}" class="ml-3 text-indigo-600 hover:text-indigo-900">{{ __('Edit') }}</a>
+                                @endif
                             </td>
                         </tr>
                     @empty
-                        <x-empty-state :colspan="8" :message="__('No tickets found.')" :action-url="route('tickets.create')" :action-label="__('Create your first ticket')">
+                        <x-empty-state :colspan="8" :message="__('No tickets found.')" :action-url="Auth::user()?->hasRole('agent') ? null : route('tickets.create')" :action-label="__('Create your first ticket')">
                             <x-slot name="icon">
                                 <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />

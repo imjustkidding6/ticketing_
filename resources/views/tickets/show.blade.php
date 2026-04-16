@@ -15,12 +15,14 @@
             <div class="mb-6 flex items-start justify-between">
                 <h1 class="text-2xl font-bold text-gray-900">{{ $ticket->ticket_number }}</h1>
                 <div class="flex items-center gap-2">
-                    <a href="{{ route('tickets.edit', $ticket) }}" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
-                        <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-                        </svg>
-                        {{ __('Edit') }}
-                    </a>
+                    @if(!Auth::user()?->hasRole('agent'))
+                        <a href="{{ route('tickets.edit', $ticket) }}" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                            <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                            </svg>
+                            {{ __('Edit') }}
+                        </a>
+                    @endif
                     <a href="{{ route('tickets.index') }}" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
                         {{ __('Back to Tickets') }}
                     </a>
@@ -330,10 +332,12 @@
                     <div class="rounded-xl bg-white p-6 shadow-sm">
                         <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Assignment & Priority') }}</h4>
                         <div class="mt-4 space-y-3">
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500">{{ __('Assigned to') }}</dt>
-                                <dd class="mt-1 text-sm font-semibold text-gray-900">{{ $ticket->assignee?->name ?? __('Unassigned') }}</dd>
-                            </div>
+                            @if(!(Auth::user()?->hasRole('agent') && Auth::user()?->tenant?->license?->plan?->name === 'Starter'))
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">{{ __('Assigned to') }}</dt>
+                                    <dd class="mt-1 text-sm font-semibold text-gray-900">{{ $ticket->assignee?->name ?? __('Unassigned') }}</dd>
+                                </div>
+                            @endif
 
                             @if(!in_array($ticket->status, ['closed', 'cancelled']))
                                 @if(!$ticket->assigned_to)

@@ -70,6 +70,45 @@ class TicketControllerTest extends TestCase
         $this->get($this->tenantUrl('/tickets/create'))->assertOk();
     }
 
+    public function test_agent_cannot_access_ticket_creation_form(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $this->setupTenantContext($tenant, 'agent');
+
+        $this->get($this->tenantUrl('/tickets/create'))->assertForbidden();
+    }
+
+    public function test_agent_cannot_submit_new_ticket(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $agent = $this->setupTenantContext($tenant, 'agent');
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+
+        $this->post($this->tenantUrl('/tickets'), [
+            'client_id' => $client->id,
+            'subject' => 'Agent ticket attempt',
+            'description' => 'Should be blocked',
+            'priority' => 'medium',
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('tickets', [
+            'tenant_id' => $tenant->id,
+            'subject' => 'Agent ticket attempt',
+            'created_by' => $agent->id,
+        ]);
+    }
+
+    public function test_agent_does_not_see_create_ticket_action_on_index(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $this->setupTenantContext($tenant, 'agent');
+
+        $this->get($this->tenantUrl('/tickets'))
+            ->assertOk()
+            ->assertDontSee('New Ticket')
+            ->assertDontSee('Create your first ticket');
+    }
+
     public function test_store_creates_ticket(): void
     {
         $tenant = $this->createBusinessTenant();
@@ -101,6 +140,43 @@ class TicketControllerTest extends TestCase
         $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
 
         $this->get($this->tenantUrl("/tickets/{$ticket->id}"))->assertOk();
+    }
+
+    public function test_agent_does_not_see_edit_button_on_ticket_view(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $manager = $this->setupTenantContext($tenant, 'manager');
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $manager->id]);
+
+        $this->setupTenantContext($tenant, 'agent');
+
+        $this->get($this->tenantUrl("/tickets/{$ticket->id}"))
+            ->assertOk()
+            ->assertDontSee($this->tenantUrl("/tickets/{$ticket->id}/edit"));
+    }
+
+    public function test_agent_does_not_see_edit_button_on_ticket_index(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $manager = $this->setupTenantContext($tenant, 'manager');
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $manager->id]);
+
+        $this->setupTenantContext($tenant, 'agent');
+
+        $this->get($this->tenantUrl('/tickets'))
+            ->assertOk()
+            ->assertDontSee($this->tenantUrl("/tickets/{$ticket->id}/edit"));
+    }
+
+    public function test_manager_sees_edit_button_on_ticket_index(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $manager = $this->setupTenantContext($tenant, 'manager');
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $manager->id]);
+
+        $this->get($this->tenantUrl('/tickets'))
+            ->assertOk()
+            ->assertSee($this->tenantUrl("/tickets/{$ticket->id}/edit"));
     }
 
     public function test_edit_ticket(): void

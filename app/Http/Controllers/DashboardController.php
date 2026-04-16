@@ -40,10 +40,16 @@ class DashboardController extends Controller
         $tenant = $tenantId ? \App\Models\Tenant::find($tenantId) : null;
         $role = $tenant ? $user->roleInTenant($tenant) : null;
         $isAdminOrOwner = in_array($role, ['owner', 'admin']);
+        $shouldCountAllOpenTickets = in_array($role, ['owner', 'admin', 'manager'], true);
 
         // ── My Ticket Stats ──
+        $myOpenTicketsQuery = Ticket::query()->open();
+        if (! $shouldCountAllOpenTickets) {
+            $myOpenTicketsQuery->where('assigned_to', $userId);
+        }
+
         $myTicketStats = [
-            'open' => Ticket::query()->where('assigned_to', $userId)->whereIn('status', ['open', 'assigned'])->count(),
+            'open' => $myOpenTicketsQuery->count(),
             'in_progress' => Ticket::query()->where('assigned_to', $userId)->where('status', 'in_progress')->count(),
             'closed_this_month' => Ticket::query()
                 ->where('assigned_to', $userId)
@@ -92,6 +98,16 @@ class DashboardController extends Controller
             ->take(10)
             ->get();
 
+        $myBusinessTasks = collect();
+        if ($user?->hasRole('agent') && $user?->tenant?->license?->plan?->name === 'Business') {
+            $myBusinessTasks = Ticket::query()
+                ->where('assigned_to', $userId)
+                ->whereIn('status', ['open', 'in_progress', 'assigned'])
+                ->latest()
+                ->take(10)
+                ->get();
+        }
+
         // ── My Activity Feed (recent history entries by this user) ──
         $myActivity = TicketHistory::query()
             ->with(['ticket:id,ticket_number', 'user:id,name'])
@@ -135,6 +151,7 @@ class DashboardController extends Controller
             'myPerformance',
             'myTickets',
             'myTasks',
+            'myBusinessTasks',
             'myActivity',
             'myTrend',
             'myTicketsByStatus',

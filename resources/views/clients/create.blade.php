@@ -94,7 +94,9 @@
 
                     <div class="mt-6 flex items-center justify-end gap-3">
                         <a href="{{ route('clients.index') }}" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">{{ __('Cancel') }}</a>
-                        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Create Client') }}</button>
+                        @if(!(Auth::user()?->hasRole('agent') && Auth::user()?->tenant?->license?->plan?->name === 'Starter'))
+                            <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Create Client') }}</button>
+                        @endif
                     </div>
                 </form>
             </div>
