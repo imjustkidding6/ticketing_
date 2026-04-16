@@ -76,6 +76,7 @@ class TenantRoleService
         ],
         'agent' => [
             'view tickets',
+            'create tickets',
             'update tickets',
             'close tickets',
             'view reports',

@@ -8,7 +8,6 @@ use App\Models\SlaPolicy;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class ClientController extends Controller
@@ -18,10 +17,6 @@ class ClientController extends Controller
      */
     public function index(Request $request): View
     {
-        if (Auth::user()?->hasRole('agent') && Auth::user()?->tenant?->license?->plan?->name === 'Starter') {
-            abort(403, 'Action not allowed on Starter plan');
-        }
-
         $this->checkPermission('manage clients');
 
         $clients = Client::query()
@@ -56,10 +51,6 @@ class ClientController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        if (Auth::user()?->hasRole('agent') && Auth::user()?->tenant?->license?->plan?->name === 'Starter') {
-            abort(403, 'Action not allowed on Starter plan');
-        }
-
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],

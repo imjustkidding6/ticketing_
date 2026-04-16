@@ -98,16 +98,6 @@ class DashboardController extends Controller
             ->take(10)
             ->get();
 
-        $myBusinessTasks = collect();
-        if ($user?->hasRole('agent') && $user?->tenant?->license?->plan?->name === 'Business') {
-            $myBusinessTasks = Ticket::query()
-                ->where('assigned_to', $userId)
-                ->whereIn('status', ['open', 'in_progress', 'assigned'])
-                ->latest()
-                ->take(10)
-                ->get();
-        }
-
         // ── My Activity Feed (recent history entries by this user) ──
         $myActivity = TicketHistory::query()
             ->with(['ticket:id,ticket_number', 'user:id,name'])
@@ -151,7 +141,6 @@ class DashboardController extends Controller
             'myPerformance',
             'myTickets',
             'myTasks',
-            'myBusinessTasks',
             'myActivity',
             'myTrend',
             'myTicketsByStatus',

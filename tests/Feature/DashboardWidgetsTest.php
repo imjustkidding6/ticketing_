@@ -11,8 +11,8 @@ use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\User;
-use App\Services\TicketService;
 use App\Notifications\TicketCreatedNotification;
+use App\Services\TicketService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -181,29 +181,44 @@ class DashboardWidgetsTest extends TestCase
     {
         $tenant = $this->createBusinessTenant();
         $manager = $this->setupTenantContext($tenant, 'manager');
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $department = Department::factory()->create(['tenant_id' => $tenant->id]);
+        $category = TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'department_id' => $department->id]);
 
         Ticket::factory()->create([
             'tenant_id' => $tenant->id,
             'assigned_to' => $manager->id,
             'status' => 'open',
+            'client_id' => $client->id,
+            'department_id' => $department->id,
+            'category_id' => $category->id,
         ]);
 
         Ticket::factory()->create([
             'tenant_id' => $tenant->id,
             'assigned_to' => null,
             'status' => 'assigned',
+            'client_id' => $client->id,
+            'department_id' => $department->id,
+            'category_id' => $category->id,
         ]);
 
         Ticket::factory()->create([
             'tenant_id' => $tenant->id,
             'assigned_to' => User::factory()->create()->id,
             'status' => 'in_progress',
+            'client_id' => $client->id,
+            'department_id' => $department->id,
+            'category_id' => $category->id,
         ]);
 
         Ticket::factory()->create([
             'tenant_id' => $tenant->id,
             'assigned_to' => User::factory()->create()->id,
             'status' => 'closed',
+            'client_id' => $client->id,
+            'department_id' => $department->id,
+            'category_id' => $category->id,
         ]);
 
         $response = $this->getJson($this->tenantUrl('/dashboard/stats'));
@@ -262,13 +277,13 @@ class DashboardWidgetsTest extends TestCase
             ->assertViewHas('isAdminOrOwner', false);
     }
 
-    public function test_dashboard_hides_create_ticket_action_for_agents(): void
+    public function test_dashboard_shows_create_ticket_action_for_agents(): void
     {
         $tenant = $this->createBusinessTenant();
         $this->setupTenantContext($tenant, 'agent');
 
         $this->get($this->tenantUrl('/dashboard'))
             ->assertOk()
-            ->assertDontSee('Create Ticket');
+            ->assertSee('Create Ticket');
     }
 }
