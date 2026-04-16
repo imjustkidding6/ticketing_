@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
+use App\Http\Controllers\Admin\ChatbotSettingsController as AdminChatbotSettingsController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DistributorController;
 use App\Http\Controllers\Admin\LicenseController;
@@ -56,6 +57,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::resource('plans', PlanController::class)->only(['index', 'edit', 'update']);
     Route::resource('licenses', LicenseController::class)->except(['destroy']);
     Route::post('licenses/{license}/revoke', [LicenseController::class, 'revoke'])->name('licenses.revoke');
+    Route::get('chatbot-settings', [AdminChatbotSettingsController::class, 'edit'])->name('chatbot-settings.edit');
+    Route::post('chatbot-settings', [AdminChatbotSettingsController::class, 'update'])->name('chatbot-settings.update');
 
     Route::get('tenants', [AdminTenantController::class, 'index'])->name('tenants.index');
     Route::get('tenants/{tenant}', [AdminTenantController::class, 'show'])->name('tenants.show');

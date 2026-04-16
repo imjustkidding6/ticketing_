@@ -5,6 +5,7 @@ use App\Http\Controllers\AgentScheduleController;
 use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\CannedResponseController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientPortalController;
 use App\Http\Controllers\DashboardController;
@@ -75,6 +76,12 @@ Route::get('api/public/products', function (\Illuminate\Http\Request $request, s
 
     return $query->get(['id', 'name']);
 })->name('api.public.products');
+
+Route::middleware('throttle:chatbot-ip')->group(function () {
+    Route::post('api/public/chatbot/token', [ChatbotController::class, 'token'])->name('api.public.chatbot.token');
+    Route::post('api/public/chatbot/message', [ChatbotController::class, 'message'])->name('api.public.chatbot.message');
+    Route::post('api/public/chatbot/escalate', [ChatbotController::class, 'escalate'])->name('api.public.chatbot.escalate');
+});
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified', 'tenant'])->name('dashboard');

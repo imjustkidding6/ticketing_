@@ -20,7 +20,7 @@ class ClientPortalTest extends TestCase
 
     private function createTenant(string $planSlug): Tenant
     {
-        $plan = Plan::factory()->create(['slug' => $planSlug . '_' . Str::random(4), 'features' => PlanFeature::forPlan($planSlug)]);
+        $plan = Plan::factory()->create(['slug' => $planSlug.'_'.Str::random(4), 'features' => PlanFeature::forPlan($planSlug)]);
         $license = License::factory()->active()->forPlan($plan)->create();
 
         return Tenant::factory()->create(['license_id' => $license->id]);

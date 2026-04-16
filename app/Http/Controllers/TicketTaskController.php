@@ -14,6 +14,7 @@ class TicketTaskController extends Controller
     public function __construct(
         private TicketService $ticketService,
     ) {}
+
     /**
      * Store a new task for a ticket.
      */
@@ -27,7 +28,7 @@ class TicketTaskController extends Controller
 
         $ticket->tasks()->create($validated);
 
-        $this->ticketService->addHistory($ticket, 'task_added', null, null, null, 'Task added: ' . $validated['description']);
+        $this->ticketService->addHistory($ticket, 'task_added', null, null, null, 'Task added: '.$validated['description']);
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Task added successfully.');
@@ -46,7 +47,7 @@ class TicketTaskController extends Controller
 
         $task->update($validated);
 
-        $this->ticketService->addHistory($ticket, 'task_updated', null, null, null, 'Task updated: ' . $validated['description']);
+        $this->ticketService->addHistory($ticket, 'task_updated', null, null, null, 'Task updated: '.$validated['description']);
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Task updated successfully.');
@@ -145,7 +146,7 @@ class TicketTaskController extends Controller
      */
     public function destroy(Ticket $ticket, TicketTask $task): RedirectResponse
     {
-        $this->ticketService->addHistory($ticket, 'task_deleted', null, null, null, 'Task removed: ' . $task->description);
+        $this->ticketService->addHistory($ticket, 'task_deleted', null, null, null, 'Task removed: '.$task->description);
 
         $task->delete();
 

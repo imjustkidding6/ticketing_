@@ -15,6 +15,7 @@ enum PlanFeature: string
     case SlaReport = 'sla_report';
     case EmailNotifications = 'email_notifications';
     case DetailedReporting = 'detailed_reporting';
+    case AiChatbot = 'ai_chatbot';
 
     // Enterprise features
     case TicketMerging = 'ticket_merging';
@@ -58,6 +59,7 @@ enum PlanFeature: string
             self::SlaReport,
             self::EmailNotifications,
             self::DetailedReporting,
+            self::AiChatbot,
         ];
     }
 
@@ -112,6 +114,7 @@ enum PlanFeature: string
             self::SlaReport => 'SLA Compliance Report',
             self::EmailNotifications => 'Email Notification',
             self::DetailedReporting => 'Detailed Reporting & Export',
+            self::AiChatbot => 'AI Chatbot (Public)',
             self::TicketMerging => 'Ticket Merging',
             self::TicketReopening => 'Ticket Re-Opening',
             self::CustomRoles => 'Customized Roles & Permissions',
@@ -138,7 +141,8 @@ enum PlanFeature: string
             self::SlaManagement,
             self::SlaReport,
             self::EmailNotifications,
-            self::DetailedReporting => 'business',
+            self::DetailedReporting,
+            self::AiChatbot => 'business',
             self::TicketMerging,
             self::TicketReopening,
             self::CustomRoles,

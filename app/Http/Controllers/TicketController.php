@@ -388,7 +388,7 @@ class TicketController extends Controller
      */
     public function reopen(Ticket $ticket): RedirectResponse
     {
-        $this->ticketService->addHistory($ticket, 'reopened', 'status', $ticket->status, 'open', 'Ticket reopened (reopened ' . ($ticket->reopened_count + 1) . ' time(s))');
+        $this->ticketService->addHistory($ticket, 'reopened', 'status', $ticket->status, 'open', 'Ticket reopened (reopened '.($ticket->reopened_count + 1).' time(s))');
 
         $ticket->update([
             'closed_at' => null,
@@ -422,7 +422,7 @@ class TicketController extends Controller
     {
         $this->checkPermission('delete tickets');
 
-        $this->ticketService->addHistory($ticket, 'deleted', null, null, null, 'Ticket deleted' . ($request->input('reason') ? ': ' . $request->input('reason') : ''));
+        $this->ticketService->addHistory($ticket, 'deleted', null, null, null, 'Ticket deleted'.($request->input('reason') ? ': '.$request->input('reason') : ''));
 
         $ticket->update([
             'deleted_by' => Auth::id(),
