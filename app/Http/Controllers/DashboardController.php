@@ -40,10 +40,16 @@ class DashboardController extends Controller
         $tenant = $tenantId ? \App\Models\Tenant::find($tenantId) : null;
         $role = $tenant ? $user->roleInTenant($tenant) : null;
         $isAdminOrOwner = in_array($role, ['owner', 'admin']);
+        $shouldCountAllOpenTickets = in_array($role, ['owner', 'admin', 'manager'], true);
 
         // ── My Ticket Stats ──
+        $myOpenTicketsQuery = Ticket::query()->open();
+        if (! $shouldCountAllOpenTickets) {
+            $myOpenTicketsQuery->where('assigned_to', $userId);
+        }
+
         $myTicketStats = [
-            'open' => Ticket::query()->where('assigned_to', $userId)->whereIn('status', ['open', 'assigned'])->count(),
+            'open' => $myOpenTicketsQuery->count(),
             'in_progress' => Ticket::query()->where('assigned_to', $userId)->where('status', 'in_progress')->count(),
             'closed_this_month' => Ticket::query()
                 ->where('assigned_to', $userId)

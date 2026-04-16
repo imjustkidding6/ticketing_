@@ -51,6 +51,26 @@ class TicketTaskControllerTest extends TestCase
         ]);
     }
 
+    public function test_add_task_defaults_assignee_to_ticket_assignee(): void
+    {
+        [$tenant, $user, $ticket] = $this->setupContext();
+
+        $agent = User::factory()->create();
+        $tenant->addUser($agent, 'agent');
+
+        $ticket->update(['assigned_to' => $agent->id]);
+
+        $this->post($this->tenantUrl("/tickets/{$ticket->id}/tasks"), [
+            'description' => 'Inherited assignee task',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('ticket_tasks', [
+            'ticket_id' => $ticket->id,
+            'description' => 'Inherited assignee task',
+            'assigned_to' => $agent->id,
+        ]);
+    }
+
     public function test_update_task(): void
     {
         [$tenant, $user, $ticket] = $this->setupContext();

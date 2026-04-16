@@ -25,6 +25,10 @@ class TicketTaskController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        if (! array_key_exists('assigned_to', $validated) || empty($validated['assigned_to'])) {
+            $validated['assigned_to'] = $ticket->assigned_to;
+        }
+
         $ticket->tasks()->create($validated);
 
         $this->ticketService->addHistory($ticket, 'task_added', null, null, null, 'Task added: ' . $validated['description']);

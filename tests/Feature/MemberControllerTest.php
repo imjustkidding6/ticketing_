@@ -6,6 +6,7 @@ use App\Enums\PlanFeature;
 use App\Models\License;
 use App\Models\Plan;
 use App\Models\Tenant;
+use App\Models\Ticket;
 use App\Models\User;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -62,6 +63,53 @@ class MemberControllerTest extends TestCase
         $tenant->addUser($member, 'member');
 
         $this->get($this->tenantUrl("/members/{$member->id}"))->assertOk();
+    }
+
+    public function test_show_member_performance_counts_closed_tickets_in_reporting_window(): void
+    {
+        [$tenant] = $this->setupContext();
+        $member = User::factory()->create();
+        $tenant->addUser($member, 'member');
+
+        $ticket = Ticket::factory()->create([
+            'tenant_id' => $tenant->id,
+            'assigned_to' => $member->id,
+            'created_at' => now()->subDays(20),
+            'status' => 'closed',
+            'closed_at' => now()->subDay(),
+        ]);
+
+        $response = $this->get($this->tenantUrl("/members/{$member->id}?perf_from=" . now()->subDays(7)->toDateString() . '&perf_to=' . now()->toDateString()));
+
+        $response->assertOk();
+        $response->assertViewHas('performance', function (array $performance) use ($ticket) {
+            return $performance['closed'] === 1
+                && $performance['total_assigned'] === 1
+                && $performance['by_status']['closed'] === 1;
+        });
+    }
+
+    public function test_show_member_performance_defaults_to_ticket_history(): void
+    {
+        [$tenant] = $this->setupContext();
+        $member = User::factory()->create();
+        $tenant->addUser($member, 'member');
+
+        Ticket::factory()->create([
+            'tenant_id' => $tenant->id,
+            'assigned_to' => $member->id,
+            'created_at' => now()->subDays(60),
+            'status' => 'closed',
+            'closed_at' => now()->subDays(2),
+        ]);
+
+        $response = $this->get($this->tenantUrl("/members/{$member->id}"));
+
+        $response->assertOk();
+        $response->assertViewHas('performance', function (array $performance): bool {
+            return $performance['closed'] === 1
+                && $performance['total_assigned'] === 1;
+        });
     }
 
     public function test_update_member(): void

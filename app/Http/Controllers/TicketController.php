@@ -401,7 +401,7 @@ class TicketController extends Controller
      */
     public function reopen(Ticket $ticket): RedirectResponse
     {
-        $this->ticketService->addHistory($ticket, 'reopened', 'status', $ticket->status, 'open', 'Ticket reopened (reopened ' . ($ticket->reopened_count + 1) . ' time(s))');
+        $this->ticketService->addHistory($ticket, 'reopened', 'status', $ticket->status, 'open', 'Ticket reopened (reopened '.($ticket->reopened_count + 1).' time(s))');
 
         $ticket->update([
             'closed_at' => null,
@@ -435,7 +435,7 @@ class TicketController extends Controller
     {
         $this->checkPermission('delete tickets');
 
-        $this->ticketService->addHistory($ticket, 'deleted', null, null, null, 'Ticket deleted' . ($request->input('reason') ? ': ' . $request->input('reason') : ''));
+        $this->ticketService->addHistory($ticket, 'deleted', null, null, null, 'Ticket deleted'.($request->input('reason') ? ': '.$request->input('reason') : ''));
 
         $ticket->update([
             'deleted_by' => Auth::id(),
@@ -455,9 +455,8 @@ class TicketController extends Controller
     {
         $query = $request->input('q', '');
 
-        $tickets = collect();
         if (strlen($query) >= 2) {
-            $tickets = Ticket::query()
+            $tickets = $this->scopeByUserDepartments(Ticket::query())
                 ->with(['client', 'assignee', 'department'])
                 ->notSpam()
                 ->where(function ($q) use ($query) {
@@ -467,8 +466,13 @@ class TicketController extends Controller
                         ->orWhereHas('client', fn ($cq) => $cq->where('name', 'like', "%{$query}%"));
                 })
                 ->latest()
-                ->limit(50)
-                ->get();
+                ->paginate(50)
+                ->withQueryString();
+        } else {
+            $tickets = Ticket::query()
+                ->whereRaw('1 = 0')
+                ->paginate(50)
+                ->withQueryString();
         }
 
         return view('tickets.search', compact('tickets', 'query'));

@@ -16,7 +16,10 @@ class AgentPerformanceService
     public function getAgentPerformanceReport(User $agent, string $from, string $to): array
     {
         $assignedTickets = Ticket::where('assigned_to', $agent->id)
-            ->whereBetween('created_at', [$from, $to])
+            ->where(function ($query) use ($from, $to) {
+                $query->whereBetween('created_at', [$from, $to])
+                    ->orWhereBetween('closed_at', [$from, $to]);
+            })
             ->get();
 
         $closedTickets = $assignedTickets->where('status', 'closed');

@@ -3,12 +3,16 @@
 namespace Tests\Feature;
 
 use App\Enums\PlanFeature;
+use App\Models\Client;
+use App\Models\Department;
 use App\Models\License;
 use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\Ticket;
+use App\Models\TicketCategory;
 use App\Models\User;
 use App\Notifications\TicketCreatedNotification;
+use App\Services\TicketService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -155,7 +159,7 @@ class DashboardWidgetsTest extends TestCase
     public function test_my_tickets_only_shows_assigned_to_user(): void
     {
         $tenant = $this->createBusinessTenant();
-        $user = $this->setupTenantContext($tenant);
+        $user = $this->setupTenantContext($tenant, 'agent');
 
         Ticket::factory()->create([
             'tenant_id' => $tenant->id,
@@ -171,6 +175,86 @@ class DashboardWidgetsTest extends TestCase
 
         $response = $this->getJson($this->tenantUrl('/dashboard/stats'));
         $this->assertEquals(1, $response->json('myTicketStats.open'));
+    }
+
+    public function test_manager_open_ticket_count_includes_all_open_tenant_tickets(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $manager = $this->setupTenantContext($tenant, 'manager');
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $department = Department::factory()->create(['tenant_id' => $tenant->id]);
+        $category = TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'department_id' => $department->id]);
+
+        Ticket::factory()->create([
+            'tenant_id' => $tenant->id,
+            'assigned_to' => $manager->id,
+            'status' => 'open',
+            'client_id' => $client->id,
+            'department_id' => $department->id,
+            'category_id' => $category->id,
+        ]);
+
+        Ticket::factory()->create([
+            'tenant_id' => $tenant->id,
+            'assigned_to' => null,
+            'status' => 'assigned',
+            'client_id' => $client->id,
+            'department_id' => $department->id,
+            'category_id' => $category->id,
+        ]);
+
+        Ticket::factory()->create([
+            'tenant_id' => $tenant->id,
+            'assigned_to' => User::factory()->create()->id,
+            'status' => 'in_progress',
+            'client_id' => $client->id,
+            'department_id' => $department->id,
+            'category_id' => $category->id,
+        ]);
+
+        Ticket::factory()->create([
+            'tenant_id' => $tenant->id,
+            'assigned_to' => User::factory()->create()->id,
+            'status' => 'closed',
+            'client_id' => $client->id,
+            'department_id' => $department->id,
+            'category_id' => $category->id,
+        ]);
+
+        $response = $this->getJson($this->tenantUrl('/dashboard/stats'));
+        $this->assertEquals(3, $response->json('myTicketStats.open'));
+    }
+
+    public function test_agent_sees_created_ticket_tasks_assigned_from_ticket_assignee(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $agent = $this->setupTenantContext($tenant, 'agent');
+
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $department = Department::factory()->create(['tenant_id' => $tenant->id]);
+        $category = TicketCategory::factory()->create(['tenant_id' => $tenant->id]);
+
+        $service = app(TicketService::class);
+        $service->createTicket([
+            'tenant_id' => $tenant->id,
+            'subject' => 'Agent task visibility ticket',
+            'description' => 'Ticket created with tasks',
+            'priority' => 'medium',
+            'department_id' => $department->id,
+            'category_id' => $category->id,
+            'client_id' => $client->id,
+            'assigned_to' => $agent->id,
+            'tasks' => ['First follow-up task'],
+        ]);
+
+        $response = $this->get($this->tenantUrl('/dashboard'));
+        $response->assertOk();
+
+        $myTasks = $response->viewData('myTasks');
+        $this->assertNotNull($myTasks);
+        $this->assertCount(1, $myTasks);
+        $this->assertEquals('First follow-up task', $myTasks->first()->description);
+        $this->assertEquals($agent->id, $myTasks->first()->assigned_to);
     }
 
     public function test_dashboard_shows_admin_flag_for_owner(): void
@@ -191,5 +275,15 @@ class DashboardWidgetsTest extends TestCase
         $this->get($this->tenantUrl('/dashboard'))
             ->assertOk()
             ->assertViewHas('isAdminOrOwner', false);
+    }
+
+    public function test_dashboard_shows_create_ticket_action_for_agents(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $this->setupTenantContext($tenant, 'agent');
+
+        $this->get($this->tenantUrl('/dashboard'))
+            ->assertOk()
+            ->assertSee('Create Ticket');
     }
 }

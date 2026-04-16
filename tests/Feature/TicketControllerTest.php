@@ -10,6 +10,7 @@ use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
+use App\Models\TicketTask;
 use App\Models\User;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -70,6 +71,45 @@ class TicketControllerTest extends TestCase
         $this->get($this->tenantUrl('/tickets/create'))->assertOk();
     }
 
+    public function test_agent_can_access_ticket_creation_form(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $this->setupTenantContext($tenant, 'agent');
+
+        $this->get($this->tenantUrl('/tickets/create'))->assertOk();
+    }
+
+    public function test_agent_can_submit_new_ticket(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $agent = $this->setupTenantContext($tenant, 'agent');
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+
+        $this->post($this->tenantUrl('/tickets'), [
+            'client_id' => $client->id,
+            'subject' => 'Agent ticket submission',
+            'description' => 'Agent created ticket',
+            'priority' => 'medium',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('tickets', [
+            'tenant_id' => $tenant->id,
+            'subject' => 'Agent ticket submission',
+            'created_by' => $agent->id,
+        ]);
+    }
+
+    public function test_agent_sees_create_ticket_action_on_index(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $this->setupTenantContext($tenant, 'agent');
+
+        $this->get($this->tenantUrl('/tickets'))
+            ->assertOk()
+            ->assertSee('New Ticket')
+            ->assertSee('Create your first ticket');
+    }
+
     public function test_store_creates_ticket(): void
     {
         $tenant = $this->createBusinessTenant();
@@ -101,6 +141,43 @@ class TicketControllerTest extends TestCase
         $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
 
         $this->get($this->tenantUrl("/tickets/{$ticket->id}"))->assertOk();
+    }
+
+    public function test_agent_sees_edit_button_on_ticket_view(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $manager = $this->setupTenantContext($tenant, 'manager');
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $manager->id]);
+
+        $this->setupTenantContext($tenant, 'agent');
+
+        $this->get($this->tenantUrl("/tickets/{$ticket->id}"))
+            ->assertOk()
+            ->assertSee($this->tenantUrl("/tickets/{$ticket->id}/edit"));
+    }
+
+    public function test_agent_sees_edit_button_on_ticket_index(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $manager = $this->setupTenantContext($tenant, 'manager');
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $manager->id]);
+
+        $this->setupTenantContext($tenant, 'agent');
+
+        $this->get($this->tenantUrl('/tickets'))
+            ->assertOk()
+            ->assertSee($this->tenantUrl("/tickets/{$ticket->id}/edit"));
+    }
+
+    public function test_manager_sees_edit_button_on_ticket_index(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $manager = $this->setupTenantContext($tenant, 'manager');
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $manager->id]);
+
+        $this->get($this->tenantUrl('/tickets'))
+            ->assertOk()
+            ->assertSee($this->tenantUrl("/tickets/{$ticket->id}/edit"));
     }
 
     public function test_edit_ticket(): void
@@ -207,6 +284,9 @@ class TicketControllerTest extends TestCase
         $tenant = $this->createBusinessTenant();
         $user = $this->setupTenantContext($tenant);
         $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+        TicketTask::factory()
+            ->completed()
+            ->create(['tenant_id' => $tenant->id, 'ticket_id' => $ticket->id]);
 
         $this->post($this->tenantUrl("/tickets/{$ticket->id}/false-alarm"))->assertRedirect();
 
@@ -226,7 +306,7 @@ class TicketControllerTest extends TestCase
         $otherTicket = Ticket::factory()->create(['tenant_id' => $tenant2->id, 'created_by' => $otherUser->id]);
 
         $this->get($this->tenantUrl("/tickets/{$otherTicket->id}"))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_agent_cannot_delete_tickets(): void
