@@ -1,8 +1,8 @@
-.PHONY: help up down build rebuild shell bash mysql redis migrate seed fresh test tinker logs npm-dev npm-build composer-install artisan
+.PHONY: help up down build rebuild watch shell bash mysql redis migrate seed fresh test tinker logs npm-dev npm-build composer-install artisan
 
 COMPOSE_PROJECT_NAME ?= ticketing
 DB_PASSWORD ?= secret
-COMPOSE = docker-compose -p $(COMPOSE_PROJECT_NAME)
+COMPOSE = docker compose -p $(COMPOSE_PROJECT_NAME)
 
 # Default target
 help:
@@ -15,6 +15,7 @@ help:
 	@echo "  down          Stop and remove all containers"
 	@echo "  build         Build Docker images"
 	@echo "  rebuild       Rebuild Docker images (no cache)"
+	@echo "  watch         Watch files and rebuild/refresh containers"
 	@echo "  logs          Show container logs (follow mode)"
 	@echo ""
 	@echo "Shell Access:"
@@ -49,6 +50,9 @@ build:
 
 rebuild:
 	$(COMPOSE) build --no-cache
+
+watch:
+	$(COMPOSE) watch
 
 logs:
 	$(COMPOSE) logs -f

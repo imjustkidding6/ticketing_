@@ -26,10 +26,13 @@ This creates:
 |------|---------|
 | **Admin user** | `admin@example.com` / `password` (`is_admin = true`) |
 | **Test user** | `test@example.com` / `password` (regular tenant user) |
+| **Start plan users** | `start-admin@example.com`, `start-agent@example.com`, `start-client@example.com` (`password`) |
+| **Business plan users** | `business-admin@example.com`, `business-agent@example.com`, `business-client@example.com` (`password`) |
+| **Enterprise plan users** | `enterprise-admin@example.com`, `enterprise-agent@example.com`, `enterprise-client@example.com` (`password`) |
 | **3 Plans** | Start, Business, Enterprise |
 | **Demo Distributor** | With auto-generated API key |
 | **Demo License** | Start plan, 10 seats, 1-year validity |
-| **Demo Tenant** | "Demo Company" with test user as owner |
+| **Demo Tenant** | "Demo Company" with tenant-admin, manager, agent, and test user |
 | **16 Permissions** | Spatie permissions for tenant-level RBAC |
 
 ### Access the Admin Panel
@@ -392,7 +395,6 @@ app/
 | Package | Version | Purpose |
 |---------|---------|---------|
 | `laravel/breeze` | latest | Auth scaffolding (Blade starter kit) |
-| `laravel/sail` | v1 | Docker dev environment |
 | `laravel/pint` | v1 | Code style formatter |
 | `laravel/boost` | v2 | MCP/dev tooling |
 | `phpunit/phpunit` | v11 | Testing framework |
