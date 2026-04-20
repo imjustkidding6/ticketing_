@@ -144,8 +144,10 @@ class TicketController extends Controller
     {
         $data = $request->validated();
 
-        if ($request->hasFile('attachments')) {
+        if ($request->hasFile('attachments') && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments)) {
             $data['attachments'] = $this->storeAttachments($request);
+        } else {
+            unset($data['attachments']);
         }
 
         $ticket = $this->ticketService->createTicket($data);
@@ -239,9 +241,11 @@ class TicketController extends Controller
     {
         $data = $request->validated();
 
-        if ($request->hasFile('attachments')) {
+        if ($request->hasFile('attachments') && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments)) {
             $existing = $ticket->attachments ?? [];
             $data['attachments'] = array_merge($existing, $this->storeAttachments($request));
+        } else {
+            unset($data['attachments']);
         }
 
         $this->ticketService->updateTicket($ticket, $data);

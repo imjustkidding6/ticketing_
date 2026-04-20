@@ -60,6 +60,30 @@
                         </div>
                     </div>
 
+                    {{-- Ticket Attachments (Business+) --}}
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments) && $ticket->attachments && count($ticket->attachments) > 0)
+                    <div class="rounded-xl bg-white p-6 shadow-sm">
+                        <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Attachments') }}</h4>
+                        <ul class="mt-3 divide-y divide-gray-100 rounded-md border border-gray-200">
+                            @foreach($ticket->attachments as $idx => $attachment)
+                                <li class="flex items-center justify-between py-2 pl-3 pr-4 text-sm">
+                                    <div class="flex min-w-0 flex-1 items-center gap-2">
+                                        <svg class="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                                        </svg>
+                                        <span class="truncate font-medium text-gray-900">{{ $attachment['name'] }}</span>
+                                        <span class="shrink-0 text-xs text-gray-500">{{ number_format(($attachment['size'] ?? 0) / 1024, 0) }} KB</span>
+                                    </div>
+                                    <a href="{{ route('tickets.attachment', [$ticket, $idx]) }}"
+                                        class="ml-4 shrink-0 text-indigo-600 hover:text-indigo-500">
+                                        {{ __('Download') }}
+                                    </a>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                    @endif
+
                     {{-- Ticket Details --}}
                     <div class="rounded-xl bg-white p-6 shadow-sm">
                         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
@@ -262,7 +286,7 @@
                                         <div class="mt-2 text-sm text-gray-700 prose prose-sm max-w-none">
                                             {!! nl2br(e($comment->content)) !!}
                                         </div>
-                                        @if($comment->attachments)
+                                        @if($comment->attachments && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments))
                                             <div class="mt-2 flex flex-wrap gap-2">
                                                 @foreach($comment->attachments as $idx => $attachment)
                                                     <a href="{{ route('tickets.comments.attachment', [$ticket, $comment, $idx]) }}" class="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-100 hover:text-gray-800">
@@ -304,10 +328,12 @@
                                 @endif
                                 <div class="space-y-3">
                                     <textarea name="content" id="comment_content" rows="3" required class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="{{ __('Write a comment...') }}"></textarea>
-                                    <div>
-                                        <input type="file" name="attachments[]" multiple class="block w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200">
-                                        <p class="mt-1 text-xs text-gray-400">{{ __('Max 5 files, 10MB each. Images, PDF, docs, zip.') }}</p>
-                                    </div>
+                                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments))
+                                        <div>
+                                            <input type="file" name="attachments[]" multiple class="block w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200">
+                                            <p class="mt-1 text-xs text-gray-400">{{ __('Max 5 files, 10MB each. Images, PDF, docs, zip.') }}</p>
+                                        </div>
+                                    @endif
                                     <div class="flex items-center justify-between">
                                         <select name="type" class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                             <option value="public">{{ __('Public') }}</option>
