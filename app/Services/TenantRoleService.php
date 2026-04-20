@@ -33,6 +33,7 @@ class TenantRoleService
         'manage departments',
         'manage settings',
         'manage billing',
+        'manage schedules',
     ];
 
     /**
@@ -59,6 +60,7 @@ class TenantRoleService
             'manage departments',
             'manage settings',
             'manage billing',
+            'manage schedules',
         ],
         'manager' => [
             'view tickets',
@@ -76,6 +78,7 @@ class TenantRoleService
             'manage users',
             'manage departments',
             'manage billing',
+            'manage schedules',
         ],
         'agent' => [
             'view tickets',

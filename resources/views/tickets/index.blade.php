@@ -58,13 +58,13 @@
             <x-data-table>
                 <thead class="bg-gray-50">
                     <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Ticket') }}</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Client') }}</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Priority') }}</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Status') }}</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Assigned To') }}</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Created') }}</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Resolution') }}</th>
+                        <x-sortable-th column="ticket_number" :label="__('Ticket')" />
+                        <x-sortable-th column="client" :label="__('Client')" />
+                        <x-sortable-th column="priority" :label="__('Priority')" />
+                        <x-sortable-th column="status" :label="__('Status')" />
+                        <x-sortable-th column="assignee" :label="__('Assigned To')" />
+                        <x-sortable-th column="created_at" :label="__('Created')" />
+                        <x-sortable-th column="resolution" :label="__('Resolution')" />
                         <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Actions') }}</th>
                     </tr>
                 </thead>

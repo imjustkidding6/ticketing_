@@ -77,6 +77,31 @@ class TicketService
     }
 
     /**
+     * Block assignment when the agent is outside their weekly schedule window.
+     * Only enforced when the tenant has the agent_schedule feature.
+     * Users with no configured schedule are allowed (not configured = no rule).
+     * Owners bypass.
+     */
+    private function guardAgentAvailability(Ticket $ticket, User $agent): void
+    {
+        if (! $this->planService->tenantHasFeature($ticket->tenant, PlanFeature::AgentSchedule)) {
+            return;
+        }
+
+        $pivot = $agent->tenants()->where('tenants.id', $ticket->tenant_id)->first()?->pivot;
+        if ($pivot?->role === 'owner') {
+            return;
+        }
+
+        if (! $agent->isOnScheduleAt(now())) {
+            throw new \InvalidArgumentException(
+                "Cannot assign to {$agent->name}: they're off-schedule right now. ".
+                'Pick an available agent or wait until their working hours.'
+            );
+        }
+    }
+
+    /**
      * Create a new ticket.
      *
      * @param  array<string, mixed>  $data
@@ -112,6 +137,7 @@ class TicketService
                     'priority' => $data['priority'],
                 ]);
                 $this->guardAgentTier($probe, $agent);
+                $this->guardAgentAvailability($probe, $agent);
             }
         }
 
@@ -199,6 +225,7 @@ class TicketService
             if ($agent) {
                 $probe = (clone $ticket)->forceFill(['priority' => $nextPriority]);
                 $this->guardAgentTier($probe, $agent);
+                $this->guardAgentAvailability($probe, $agent);
             }
         }
 
@@ -225,6 +252,7 @@ class TicketService
     public function assignTicket(Ticket $ticket, User $agent, ?User $assignedBy = null): void
     {
         $this->guardAgentTier($ticket, $agent);
+        $this->guardAgentAvailability($ticket, $agent);
 
         $oldAssignee = $ticket->assigned_to;
 

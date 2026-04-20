@@ -23,6 +23,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TicketController extends Controller
 {
+    use \App\Http\Controllers\Concerns\HasSortableQuery;
+
     public function __construct(
         private TicketService $ticketService,
         private TicketMergeService $mergeService,
@@ -96,11 +98,49 @@ class TicketController extends Controller
                         ->orWhere('ticket_number', 'like', "%{$search}%")
                         ->orWhere('description', 'like', "%{$search}%");
                 });
-            })
-            ->orderByRaw("FIELD(status, 'open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled')")
-            ->latest()
-            ->paginate(20)
-            ->withQueryString();
+            });
+
+        // If a sort is explicitly requested, honor it; otherwise use the default
+        // status-priority order from the list spec.
+        if ($request->filled('sort')) {
+            $sort = $request->input('sort');
+            $direction = strtolower($request->input('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+            switch ($sort) {
+                case 'client':
+                    $tickets->leftJoin('clients', 'tickets.client_id', '=', 'clients.id')
+                        ->select('tickets.*')
+                        ->orderBy('clients.name', $direction);
+                    break;
+                case 'assignee':
+                    $tickets->leftJoin('users', 'tickets.assigned_to', '=', 'users.id')
+                        ->select('tickets.*')
+                        ->orderBy('users.name', $direction);
+                    break;
+                case 'resolution':
+                    // Sort by elapsed hours (closed_at - created_at); open tickets use NOW().
+                    $tickets->orderByRaw("TIMESTAMPDIFF(MINUTE, tickets.created_at, COALESCE(tickets.closed_at, NOW())) {$direction}");
+                    break;
+                case 'priority':
+                    // Order priority by severity: critical > high > medium > low
+                    $tickets->orderByRaw("FIELD(priority, 'critical', 'high', 'medium', 'low') {$direction}");
+                    break;
+                case 'ticket_number':
+                case 'subject':
+                case 'status':
+                case 'created_at':
+                    $tickets->orderBy($sort, $direction);
+                    break;
+                default:
+                    $tickets->orderByRaw("FIELD(status, 'open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled')")
+                        ->latest();
+            }
+        } else {
+            $tickets->orderByRaw("FIELD(status, 'open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled')")
+                ->latest();
+        }
+
+        $tickets = $tickets->paginate(20)->withQueryString();
 
         $departments = Department::active()->ordered()->get();
         $agents = User::query()
@@ -124,8 +164,9 @@ class TicketController extends Controller
         $products = Product::active()->ordered()->get();
         $agents = User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+            ->with('schedules')
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'support_tier']);
 
         // Build SLA lookup: { tier: { priority: { response, resolution } } }
         $slaLookup = \App\Models\SlaPolicy::active()
@@ -191,6 +232,7 @@ class TicketController extends Controller
 
         $agents = \App\Models\User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+            ->with('schedules')
             ->orderBy('name')
             ->get(['id', 'name', 'support_tier']);
 

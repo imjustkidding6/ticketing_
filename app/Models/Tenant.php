@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\AppSetting;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -55,6 +56,21 @@ class Tenant extends Model
         }
 
         return Storage::disk('public')->url($this->logo_path);
+    }
+
+    /**
+     * Display name preferring the "Company Name" in General Settings, falling
+     * back to the tenant's own name. Bypasses the tenant-session scope so it
+     * works on public portal requests where no session is set.
+     */
+    public function displayName(): string
+    {
+        $companyName = AppSetting::withoutGlobalScopes()
+            ->where('tenant_id', $this->id)
+            ->where('key', 'company_name')
+            ->value('value');
+
+        return $companyName ?: $this->name;
     }
 
     /**

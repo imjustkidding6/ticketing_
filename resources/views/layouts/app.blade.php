@@ -486,22 +486,40 @@
                                 <span x-show="unreadCount > 0" x-cloak x-text="unreadCount > 99 ? '99+' : unreadCount" class="absolute -top-0.5 -right-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"></span>
                             </button>
 
-                            <div x-show="open" x-cloak @click.outside="open = false" x-transition class="absolute right-0 mt-2 w-80 rounded-xl border border-gray-200 bg-white shadow-lg z-50">
+                            <div x-show="open" x-cloak @click.outside="open = false" x-transition class="absolute right-0 mt-2 w-[28rem] max-w-[92vw] rounded-xl border border-gray-200 bg-white shadow-lg z-50">
                                 <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3">
                                     <span class="text-sm font-semibold text-gray-900">{{ __('Notifications') }}</span>
                                     <button x-show="unreadCount > 0" @click="markAllRead()" class="text-xs text-indigo-600 hover:text-indigo-800">{{ __('Mark all read') }}</button>
                                 </div>
-                                <div class="max-h-80 overflow-y-auto">
+                                <div class="max-h-96 overflow-y-auto">
                                     <template x-if="notifications.length === 0 && loaded">
                                         <p class="px-4 py-8 text-center text-sm text-gray-500">{{ __('No notifications.') }}</p>
                                     </template>
                                     <template x-for="n in notifications" :key="n.id">
-                                        <div @click="markRead(n.id)" class="cursor-pointer border-b border-gray-100 px-4 py-3 hover:bg-gray-50" :class="{ 'bg-blue-50': !n.read_at }">
-                                            <div class="flex items-start justify-between gap-2">
-                                                <p class="text-sm text-gray-900" x-text="n.data.message || n.data.title || n.type"></p>
-                                                <span x-show="!n.read_at" class="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-500"></span>
+                                        <div @click="openNotification(n)" class="cursor-pointer border-b border-gray-100 px-4 py-3 hover:bg-gray-50" :class="{ 'bg-blue-50': !n.read_at }">
+                                            <div class="flex items-start gap-3">
+                                                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                                                    :class="{
+                                                        'bg-indigo-100 text-indigo-600': n.action === 'assigned',
+                                                        'bg-emerald-100 text-emerald-600': n.action === 'created',
+                                                        'bg-blue-100 text-blue-600': n.action === 'status_changed',
+                                                        'bg-amber-100 text-amber-600': n.action === 'sla_breach_warning',
+                                                        'bg-purple-100 text-purple-600': n.action === 'escalated',
+                                                        'bg-gray-100 text-gray-500': !['assigned','created','status_changed','sla_breach_warning','escalated'].includes(n.action),
+                                                    }">
+                                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                                                    </svg>
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-start justify-between gap-2">
+                                                        <p class="text-sm font-medium text-gray-900" x-text="n.title"></p>
+                                                        <span x-show="!n.read_at" class="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-500"></span>
+                                                    </div>
+                                                    <p x-show="n.subject" class="mt-0.5 truncate text-xs text-gray-600" x-text="n.subject"></p>
+                                                    <p class="mt-1 text-xs text-gray-400" x-text="n.created_ago"></p>
+                                                </div>
                                             </div>
-                                            <p class="mt-1 text-xs text-gray-400" x-text="n.created_ago"></p>
                                         </div>
                                     </template>
                                 </div>
@@ -587,6 +605,13 @@
                                     headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'Accept': 'application/json' }
                                 });
                             } catch (e) {}
+                        }
+                    },
+
+                    async openNotification(n) {
+                        await this.markRead(n.id);
+                        if (n.url) {
+                            window.location.href = n.url;
                         }
                     },
 

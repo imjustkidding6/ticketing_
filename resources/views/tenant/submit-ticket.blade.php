@@ -2,7 +2,7 @@
     {{-- Hero Section --}}
     <div class="-mt-8 pb-12 pt-16" style="background-color: var(--portal-primary);">
         <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6 text-center">
-            <h1 class="text-3xl font-bold text-white sm:text-4xl">{{ $tenant->name }} {{ __('Support') }}</h1>
+            <h1 class="text-3xl font-bold text-white sm:text-4xl">{{ $tenant->displayName() }} {{ __('Support') }}</h1>
             <p class="mt-3 text-lg text-white/70">{{ __('Submit a ticket and we\'ll get back to you as soon as possible.') }}</p>
         </div>
     </div>

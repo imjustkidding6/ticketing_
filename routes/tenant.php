@@ -211,11 +211,11 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::get('service-reports/{report}/download', [ServiceReportController::class, 'download'])->name('service-reports.download')->middleware('feature:service_reports');
 
     // Agent Schedules (Business+ via feature gate)
-    Route::get('schedules', [AgentScheduleController::class, 'index'])->name('schedules.index')->middleware('feature:agent_schedule');
-    Route::get('schedules/team', [AgentScheduleController::class, 'team'])->name('schedules.team')->middleware('feature:agent_schedule');
-    Route::post('schedules', [AgentScheduleController::class, 'store'])->name('schedules.store')->middleware('feature:agent_schedule');
-    Route::put('schedules/{schedule}', [AgentScheduleController::class, 'update'])->name('schedules.update')->middleware('feature:agent_schedule');
-    Route::delete('schedules/{schedule}', [AgentScheduleController::class, 'destroy'])->name('schedules.destroy')->middleware('feature:agent_schedule');
+    Route::middleware('feature:agent_schedule')->group(function () {
+        Route::get('schedules', [AgentScheduleController::class, 'index'])->name('schedules.index');
+        Route::get('schedules/team', [AgentScheduleController::class, 'team'])->name('schedules.team');
+        Route::post('schedules', [AgentScheduleController::class, 'save'])->name('schedules.save');
+    });
 
     // Custom Roles (Enterprise via feature gate)
     Route::resource('roles', RoleController::class)->except(['show'])->middleware('feature:custom_roles');

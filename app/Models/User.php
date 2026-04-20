@@ -78,6 +78,39 @@ class User extends Authenticatable
     }
 
     /**
+     * Whether the user is on-schedule at the given instant (or now).
+     * Returns true if no schedule rows exist (schedule not configured).
+     * Returns false when the row for today's day_of_week is unavailable
+     * or the time is outside the configured window.
+     */
+    public function isOnScheduleAt(?\Carbon\Carbon $at = null): bool
+    {
+        $at = $at ?? now();
+
+        // No schedule rows at all → schedule not configured, don't block.
+        if (! $this->schedules()->exists()) {
+            return true;
+        }
+
+        $row = $this->schedules()
+            ->where('day_of_week', $at->dayOfWeek)
+            ->first();
+
+        // Nothing scheduled for today → treat as unavailable.
+        if (! $row) {
+            return false;
+        }
+
+        if (! $row->is_available) {
+            return false;
+        }
+
+        $current = $at->format('H:i:s');
+
+        return $current >= $row->start_time && $current <= $row->end_time;
+    }
+
+    /**
      * @return BelongsToMany<Department, $this>
      */
     public function departments(): BelongsToMany
