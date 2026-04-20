@@ -2,15 +2,32 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Plan;
-use Illuminate\View\View;
+use App\Services\TenantUrlHelper;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 
 class HomeController extends Controller
 {
-    public function __invoke(): View
+    public function __invoke(): RedirectResponse
     {
-        $plans = Plan::query()->active()->get();
+        if (! Auth::check()) {
+            return redirect()->route('login');
+        }
 
-        return view('welcome', compact('plans'));
+        $user = Auth::user();
+
+        if ($user->isAdmin()) {
+            return redirect()->route('admin.dashboard');
+        }
+
+        $tenant = $user->ensureCurrentTenant();
+
+        if (! $tenant) {
+            return redirect()->route('dashboard.no-tenant');
+        }
+
+        return redirect()->to(
+            app(TenantUrlHelper::class)->tenantUrl($tenant, '/dashboard')
+        );
     }
 }

@@ -22,7 +22,7 @@
                 </div>
             </div>
 
-            <form method="POST" action="{{ route('tenant.submit-ticket.store', ['slug' => $tenant->slug]) }}" class="space-y-5">
+            <form method="POST" action="{{ route('tenant.submit-ticket.store', ['slug' => $tenant->slug]) }}" class="space-y-5" enctype="multipart/form-data">
                 @csrf
 
                 {{-- Name & Email --}}
@@ -110,24 +110,59 @@
                     @error('description') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                 </div>
 
-                {{-- Priority + Incident Date --}}
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label for="priority" class="block text-sm font-medium text-gray-700">{{ __('Priority') }} <span class="text-red-500">*</span></label>
-                        <select name="priority" id="priority" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                            <option value="low" {{ old('priority', 'medium') === 'low' ? 'selected' : '' }}>{{ __('Low') }}</option>
-                            <option value="medium" {{ old('priority', 'medium') === 'medium' ? 'selected' : '' }}>{{ __('Medium') }}</option>
-                            <option value="high" {{ old('priority') === 'high' ? 'selected' : '' }}>{{ __('High') }}</option>
-                            <option value="critical" {{ old('priority') === 'critical' ? 'selected' : '' }}>{{ __('Critical') }}</option>
-                        </select>
-                        @error('priority') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                    </div>
-                    <div>
-                        <label for="incident_date" class="block text-sm font-medium text-gray-700">{{ __('Incident Date/Time') }} <span class="text-gray-400 font-normal">({{ __('optional') }})</span></label>
-                        <input type="datetime-local" name="incident_date" id="incident_date" value="{{ old('incident_date') }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                        @error('incident_date') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                    </div>
+                {{-- Incident Date --}}
+                <div>
+                    <label for="incident_date" class="block text-sm font-medium text-gray-700">{{ __('Incident Date/Time') }} <span class="text-gray-400 font-normal">({{ __('optional') }})</span></label>
+                    <input type="datetime-local" name="incident_date" id="incident_date" value="{{ old('incident_date') }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    @error('incident_date') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                 </div>
+
+                @if ($allowAttachments)
+                    {{-- Attachments (Business+) --}}
+                    <div x-data="attachmentValidator()">
+                        <label for="attachments" class="block text-sm font-medium text-gray-700">{{ __('Attachments') }} <span class="text-gray-400 font-normal">({{ __('optional') }})</span></label>
+                        <input type="file" name="attachments[]" id="attachments" multiple accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.txt" @change="validate($event)" class="mt-1 block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100">
+                        <p class="mt-1 text-xs text-gray-500">{{ __('Up to 3 files, 10MB each. Allowed: jpg, png, gif, pdf, doc, docx, txt.') }}</p>
+                        <template x-if="error">
+                            <p class="mt-1 text-sm text-red-600" x-text="error"></p>
+                        </template>
+                        @error('attachments') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                        @error('attachments.*') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                    <script>
+                        function attachmentValidator() {
+                            const MAX_SIZE = 10 * 1024 * 1024;
+                            const MAX_COUNT = 3;
+                            const ALLOWED = ['jpg','jpeg','png','gif','pdf','doc','docx','txt'];
+                            return {
+                                error: '',
+                                validate(e) {
+                                    this.error = '';
+                                    const files = Array.from(e.target.files || []);
+                                    if (files.length > MAX_COUNT) {
+                                        this.error = 'You can upload at most ' + MAX_COUNT + ' files.';
+                                        e.target.value = '';
+                                        return;
+                                    }
+                                    for (const f of files) {
+                                        const ext = (f.name.split('.').pop() || '').toLowerCase();
+                                        if (!ALLOWED.includes(ext)) {
+                                            this.error = f.name + ': file type not allowed.';
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        if (f.size > MAX_SIZE) {
+                                            const mb = (f.size / 1024 / 1024).toFixed(1);
+                                            this.error = f.name + ' is ' + mb + ' MB — max is 10 MB.';
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                    }
+                                },
+                            };
+                        }
+                    </script>
+                @endif
 
                 {{-- Info Box --}}
                 <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-4">

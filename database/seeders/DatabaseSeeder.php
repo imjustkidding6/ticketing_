@@ -64,5 +64,7 @@ class DatabaseSeeder extends Seeder
         $roleService = new TenantRoleService;
         $roleService->setupDefaultRoles($tenant);
         $roleService->assignRole($user, 'admin', $tenant);
+
+        DepartmentSeeder::seedForTenant($tenant);
     }
 }

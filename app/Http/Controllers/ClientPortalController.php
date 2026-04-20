@@ -368,7 +368,9 @@ class ClientPortalController extends Controller
             ? route('portal.knowledge-base.search', ['slug' => $tenant->slug])
             : null;
 
-        return view('tenant.submit-ticket', compact('tenant', 'departments', 'categories', 'products', 'kbSearchUrl'));
+        $allowAttachments = $this->planService->tenantHasFeature($tenant, PlanFeature::Attachments);
+
+        return view('tenant.submit-ticket', compact('tenant', 'departments', 'categories', 'products', 'kbSearchUrl', 'allowAttachments'));
     }
 
     /**
@@ -379,18 +381,39 @@ class ClientPortalController extends Controller
         $tenant = $this->resolvePublicTenant($slug);
         $this->abortIfStarter($tenant);
 
-        $validated = $request->validate([
+        $allowAttachments = $this->planService->tenantHasFeature($tenant, PlanFeature::Attachments);
+
+        $rules = [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
-            'priority' => ['required', 'in:low,medium,high,critical'],
             'department_id' => ['required', 'integer'],
             'category_id' => ['nullable', 'integer'],
             'incident_date' => ['nullable', 'date'],
             'product_ids' => ['nullable', 'array'],
             'product_ids.*' => ['integer'],
-        ]);
+        ];
+
+        if ($allowAttachments) {
+            $rules['attachments'] = ['nullable', 'array', 'max:3'];
+            $rules['attachments.*'] = ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,pdf,doc,docx,txt'];
+        }
+
+        $validated = $request->validate($rules);
+
+        $attachments = [];
+        if ($allowAttachments && $request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $path = $file->store("tenants/{$tenant->id}/attachments", config('filesystems.default'));
+                $attachments[] = [
+                    'name' => $file->getClientOriginalName(),
+                    'path' => $path,
+                    'size' => $file->getSize(),
+                    'mime' => $file->getMimeType(),
+                ];
+            }
+        }
 
         $client = $this->findOrCreateGuestClient($tenant, $validated['email'], $validated['name']);
         $trackingToken = Str::random(64);
@@ -399,13 +422,14 @@ class ClientPortalController extends Controller
             'tenant_id' => $tenant->id,
             'subject' => $validated['subject'],
             'description' => $validated['description'],
-            'priority' => $validated['priority'],
+            'priority' => null,
             'department_id' => $validated['department_id'],
             'category_id' => $validated['category_id'],
             'incident_date' => $validated['incident_date'] ?? null,
             'client_id' => $client->id,
             'created_by' => null,
             'tracking_token' => $trackingToken,
+            'attachments' => $attachments ?: null,
         ]);
 
         if (! empty($validated['product_ids'])) {

@@ -37,7 +37,7 @@ class EnsureTenantSession
                 ->first();
 
             if (! $tenant || ! $user->belongsToTenant($tenant)) {
-                return redirect(config('app.url'))
+                return redirect('/')
                     ->with('error', 'You do not have access to this organization.');
             }
 
