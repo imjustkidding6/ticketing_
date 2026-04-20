@@ -324,6 +324,52 @@ class ReportController extends Controller
     }
 
     /**
+     * Export SLA compliance rows as CSV.
+     */
+    public function exportSlaCompliance(Request $request): StreamedResponse
+    {
+        $from = $request->input('from') ? \Carbon\Carbon::parse($request->input('from')) : now()->subDays(30);
+        $to = $request->input('to') ? \Carbon\Carbon::parse($request->input('to')) : now();
+
+        $report = $this->slaService->getComplianceReport($from, $to);
+
+        $rows = $report['rows']->map(function (array $r) {
+            $t = $r['ticket'];
+
+            return [
+                $t->ticket_number,
+                $t->subject,
+                $t->client?->name ?? '-',
+                $r['client_tier'] ?? '-',
+                $t->department?->name ?? '-',
+                $t->assignee?->name ?? '-',
+                ucfirst($r['priority'] ?? '-'),
+                $r['policy_name'] ?? '-',
+                $t->created_at->format('Y-m-d H:i'),
+                $t->first_response_at?->format('Y-m-d H:i') ?? '-',
+                $t->closed_at?->format('Y-m-d H:i') ?? '-',
+                $r['response_hours'] !== null ? $r['response_hours'] : '-',
+                $r['response_target'] ?? '-',
+                strtoupper($r['response_status']),
+                $r['resolution_hours'] !== null ? $r['resolution_hours'] : '-',
+                $r['resolution_target'] ?? '-',
+                strtoupper($r['resolution_status']),
+            ];
+        })->toArray();
+
+        return $this->reportService->exportToCsv(
+            $rows,
+            [
+                'Ticket #', 'Subject', 'Client', 'Tier', 'Department', 'Agent', 'Priority',
+                'SLA Policy', 'Created', 'First Response', 'Closed',
+                'Response (h)', 'Response Target (h)', 'Response',
+                'Resolution (h)', 'Resolution Target (h)', 'Resolution',
+            ],
+            'sla-compliance-'.$from->toDateString().'-to-'.$to->toDateString().'.csv'
+        );
+    }
+
+    /**
      * Display agent performance report.
      */
     public function agents(Request $request): View

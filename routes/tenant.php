@@ -191,12 +191,19 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::get('reports/billing', [ReportController::class, 'billing'])->name('reports.billing')->middleware('feature:billing');
     Route::get('reports/export/billing', [ReportController::class, 'exportBilling'])->name('reports.export.billing')->middleware('feature:billing');
     Route::get('reports/sla-compliance', [ReportController::class, 'slaCompliance'])->name('reports.sla-compliance')->middleware('feature:sla_report');
+    Route::get('reports/export/sla-compliance', [ReportController::class, 'exportSlaCompliance'])->name('reports.export.sla-compliance')->middleware(['feature:sla_report', 'feature:detailed_reporting']);
 
     // Activity Logs (Business+ via feature gate)
     Route::get('activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index')->middleware('feature:audit_logs');
 
     // SLA Policies (Business+ via feature gate)
-    Route::resource('sla', SlaPolicyController::class)->except(['show'])->middleware('feature:sla_management');
+    Route::middleware('feature:sla_management')->group(function () {
+        Route::get('sla', [SlaPolicyController::class, 'index'])->name('sla.index');
+        Route::post('sla/seed-defaults', [SlaPolicyController::class, 'seedDefaults'])->name('sla.seed-defaults');
+        Route::get('sla/tier/{tier}/edit', [SlaPolicyController::class, 'editTier'])->name('sla.edit-tier');
+        Route::post('sla/tier/{tier}', [SlaPolicyController::class, 'updateTier'])->name('sla.update-tier');
+        Route::delete('sla/tier/{tier}', [SlaPolicyController::class, 'destroyTier'])->name('sla.destroy-tier');
+    });
 
     // Service Reports (Business+ via feature gate)
     Route::get('service-reports', [ServiceReportController::class, 'index'])->name('service-reports.index')->middleware('feature:service_reports');

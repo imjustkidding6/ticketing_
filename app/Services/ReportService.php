@@ -23,7 +23,8 @@ class ReportService
     {
         // Merged source tickets are archival artifacts (their counts, closed_at,
         // and resolution metrics would otherwise double-count with their target).
-        $query->notMerged();
+        // Spam is excluded from the tickets list and should be excluded here too.
+        $query->notMerged()->notSpam();
 
         if (! empty($filters['from'])) {
             $query->where('created_at', '>=', Carbon::parse($filters['from'])->startOfDay());
@@ -148,6 +149,8 @@ class ReportService
     public function getResolutionReport(array $filters = []): array
     {
         $query = Ticket::query()
+            ->notMerged()
+            ->notSpam()
             ->where('status', 'closed')
             ->whereNotNull('closed_at');
 
@@ -209,7 +212,9 @@ class ReportService
         $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
-            $q->whereBetween('created_at', [$from, $to]);
+            $q->whereBetween('created_at', [$from, $to])
+                ->where('is_merged', false)
+                ->where('is_spam', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('priority', $filters['priority']);
@@ -329,7 +334,9 @@ class ReportService
         $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
-            $q->whereBetween('created_at', [$from, $to]);
+            $q->whereBetween('created_at', [$from, $to])
+                ->where('is_merged', false)
+                ->where('is_spam', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('priority', $filters['priority']);
@@ -377,7 +384,9 @@ class ReportService
         $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
-            $q->whereBetween('created_at', [$from, $to]);
+            $q->whereBetween('created_at', [$from, $to])
+                ->where('is_merged', false)
+                ->where('is_spam', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('priority', $filters['priority']);
@@ -548,18 +557,20 @@ class ReportService
 
         return Department::query()
             ->withCount(['tickets as total' => function ($q) use ($filters, $from, $to) {
-                $q->whereBetween('created_at', [$from, $to]);
+                $q->whereBetween('tickets.created_at', [$from, $to])
+                    ->where('tickets.is_merged', false)
+                    ->where('tickets.is_spam', false);
 
                 if (! empty($filters['priority'])) {
-                    $q->where('priority', $filters['priority']);
+                    $q->where('tickets.priority', $filters['priority']);
                 }
 
                 if (! empty($filters['client_id'])) {
-                    $q->where('client_id', $filters['client_id']);
+                    $q->where('tickets.client_id', $filters['client_id']);
                 }
 
                 if (! empty($filters['assigned_to'])) {
-                    $q->where('assigned_to', $filters['assigned_to']);
+                    $q->where('tickets.assigned_to', $filters['assigned_to']);
                 }
             }])
             ->orderByDesc('total')
@@ -581,18 +592,20 @@ class ReportService
 
         return Client::query()
             ->withCount(['tickets as total' => function ($q) use ($filters, $from, $to) {
-                $q->whereBetween('created_at', [$from, $to]);
+                $q->whereBetween('tickets.created_at', [$from, $to])
+                    ->where('tickets.is_merged', false)
+                    ->where('tickets.is_spam', false);
 
                 if (! empty($filters['priority'])) {
-                    $q->where('priority', $filters['priority']);
+                    $q->where('tickets.priority', $filters['priority']);
                 }
 
                 if (! empty($filters['department_id'])) {
-                    $q->where('department_id', $filters['department_id']);
+                    $q->where('tickets.department_id', $filters['department_id']);
                 }
 
                 if (! empty($filters['assigned_to'])) {
-                    $q->where('assigned_to', $filters['assigned_to']);
+                    $q->where('tickets.assigned_to', $filters['assigned_to']);
                 }
             }])
             ->orderByDesc('total')
@@ -615,7 +628,9 @@ class ReportService
         return User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
             ->withCount(['tickets as total' => function ($q) use ($filters, $from, $to) {
-                $q->whereBetween('tickets.created_at', [$from, $to]);
+                $q->whereBetween('tickets.created_at', [$from, $to])
+                    ->where('tickets.is_merged', false)
+                    ->where('tickets.is_spam', false);
 
                 if (! empty($filters['priority'])) {
                     $q->where('tickets.priority', $filters['priority']);
@@ -699,7 +714,11 @@ class ReportService
 
         if ($entity === 'product') {
             $topIds = \App\Models\Product::query()
-                ->withCount(['tickets as tc' => fn ($q) => $q->whereBetween('tickets.created_at', [$from, $to])])
+                ->withCount(['tickets as tc' => fn ($q) => $q
+                    ->whereBetween('tickets.created_at', [$from, $to])
+                    ->where('tickets.is_merged', false)
+                    ->where('tickets.is_spam', false)
+                ])
                 ->orderByDesc('tc')
                 ->limit($limit)
                 ->pluck('id', 'name');
@@ -759,6 +778,7 @@ class ReportService
             foreach ($topIds as $name => $productId) {
                 $counts = Ticket::query()
                     ->notMerged()
+                    ->notSpam()
                     ->whereHas('products', fn ($q) => $q->where('products.id', $productId))
                     ->whereBetween('created_at', [$from, $to])
                     ->selectRaw("{$groupExpr} as period, COUNT(*) as cnt")

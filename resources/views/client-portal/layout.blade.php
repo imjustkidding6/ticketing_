@@ -84,7 +84,7 @@
             <!-- Footer -->
             <footer class="border-t border-gray-200 bg-white py-4">
                 <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6 text-center text-sm text-gray-500">
-                    &copy; {{ date('Y') }} {{ $tenant->name }}. {{ __('All rights reserved.') }}
+                    &copy; {{ date('Y') }} CliqueHA Information Services OPC. {{ __('All rights reserved.') }}
                 </div>
             </footer>
         </div>

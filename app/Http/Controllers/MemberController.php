@@ -147,18 +147,20 @@ class MemberController extends Controller
         $member->load(['roles', 'departments']);
 
         $stats = [
-            'created' => $member->createdTickets()->count(),
-            'assigned' => $member->tickets()->count(),
-            'closed' => $member->tickets()->where('status', 'closed')->count(),
+            'created' => $member->createdTickets()->notMerged()->count(),
+            'assigned' => $member->tickets()->notMerged()->count(),
+            'closed' => $member->tickets()->notMerged()->where('status', 'closed')->count(),
         ];
 
         $recentCreated = $member->createdTickets()
+            ->notMerged()
             ->with('client')
             ->latest()
             ->limit(5)
             ->get();
 
         $assignedTickets = $member->tickets()
+            ->notMerged()
             ->with(['client', 'category', 'creator'])
             ->latest()
             ->limit(10)

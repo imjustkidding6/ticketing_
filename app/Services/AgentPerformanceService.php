@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Ticket;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 class AgentPerformanceService
@@ -15,8 +16,12 @@ class AgentPerformanceService
      */
     public function getAgentPerformanceReport(User $agent, string $from, string $to): array
     {
+        $start = Carbon::parse($from)->startOfDay();
+        $end = Carbon::parse($to)->endOfDay();
+
         $assignedTickets = Ticket::where('assigned_to', $agent->id)
-            ->whereBetween('created_at', [$from, $to])
+            ->notMerged()
+            ->whereBetween('created_at', [$start, $end])
             ->get();
 
         $closedTickets = $assignedTickets->where('status', 'closed');
@@ -65,7 +70,10 @@ class AgentPerformanceService
      */
     public function getTeamPerformanceMetrics(string $from, string $to): array
     {
-        $tickets = Ticket::whereBetween('created_at', [$from, $to])->get();
+        $start = Carbon::parse($from)->startOfDay();
+        $end = Carbon::parse($to)->endOfDay();
+
+        $tickets = Ticket::notMerged()->whereBetween('created_at', [$start, $end])->get();
         $closedTickets = $tickets->where('status', 'closed');
 
         return [

@@ -29,6 +29,29 @@ class TicketService
      * Only enforced for tenants with the agent_escalation feature (Enterprise).
      * Owners bypass.
      */
+    /**
+     * Block a priority assignment if the tenant requires an SLA policy
+     * and none exists for the given (client_tier, priority) pair.
+     */
+    private function guardSlaPolicy(int $tenantId, ?string $clientTier, ?string $priority, \App\Models\Tenant $tenant): void
+    {
+        if (! $priority) {
+            return;
+        }
+
+        if (! $this->planService->tenantHasFeature($tenant, PlanFeature::SlaManagement)) {
+            return;
+        }
+
+        if (! \App\Models\SlaPolicy::hasPolicyFor($tenantId, $clientTier, $priority)) {
+            $tierLabel = $clientTier ? " for {$clientTier} clients" : '';
+            throw new \InvalidArgumentException(
+                "Cannot set priority to '{$priority}'{$tierLabel}: no SLA policy defined. ".
+                'Create or seed SLA policies under Settings → SLA first.'
+            );
+        }
+    }
+
     private function guardAgentTier(Ticket $ticket, User $agent): void
     {
         if (! $this->planService->tenantHasFeature($ticket->tenant, PlanFeature::AgentEscalation)) {
@@ -69,6 +92,17 @@ class TicketService
         $data['ticket_number'] = Ticket::generateTicketNumber();
         $data['created_by'] = $data['created_by'] ?? Auth::id();
         $data['status'] = 'open';
+
+        if (! empty($data['priority']) && ! empty($data['tenant_id'])) {
+            $tenant = \App\Models\Tenant::find($data['tenant_id']);
+            if ($tenant) {
+                $clientTier = null;
+                if (! empty($data['client_id'])) {
+                    $clientTier = \App\Models\Client::withoutGlobalScopes()->find($data['client_id'])?->tier;
+                }
+                $this->guardSlaPolicy($data['tenant_id'], $clientTier, $data['priority'], $tenant);
+            }
+        }
 
         if (! empty($data['assigned_to']) && ! empty($data['tenant_id']) && ! empty($data['priority'])) {
             $agent = User::find($data['assigned_to']);
@@ -155,6 +189,11 @@ class TicketService
 
         $nextAssignee = array_key_exists('assigned_to', $data) ? $data['assigned_to'] : $ticket->assigned_to;
         $nextPriority = array_key_exists('priority', $data) ? $data['priority'] : $ticket->priority;
+
+        if ($nextPriority && array_key_exists('priority', $data) && $data['priority'] !== $ticket->priority) {
+            $this->guardSlaPolicy($ticket->tenant_id, $ticket->client?->tier, $nextPriority, $ticket->tenant);
+        }
+
         if ($nextAssignee && $nextPriority) {
             $agent = User::find($nextAssignee);
             if ($agent) {
@@ -247,6 +286,11 @@ class TicketService
             $updates['in_progress_at'] = now();
         }
 
+        // Response time ends when a ticket first moves to "in progress".
+        if ($status === 'in_progress' && ! $ticket->first_response_at) {
+            $updates['first_response_at'] = now();
+        }
+
         if ($status === 'closed') {
             $tasks = $ticket->tasks;
 
@@ -317,6 +361,8 @@ class TicketService
      */
     public function changePriority(Ticket $ticket, string $priority): void
     {
+        $this->guardSlaPolicy($ticket->tenant_id, $ticket->client?->tier, $priority, $ticket->tenant);
+
         $oldPriority = $ticket->priority;
         $ticket->update(['priority' => $priority]);
         $this->addHistory($ticket, 'updated', 'priority', $oldPriority, $priority, "Priority changed from {$oldPriority} to {$priority}.");
