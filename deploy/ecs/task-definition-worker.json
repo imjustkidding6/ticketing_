@@ -1,0 +1,53 @@
+{
+  "family": "ticketing-worker",
+  "networkMode": "bridge",
+  "containerDefinitions": [
+    {
+      "name": "ticketing-worker",
+      "image": "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}",
+      "cpu": 256,
+      "memory": 512,
+      "memoryReservation": 256,
+      "essential": true,
+      "environment": [
+        { "name": "APP_ENV", "value": "production" },
+        { "name": "APP_DEBUG", "value": "false" },
+        { "name": "LOG_CHANNEL", "value": "stack" },
+        { "name": "LOG_STACK", "value": "stderr" },
+        { "name": "LOG_LEVEL", "value": "warning" },
+        { "name": "CACHE_STORE", "value": "redis" },
+        { "name": "SESSION_DRIVER", "value": "redis" },
+        { "name": "QUEUE_CONNECTION", "value": "sqs" },
+        { "name": "FILESYSTEM_DISK", "value": "s3" },
+        { "name": "MAIL_MAILER", "value": "ses" },
+        { "name": "ENABLE_QUEUE_WORKER", "value": "true" },
+        { "name": "ENABLE_SCHEDULER", "value": "true" }
+      ],
+      "secrets": [
+        { "name": "APP_KEY", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/APP_KEY" },
+        { "name": "DB_HOST", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/DB_HOST" },
+        { "name": "DB_DATABASE", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/DB_DATABASE" },
+        { "name": "DB_USERNAME", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/DB_USERNAME" },
+        { "name": "DB_PASSWORD", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/DB_PASSWORD" },
+        { "name": "REDIS_HOST", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/REDIS_HOST" },
+        { "name": "AWS_ACCESS_KEY_ID", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/AWS_ACCESS_KEY_ID" },
+        { "name": "AWS_SECRET_ACCESS_KEY", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/AWS_SECRET_ACCESS_KEY" },
+        { "name": "AWS_DEFAULT_REGION", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/AWS_DEFAULT_REGION" },
+        { "name": "AWS_BUCKET", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/AWS_BUCKET" },
+        { "name": "SQS_PREFIX", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/SQS_PREFIX" },
+        { "name": "SQS_QUEUE", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/SQS_QUEUE" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/ticketing",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "worker"
+        }
+      }
+    }
+  ],
+  "requiresCompatibilities": ["EC2"],
+  "executionRoleArn": "arn:aws:iam::ACCOUNT:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT:role/ecsTaskRole"
+}

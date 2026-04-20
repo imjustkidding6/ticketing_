@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PlanFeature;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +22,7 @@ class Plan extends Model
         'description',
         'max_users',
         'max_tickets_per_month',
+        'features',
         'is_active',
     ];
 
@@ -32,6 +34,7 @@ class Plan extends Model
         return [
             'max_users' => 'integer',
             'max_tickets_per_month' => 'integer',
+            'features' => 'array',
             'is_active' => 'boolean',
         ];
     }
@@ -58,6 +61,16 @@ class Plan extends Model
     public function hasUnlimitedTickets(): bool
     {
         return $this->max_tickets_per_month === null;
+    }
+
+    /**
+     * Check if this plan includes a specific feature.
+     */
+    public function hasFeature(PlanFeature|string $feature): bool
+    {
+        $featureValue = $feature instanceof PlanFeature ? $feature->value : $feature;
+
+        return in_array($featureValue, $this->features ?? [], true);
     }
 
     /**

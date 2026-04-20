@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class Tenant extends Model
@@ -20,6 +21,11 @@ class Tenant extends Model
         'name',
         'slug',
         'description',
+        'logo_path',
+        'primary_color',
+        'accent_color',
+        'dark_primary_color',
+        'dark_accent_color',
         'is_active',
         'license_id',
         'settings',
@@ -36,6 +42,18 @@ class Tenant extends Model
             'settings' => 'array',
             'suspended_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Get the full URL for the tenant's logo.
+     */
+    public function logoUrl(): ?string
+    {
+        if (! $this->logo_path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->logo_path);
     }
 
     /**

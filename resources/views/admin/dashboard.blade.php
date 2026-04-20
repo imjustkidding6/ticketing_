@@ -3,7 +3,8 @@
 @section('title', 'Dashboard')
 
 @section('content')
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    {{-- Stats Grid --}}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div class="bg-white overflow-hidden shadow rounded-lg">
             <div class="p-5">
                 <div class="flex items-center">
@@ -14,14 +15,17 @@
                     </div>
                     <div class="ml-5 w-0 flex-1">
                         <dl>
-                            <dt class="text-sm font-medium text-gray-500 truncate">Total Tenants</dt>
-                            <dd class="text-3xl font-semibold text-gray-900">{{ $stats['tenants'] }}</dd>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Active Tenants</dt>
+                            <dd class="text-3xl font-semibold text-gray-900">{{ $stats['active_tenants'] }}</dd>
                         </dl>
                     </div>
                 </div>
             </div>
             <div class="bg-gray-50 px-5 py-3">
-                <a href="{{ route('admin.tenants.index') }}" class="text-sm text-indigo-600 hover:text-indigo-900">View all</a>
+                <a href="{{ route('admin.tenants.index') }}" class="text-sm text-indigo-600 hover:text-indigo-900">{{ $stats['tenants'] }} total</a>
+                @if($stats['suspended_tenants'] > 0)
+                    <span class="text-sm text-red-500 ml-2">({{ $stats['suspended_tenants'] }} suspended)</span>
+                @endif
             </div>
         </div>
 
@@ -42,7 +46,10 @@
                 </div>
             </div>
             <div class="bg-gray-50 px-5 py-3">
-                <a href="{{ route('admin.licenses.index') }}" class="text-sm text-indigo-600 hover:text-indigo-900">View all ({{ $stats['licenses'] }} total)</a>
+                <a href="{{ route('admin.licenses.index') }}" class="text-sm text-indigo-600 hover:text-indigo-900">{{ $stats['licenses'] }} total</a>
+                @if($stats['pending_licenses'] > 0)
+                    <span class="text-sm text-yellow-600 ml-2">({{ $stats['pending_licenses'] }} pending)</span>
+                @endif
             </div>
         </div>
 
@@ -87,9 +94,211 @@
                 <a href="{{ route('admin.plans.index') }}" class="text-sm text-indigo-600 hover:text-indigo-900">View all</a>
             </div>
         </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 bg-cyan-500 rounded-md p-3">
+                        <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Tickets (Month)</dt>
+                            <dd class="text-3xl font-semibold text-gray-900">{{ $stats['tickets_this_month'] }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-5 py-3">
+                <span class="text-sm text-gray-500">{{ $stats['total_tickets'] }} total</span>
+            </div>
+        </div>
     </div>
 
-    <div class="mt-8">
+    <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {{-- License Expiration Alerts --}}
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">License Expiration Alerts</h3>
+            </div>
+            <div class="p-6">
+                @if($expiredLicenses->isNotEmpty())
+                    <div class="mb-4">
+                        <h4 class="text-sm font-semibold text-red-700 mb-2">Expired</h4>
+                        @foreach($expiredLicenses as $license)
+                            <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-900">{{ $license->tenant?->name ?? 'Unassigned' }}</p>
+                                    <p class="text-xs text-gray-500">{{ $license->plan?->name }} &middot; Expired {{ $license->expires_at->diffForHumans() }}</p>
+                                </div>
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                    @if($license->isInGracePeriod())
+                                        Grace ({{ $license->daysUntilFullExpiry() }}d)
+                                    @else
+                                        Fully Expired
+                                    @endif
+                                </span>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
+                @if($expiringLicenses->isNotEmpty())
+                    <div>
+                        <h4 class="text-sm font-semibold text-yellow-700 mb-2">Expiring Within 30 Days</h4>
+                        @foreach($expiringLicenses as $license)
+                            <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-900">{{ $license->tenant?->name ?? 'Unassigned' }}</p>
+                                    <p class="text-xs text-gray-500">{{ $license->plan?->name }} &middot; <code class="text-xs">{{ Str::limit($license->license_key, 14) }}</code></p>
+                                </div>
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                                    @if($license->daysUntilExpiry() <= 7) bg-red-100 text-red-800
+                                    @elseif($license->daysUntilExpiry() <= 14) bg-orange-100 text-orange-800
+                                    @else bg-yellow-100 text-yellow-800
+                                    @endif">
+                                    {{ $license->daysUntilExpiry() }}d left
+                                </span>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
+                @if($expiredLicenses->isEmpty() && $expiringLicenses->isEmpty())
+                    <p class="text-sm text-gray-500 text-center py-4">No license alerts at this time.</p>
+                @endif
+            </div>
+        </div>
+
+        {{-- Plan Distribution --}}
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Plan Distribution</h3>
+            </div>
+            <div class="p-6">
+                @php
+                    $totalActiveLicenses = $planDistribution->sum('count');
+                @endphp
+
+                @if($totalActiveLicenses > 0)
+                    {{-- Visual bar --}}
+                    <div class="flex rounded-full overflow-hidden h-6 mb-4">
+                        @php
+                            $colors = ['bg-indigo-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-cyan-500'];
+                        @endphp
+                        @foreach($planDistribution as $index => $plan)
+                            @if($plan['count'] > 0)
+                                <div class="{{ $colors[$index % count($colors)] }}" style="width: {{ ($plan['count'] / $totalActiveLicenses) * 100 }}%"
+                                     title="{{ $plan['name'] }}: {{ $plan['count'] }}">
+                                </div>
+                            @endif
+                        @endforeach
+                    </div>
+
+                    {{-- Legend --}}
+                    <div class="space-y-3">
+                        @foreach($planDistribution as $index => $plan)
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <span class="w-3 h-3 rounded-full {{ $colors[$index % count($colors)] }} mr-2"></span>
+                                    <span class="text-sm text-gray-700">{{ $plan['name'] }}</span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-sm font-medium text-gray-900">{{ $plan['count'] }}</span>
+                                    <span class="text-xs text-gray-500 ml-1">({{ $totalActiveLicenses > 0 ? round(($plan['count'] / $totalActiveLicenses) * 100) : 0 }}%)</span>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="text-sm text-gray-500 text-center py-4">No active tenant subscriptions yet.</p>
+                @endif
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {{-- Top Tenants by Usage --}}
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Top Tenants by Activity</h3>
+            </div>
+            <div class="overflow-x-auto">
+                @if($topTenants->isNotEmpty())
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tenant</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Users</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Tickets</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            @foreach($topTenants as $tenant)
+                                <tr>
+                                    <td class="px-6 py-3 text-sm font-medium text-gray-900">{{ $tenant->name }}</td>
+                                    <td class="px-6 py-3 text-sm text-gray-500">{{ $tenant->license?->plan?->name ?? '-' }}</td>
+                                    <td class="px-6 py-3 text-sm text-gray-900 text-right">{{ $tenant->users_count }}</td>
+                                    <td class="px-6 py-3 text-sm text-gray-900 text-right">{{ $tenant->ticket_count }}</td>
+                                    <td class="px-6 py-3 text-right">
+                                        <a href="{{ route('admin.tenants.show', $tenant) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">View</a>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @else
+                    <div class="p-6">
+                        <p class="text-sm text-gray-500 text-center">No active tenants yet.</p>
+                    </div>
+                @endif
+            </div>
+        </div>
+
+        {{-- Recent Tenants --}}
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Recently Created Tenants</h3>
+            </div>
+            <div class="overflow-x-auto">
+                @if($recentTenants->isNotEmpty())
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tenant</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            @foreach($recentTenants as $tenant)
+                                <tr>
+                                    <td class="px-6 py-3 text-sm font-medium text-gray-900">{{ $tenant->name }}</td>
+                                    <td class="px-6 py-3 text-sm text-gray-500">{{ $tenant->license?->plan?->name ?? '-' }}</td>
+                                    <td class="px-6 py-3 text-sm text-gray-500">{{ $tenant->created_at->diffForHumans() }}</td>
+                                    <td class="px-6 py-3 text-right">
+                                        <a href="{{ route('admin.tenants.show', $tenant) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">View</a>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @else
+                    <div class="p-6">
+                        <p class="text-sm text-gray-500 text-center">No tenants yet.</p>
+                    </div>
+                @endif
+            </div>
+        </div>
+    </div>
+
+    {{-- Quick Actions --}}
+    <div class="mt-6">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-medium text-gray-900">Quick Actions</h2>
         </div>
