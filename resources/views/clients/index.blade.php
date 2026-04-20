@@ -35,10 +35,10 @@
             <x-data-table>
                 <thead class="bg-gray-50">
                     <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Client') }}</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Contact') }}</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Tier') }}</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Status') }}</th>
+                        <x-sortable-th column="name" :label="__('Client')" />
+                        <x-sortable-th column="contact_person" :label="__('Contact')" />
+                        <x-sortable-th column="tier" :label="__('Tier')" />
+                        <x-sortable-th column="status" :label="__('Status')" />
                         <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Actions') }}</th>
                     </tr>
                 </thead>

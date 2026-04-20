@@ -301,7 +301,7 @@ class ReportController extends Controller
                 $t->client?->name ?? '-',
                 $t->department?->name ?? '-',
                 $t->assignee?->name ?? '-',
-                number_format($t->billable_amount ?? 0, 2),
+                \App\Models\AppSetting::formatCurrency($t->billable_amount),
                 $t->billed_at ? $t->billed_at->format('m/d/Y') : 'Unbilled',
                 $t->billable_description ?? '',
             ])->toArray(),
@@ -321,6 +321,107 @@ class ReportController extends Controller
         $report = $this->slaService->getComplianceReport($from, $to);
 
         return view('reports.sla-compliance', compact('report'));
+    }
+
+    /**
+     * Display reopen report.
+     */
+    public function reopens(Request $request): View
+    {
+        $this->checkPermission('view reports');
+
+        $filters = $this->extractFilters($request);
+        $report = $this->reportService->getReopenAnalysisReport($filters);
+
+        return view('reports.reopens', [
+            ...$this->getFilterData(),
+            'filters' => $filters,
+            'report' => $report,
+        ]);
+    }
+
+    /**
+     * Export reopen report rows as CSV.
+     */
+    public function exportReopens(Request $request): StreamedResponse
+    {
+        $this->checkPermission('view reports');
+
+        $filters = $this->extractFilters($request);
+        $report = $this->reportService->getReopenAnalysisReport($filters);
+
+        $rows = $report['tickets']->map(fn ($t) => [
+            $t->ticket_number,
+            $t->subject,
+            $t->client?->name ?? '-',
+            $t->department?->name ?? '-',
+            $t->category?->name ?? '-',
+            $t->assignee?->name ?? 'Unassigned',
+            ucfirst($t->priority ?? '-'),
+            ucfirst(str_replace('_', ' ', $t->status ?? '-')),
+            $t->reopened_count,
+            $t->first_closed_at?->format('Y-m-d H:i') ?? '-',
+            $t->last_reopened_at?->format('Y-m-d H:i') ?? '-',
+            $t->closed_at?->format('Y-m-d H:i') ?? '-',
+            $t->last_reopen_reason ?? '-',
+        ])->toArray();
+
+        return $this->reportService->exportToCsv(
+            $rows,
+            [
+                'Ticket #', 'Subject', 'Client', 'Department', 'Category', 'Agent',
+                'Priority', 'Status', 'Reopen Count',
+                'First Closed', 'Last Reopened', 'Last Closed',
+                'Last Reason',
+            ],
+            'reopen-report-'.($filters['from'] ?? 'all').'-to-'.($filters['to'] ?? 'now').'.csv'
+        );
+    }
+
+    /**
+     * Export SLA compliance rows as CSV.
+     */
+    public function exportSlaCompliance(Request $request): StreamedResponse
+    {
+        $from = $request->input('from') ? \Carbon\Carbon::parse($request->input('from')) : now()->subDays(30);
+        $to = $request->input('to') ? \Carbon\Carbon::parse($request->input('to')) : now();
+
+        $report = $this->slaService->getComplianceReport($from, $to);
+
+        $rows = $report['rows']->map(function (array $r) {
+            $t = $r['ticket'];
+
+            return [
+                $t->ticket_number,
+                $t->subject,
+                $t->client?->name ?? '-',
+                $r['client_tier'] ?? '-',
+                $t->department?->name ?? '-',
+                $t->assignee?->name ?? '-',
+                ucfirst($r['priority'] ?? '-'),
+                $r['policy_name'] ?? '-',
+                $t->created_at->format('Y-m-d H:i'),
+                $t->first_response_at?->format('Y-m-d H:i') ?? '-',
+                $t->closed_at?->format('Y-m-d H:i') ?? '-',
+                $r['response_hours'] !== null ? $r['response_hours'] : '-',
+                $r['response_target'] ?? '-',
+                strtoupper($r['response_status']),
+                $r['resolution_hours'] !== null ? $r['resolution_hours'] : '-',
+                $r['resolution_target'] ?? '-',
+                strtoupper($r['resolution_status']),
+            ];
+        })->toArray();
+
+        return $this->reportService->exportToCsv(
+            $rows,
+            [
+                'Ticket #', 'Subject', 'Client', 'Tier', 'Department', 'Agent', 'Priority',
+                'SLA Policy', 'Created', 'First Response', 'Closed',
+                'Response (h)', 'Response Target (h)', 'Response',
+                'Resolution (h)', 'Resolution Target (h)', 'Resolution',
+            ],
+            'sla-compliance-'.$from->toDateString().'-to-'.$to->toDateString().'.csv'
+        );
     }
 
     /**

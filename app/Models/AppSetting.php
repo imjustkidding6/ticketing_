@@ -102,6 +102,25 @@ class AppSetting extends Model
     }
 
     /**
+     * Currency symbol for the tenant's configured billing currency.
+     */
+    public static function currencySymbol(): string
+    {
+        return match (static::get('currency', 'USD')) {
+            'PHP' => '₱',
+            default => '$',
+        };
+    }
+
+    /**
+     * Format a numeric amount with the tenant's currency symbol.
+     */
+    public static function formatCurrency(float|int|string|null $amount): string
+    {
+        return static::currencySymbol().number_format((float) ($amount ?? 0), 2);
+    }
+
+    /**
      * Get the value cast to its proper type.
      */
     public function getTypedValue(): mixed

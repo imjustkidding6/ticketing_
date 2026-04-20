@@ -114,13 +114,20 @@
                                 </template>
                             </div>
                             <div>
+                                @php $scheduleFeature = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AgentSchedule); @endphp
                                 <label for="assigned_to" class="block text-sm font-medium text-gray-700">{{ __('Assign To') }}</label>
                                 <select name="assigned_to" id="assigned_to" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                     <option value="">{{ __('Unassigned') }}</option>
                                     @foreach($agents as $agent)
-                                        <option value="{{ $agent->id }}" {{ old('assigned_to') == $agent->id ? 'selected' : '' }}>{{ $agent->name }}</option>
+                                        @php $offSchedule = $scheduleFeature && ! $agent->isOnScheduleAt(); @endphp
+                                        <option value="{{ $agent->id }}" {{ old('assigned_to') == $agent->id ? 'selected' : '' }} {{ $offSchedule ? 'disabled' : '' }}>
+                                            {{ $agent->name }}{{ $offSchedule ? ' — '.__('off-schedule') : '' }}
+                                        </option>
                                     @endforeach
                                 </select>
+                                @if($scheduleFeature)
+                                    <p class="mt-1 text-xs text-gray-500">{{ __('Off-schedule agents are disabled based on their configured weekly availability.') }}</p>
+                                @endif
                                 @error('assigned_to') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
                         </div>

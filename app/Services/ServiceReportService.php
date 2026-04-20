@@ -16,37 +16,49 @@ class ServiceReportService
      */
     public function generate(Ticket $ticket): ServiceReport
     {
-        $ticket->load(['client', 'category', 'department', 'product', 'creator', 'assignee', 'tasks', 'slaPolicy']);
+        $ticket->load(['client', 'category', 'department', 'products', 'creator', 'assignee', 'tasks', 'slaPolicy']);
+
+        $general = \App\Models\AppSetting::getByGroup('general');
+
+        $slaMet = $ticket->closed_at && $ticket->resolution_due_at
+            ? $ticket->closed_at->lte($ticket->resolution_due_at)
+            : null;
 
         $reportData = [
-            'ticket_number' => $ticket->ticket_number,
-            'subject' => $ticket->subject,
-            'description' => $ticket->description,
-            'priority' => $ticket->priority,
-            'status' => $ticket->status,
-            'client_name' => $ticket->client?->name,
-            'department' => $ticket->department?->name,
-            'category' => $ticket->category?->name,
-            'product' => $ticket->product?->name,
-            'created_by' => $ticket->creator?->name,
-            'assigned_to' => $ticket->assignee?->name,
-            'created_at' => $ticket->created_at->toDateTimeString(),
-            'closed_at' => $ticket->closed_at?->toDateTimeString(),
-            'resolution_hours' => $ticket->closed_at
-                ? round($ticket->created_at->diffInHours($ticket->closed_at), 1)
-                : null,
-            'tasks' => $ticket->tasks->map(fn ($t) => [
+            'report_date' => now()->format('F j, Y'),
+            'client_info' => [
+                'company_name' => $ticket->client?->name ?? 'N/A',
+                'contact_person' => $ticket->client?->contact_person ?? $ticket->client?->name ?? 'N/A',
+                'address' => $ticket->client?->address ?? '',
+                'phone' => $ticket->client?->phone ?? '',
+                'email' => $ticket->client?->email ?? '',
+            ],
+            'staff_info' => [
+                'name' => $ticket->assignee?->name ?? 'Unassigned',
+                'phone' => $general['company_phone'] ?? '',
+                'email' => $ticket->assignee?->email ?? ($general['company_email'] ?? ''),
+            ],
+            'ticket_info' => [
+                'number' => $ticket->ticket_number,
+                'subject' => $ticket->subject,
+                'description' => $ticket->description,
+                'priority' => $ticket->priority,
+                'category' => $ticket->category?->name ?? '',
+                'department' => $ticket->department?->name ?? '',
+                'created_at' => $ticket->created_at->format('M j, Y g:i A'),
+                'closed_at' => $ticket->closed_at?->format('M j, Y g:i A'),
+            ],
+            'tasks' => $ticket->tasks->values()->map(fn ($t, $i) => [
+                'task_number' => $i + 1,
                 'description' => $t->description,
-                'status' => $t->status,
-                'assignee' => $t->assignee?->name,
+                'status' => ucfirst(str_replace('_', ' ', $t->status)),
+                'completed_at' => $t->completed_at?->format('M j, Y') ?? '',
             ])->toArray(),
-            'sla_policy' => $ticket->slaPolicy?->name,
-            'response_met' => $ticket->first_response_at && $ticket->response_due_at
-                ? $ticket->first_response_at->lte($ticket->response_due_at)
-                : null,
-            'resolution_met' => $ticket->closed_at && $ticket->resolution_due_at
-                ? $ticket->closed_at->lte($ticket->resolution_due_at)
-                : null,
+            'additional_comments' => $ticket->closing_remarks ?? '',
+            'resolution_time' => $ticket->closed_at
+                ? round($ticket->created_at->diffInHours($ticket->closed_at), 1).' hours'
+                : 'N/A',
+            'sla_compliance' => $slaMet,
         ];
 
         $report = ServiceReport::create([

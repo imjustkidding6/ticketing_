@@ -1,97 +1,84 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between w-full">
-            <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('My Schedule') }}</h2>
-            <a href="{{ route('schedules.team') }}" class="inline-flex items-center rounded-md bg-white border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
-                {{ __('Team Schedule') }}
-            </a>
+            <h2 class="text-xl font-semibold leading-tight text-gray-800">
+                {{ __('Weekly Schedule') }} — <span class="font-normal text-gray-500">{{ $target->name }}</span>
+            </h2>
+            <a href="{{ route('schedules.team') }}" class="text-sm text-indigo-600 hover:text-indigo-900">{{ __('View team schedule') }} →</a>
         </div>
     </x-slot>
 
     <div class="py-6">
-        <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-            @php
-                $days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            @endphp
+        <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+            @if(session('success'))
+                <div class="mb-4 rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800">{{ session('success') }}</div>
+            @endif
 
-            <!-- Add Schedule Entry -->
-            <div class="mb-6 overflow-hidden rounded-xl bg-white p-6 shadow-sm">
-                <h3 class="text-lg font-semibold text-gray-900">{{ __('Add Schedule Entry') }}</h3>
-                <form method="POST" action="{{ route('schedules.store') }}" class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-6">
-                    @csrf
-                    <div class="sm:col-span-2">
-                        <label for="day_of_week" class="block text-sm font-medium text-gray-700">{{ __('Day') }}</label>
-                        <select name="day_of_week" id="day_of_week" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                            @foreach($days as $index => $day)
-                                <option value="{{ $index }}" {{ old('day_of_week') == $index ? 'selected' : '' }}>{{ $day }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label for="start_time" class="block text-sm font-medium text-gray-700">{{ __('Start') }}</label>
-                        <input type="time" name="start_time" id="start_time" value="{{ old('start_time', '09:00') }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                    </div>
-                    <div>
-                        <label for="end_time" class="block text-sm font-medium text-gray-700">{{ __('End') }}</label>
-                        <input type="time" name="end_time" id="end_time" value="{{ old('end_time', '17:00') }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                    </div>
-                    <div class="flex items-end gap-3 sm:col-span-2">
-                        <label class="flex items-center gap-2">
-                            <input type="checkbox" name="is_available" value="1" checked class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                            <span class="text-sm text-gray-700">{{ __('Available') }}</span>
-                        </label>
-                        <button type="submit" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Add') }}</button>
-                    </div>
-                </form>
-                @if($errors->any())
-                    <div class="mt-3">
-                        @foreach($errors->all() as $error)
-                            <p class="text-sm text-red-600">{{ $error }}</p>
+            @if($canManageOthers && $manageableAgents->isNotEmpty())
+                <form method="GET" class="mb-4 flex items-center gap-3">
+                    <label for="user_switch" class="text-sm font-medium text-gray-700">{{ __('Editing schedule for:') }}</label>
+                    <select name="user_id" id="user_switch" onchange="this.form.submit()" class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        @foreach($manageableAgents as $agent)
+                            <option value="{{ $agent->id }}" {{ $target->id === $agent->id ? 'selected' : '' }}>{{ $agent->name }}</option>
                         @endforeach
-                    </div>
-                @endif
-            </div>
+                    </select>
+                </form>
+            @endif
 
-            <!-- Weekly Schedule -->
-            <div class="space-y-4">
-                @foreach($days as $index => $day)
-                    <div class="overflow-hidden rounded-xl bg-white shadow-sm">
-                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-3">
-                            <h3 class="text-sm font-semibold text-gray-900">{{ $day }}</h3>
-                        </div>
-                        <div class="divide-y divide-gray-200">
-                            @forelse($schedules->get($index, collect()) as $schedule)
-                                <div class="flex items-center justify-between px-6 py-3">
-                                    <div class="flex items-center gap-4">
-                                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $schedule->is_available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                            {{ $schedule->is_available ? __('Available') : __('Unavailable') }}
-                                        </span>
-                                        <span class="text-sm text-gray-900">
-                                            {{ \Carbon\Carbon::parse($schedule->start_time)->format('g:i A') }} - {{ \Carbon\Carbon::parse($schedule->end_time)->format('g:i A') }}
-                                        </span>
-                                        @if($schedule->notes)
-                                            <span class="text-xs text-gray-500">{{ $schedule->notes }}</span>
-                                        @endif
-                                    </div>
-                                    <form method="POST" action="{{ route('schedules.destroy', $schedule) }}">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="text-gray-400 hover:text-red-500">
-                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        </button>
-                                    </form>
-                                </div>
-                            @empty
-                                <div class="px-6 py-3">
-                                    <p class="text-sm text-gray-400">{{ __('No schedule set') }}</p>
-                                </div>
-                            @endforelse
-                        </div>
-                    </div>
-                @endforeach
-            </div>
+            <form method="POST" action="{{ route('schedules.save') }}" class="rounded-xl bg-white p-6 shadow-sm">
+                @csrf
+                @if($target->id !== auth()->id())
+                    <input type="hidden" name="user_id" value="{{ $target->id }}">
+                @endif
+
+                <p class="mb-4 text-sm text-gray-600">{{ __('Set when this agent is available each day. Toggle the checkbox to mark a day as unavailable.') }}</p>
+
+                <div class="overflow-hidden rounded-md border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50 text-xs font-medium uppercase tracking-wider text-gray-500">
+                            <tr>
+                                <th class="px-4 py-2 text-left">{{ __('Day') }}</th>
+                                <th class="px-4 py-2 text-center">{{ __('Available') }}</th>
+                                <th class="px-4 py-2 text-center">{{ __('Start') }}</th>
+                                <th class="px-4 py-2 text-center">{{ __('End') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 text-sm">
+                            @foreach($days as $dayIndex => $dayName)
+                                @php $row = $week[$dayIndex]; @endphp
+                                <tr class="{{ $row['available'] ? '' : 'bg-gray-50' }}">
+                                    <td class="px-4 py-3 font-medium text-gray-900">{{ $dayName }}</td>
+                                    <td class="px-4 py-3 text-center">
+                                        <input type="checkbox" name="week[{{ $dayIndex }}][available]" value="1"
+                                            {{ $row['available'] ? 'checked' : '' }}
+                                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <input type="time" required step="60"
+                                            name="week[{{ $dayIndex }}][start]"
+                                            value="{{ old('week.'.$dayIndex.'.start', $row['start']) }}"
+                                            class="w-full rounded-md border-gray-300 text-sm text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        @error("week.{$dayIndex}.start") <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <input type="time" required step="60"
+                                            name="week[{{ $dayIndex }}][end]"
+                                            value="{{ old('week.'.$dayIndex.'.end', $row['end']) }}"
+                                            class="w-full rounded-md border-gray-300 text-sm text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        @error("week.{$dayIndex}.end") <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-6 flex items-center justify-end">
+                    <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                        {{ __('Save Schedule') }}
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </x-app-layout>

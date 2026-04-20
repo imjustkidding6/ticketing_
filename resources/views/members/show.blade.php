@@ -242,6 +242,51 @@
                         @endif
                     </div>
 
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketReopening))
+                    <!-- Reopen Analysis -->
+                    <div class="rounded-xl bg-white p-5 shadow-sm">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Reopen Analysis') }}</h3>
+                            <span class="text-[10px] uppercase tracking-wide text-gray-400">{{ __('Lifetime') }}</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                            <div class="rounded-lg bg-gray-50 p-3 text-center">
+                                <p class="text-xl font-bold text-gray-700">{{ $performance['reopen']['ever_closed'] }}</p>
+                                <p class="text-xs text-gray-500">{{ __('Ever Closed') }}</p>
+                            </div>
+                            <div class="rounded-lg bg-amber-50 p-3 text-center">
+                                <p class="text-xl font-bold text-amber-700">{{ $performance['reopen']['reopened_after_closure'] }}</p>
+                                <p class="text-xs text-amber-600">{{ __('Reopened After') }}</p>
+                            </div>
+                            <div class="rounded-lg bg-orange-50 p-3 text-center">
+                                <p class="text-xl font-bold text-orange-700">{{ $performance['reopen']['total_reopens'] }}</p>
+                                <p class="text-xs text-orange-600">{{ __('Total Reopens') }}</p>
+                            </div>
+                            <div class="rounded-lg bg-blue-50 p-3 text-center">
+                                <p class="text-xl font-bold text-blue-700">{{ $performance['reopen']['avg_reopens_per_ticket'] }}</p>
+                                <p class="text-xs text-blue-600">{{ __('Avg / Ticket') }}</p>
+                            </div>
+                        </div>
+
+                        @php $rate = $performance['reopen']['reopen_rate']; @endphp
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs font-medium text-gray-600">{{ __('Reopen Rate') }}</span>
+                                <span class="text-xs font-semibold {{ $rate > 20 ? 'text-red-600' : ($rate > 10 ? 'text-amber-600' : 'text-gray-900') }}">{{ $rate }}%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="h-2 rounded-full {{ $rate > 20 ? 'bg-red-500' : ($rate > 10 ? 'bg-amber-500' : 'bg-green-500') }}" style="width: {{ min($rate, 100) }}%"></div>
+                            </div>
+                            <p class="mt-1 text-[11px] text-gray-500">{{ __('Reopened ÷ ever-closed tickets handled by this agent.') }}</p>
+                        </div>
+
+                        @if($performance['reopen']['reopened_after_closure'] === 0)
+                            <p class="mt-3 text-xs text-gray-400 text-center">{{ __('No tickets reopened after closure — clean record.') }}</p>
+                        @endif
+                    </div>
+                    @endif
+
                     <!-- Recent Tickets Created -->
                     <div class="rounded-xl bg-white p-5 shadow-sm">
                         <h3 class="text-sm font-semibold text-gray-900 mb-4">{{ __('Recent Tickets Created') }}</h3>

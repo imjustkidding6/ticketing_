@@ -38,6 +38,10 @@ class Ticket extends Model
         'resolution_due_at',
         'first_response_at',
         'closed_at',
+        'closing_remarks',
+        'first_closed_at',
+        'last_reopened_at',
+        'last_reopen_reason',
         'is_billable',
         'billable_amount',
         'billable_description',
@@ -79,6 +83,8 @@ class Ticket extends Model
             'first_response_at' => 'datetime',
             'in_progress_at' => 'datetime',
             'closed_at' => 'datetime',
+            'first_closed_at' => 'datetime',
+            'last_reopened_at' => 'datetime',
             'billed_at' => 'datetime',
             'merged_at' => 'datetime',
             'hold_started_at' => 'datetime',
@@ -201,6 +207,11 @@ class Ticket extends Model
         return $this->hasMany(TicketEscalation::class);
     }
 
+    public function serviceReports(): HasMany
+    {
+        return $this->hasMany(ServiceReport::class);
+    }
+
     public function mergedIntoTicket(): BelongsTo
     {
         return $this->belongsTo(self::class, 'merged_into_ticket_id');
@@ -270,6 +281,18 @@ class Ticket extends Model
     public function scopeNotSpam(Builder $query): Builder
     {
         return $query->where('is_spam', false);
+    }
+
+    /**
+     * Exclude tickets that have been merged into another ticket.
+     * Reports should count the surviving target, not the archival source.
+     *
+     * @param  Builder<Ticket>  $query
+     * @return Builder<Ticket>
+     */
+    public function scopeNotMerged(Builder $query): Builder
+    {
+        return $query->where('is_merged', false);
     }
 
     // ─── Helpers ─────────────────────────────────────────

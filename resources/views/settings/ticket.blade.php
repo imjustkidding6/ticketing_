@@ -13,6 +13,9 @@
                 <a href="{{ route('settings.notifications') }}" class="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">{{ __('Notifications') }}</a>
                 @endif
                 <a href="{{ route('settings.branding') }}" class="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">{{ __('Branding') }}</a>
+                @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::ServiceReports))
+                <a href="{{ route('settings.service-report') }}" class="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">{{ __('Service Report') }}</a>
+                @endif
             </div>
 
             <div class="rounded-xl bg-white p-6 shadow-sm">
@@ -36,13 +39,6 @@
                             </div>
                         </div>
 
-                        <div>
-                            <label class="flex items-center gap-3">
-                                <input type="checkbox" name="auto_assignment" value="1" {{ ($settings['auto_assignment'] ?? false) ? 'checked' : '' }} class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm font-medium text-gray-700">{{ __('Enable auto-assignment') }}</span>
-                            </label>
-                            <p class="ml-8 text-xs text-gray-500">{{ __('Automatically assign tickets based on department and availability.') }}</p>
-                        </div>
                     </div>
 
                     <div class="mt-6 flex justify-end">

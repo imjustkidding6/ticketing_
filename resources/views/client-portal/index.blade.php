@@ -2,7 +2,7 @@
     {{-- Hero Section --}}
     <div class="-mt-8 pb-12 pt-16" style="background-color: var(--portal-primary);">
         <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6 text-center">
-            <h1 class="text-3xl font-bold text-white sm:text-4xl">{{ $tenant->name }} {{ __('Support') }}</h1>
+            <h1 class="text-3xl font-bold text-white sm:text-4xl">{{ $tenant->displayName() }} {{ __('Support') }}</h1>
             <p class="mt-3 text-lg text-white/70">{{ __('Need help? Submit a ticket or track an existing one.') }}</p>
             @auth
                 <a href="{{ route('portal.dashboard', ['tenant' => $tenant->slug]) }}" class="mt-4 inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-semibold shadow-sm hover:bg-gray-100" style="color: var(--portal-primary);">

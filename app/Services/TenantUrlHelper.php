@@ -11,7 +11,7 @@ class TenantUrlHelper
      */
     public function tenantUrl(Tenant $tenant, string $path = '/'): string
     {
-        $base = rtrim(config('app.url'), '/').'/'.$tenant->slug;
+        $base = rtrim(url('/'), '/').'/'.$tenant->slug;
 
         return rtrim($base, '/').'/'.ltrim($path, '/');
     }
