@@ -33,7 +33,10 @@ class MemberController extends Controller
 
         $users = $tenant->users()
             ->with(['roles', 'departments'])
-            ->withCount(['createdTickets', 'tickets as assigned_tickets_count'])
+            ->withCount([
+                'createdTickets' => fn ($q) => $q->where('tickets.is_merged', false),
+                'tickets as assigned_tickets_count' => fn ($q) => $q->where('tickets.is_merged', false),
+            ])
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")

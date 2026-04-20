@@ -453,6 +453,46 @@
                         </div>
                     @endif
 
+                    {{-- Lifecycle (reopen metrics) --}}
+                    @if($ticket->first_closed_at || $ticket->reopened_count > 0)
+                    <div class="rounded-xl bg-white p-6 shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Lifecycle') }}</h4>
+                            @if($ticket->reopened_count > 0)
+                                <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">{{ __('Reopened') }} × {{ $ticket->reopened_count }}</span>
+                            @endif
+                        </div>
+                        <dl class="mt-3 space-y-2 text-sm">
+                            <div class="flex items-center justify-between">
+                                <dt class="text-gray-500">{{ __('First closed') }}</dt>
+                                <dd class="text-gray-900">{{ $ticket->first_closed_at?->format('M j, Y g:i A') ?? '—' }}</dd>
+                            </div>
+                            @if($ticket->reopened_count > 0)
+                                <div class="flex items-center justify-between">
+                                    <dt class="text-gray-500">{{ __('Last reopened') }}</dt>
+                                    <dd class="text-gray-900">{{ $ticket->last_reopened_at?->format('M j, Y g:i A') ?? '—' }}</dd>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <dt class="text-gray-500">{{ __('Current cycle') }}</dt>
+                                    <dd class="text-gray-900">#{{ $ticket->reopened_count + 1 }}</dd>
+                                </div>
+                                @if($ticket->last_reopen_reason)
+                                    <div>
+                                        <dt class="text-gray-500">{{ __('Last reopen reason') }}</dt>
+                                        <dd class="mt-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-1 text-xs text-amber-900">{{ $ticket->last_reopen_reason }}</dd>
+                                    </div>
+                                @endif
+                            @endif
+                            @if($ticket->status === 'closed' && $ticket->closed_at && $ticket->first_closed_at && $ticket->closed_at->ne($ticket->first_closed_at))
+                                <div class="flex items-center justify-between">
+                                    <dt class="text-gray-500">{{ __('Last closed') }}</dt>
+                                    <dd class="text-gray-900">{{ $ticket->closed_at->format('M j, Y g:i A') }}</dd>
+                                </div>
+                            @endif
+                        </dl>
+                    </div>
+                    @endif
+
                     {{-- Assignment & Priority --}}
                     <div class="rounded-xl bg-white p-6 shadow-sm">
                         <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Assignment & Priority') }}</h4>
@@ -587,41 +627,43 @@
                                             x-transition:enter-start="opacity-0 translate-y-2 scale-95"
                                             x-transition:enter-end="opacity-100 translate-y-0 scale-100"
                                             class="w-full max-w-md rounded-xl bg-white shadow-xl">
-                                            <div class="p-6">
-                                                <div class="flex items-start gap-4">
-                                                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
-                                                        <svg class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                                                        </svg>
+                                            <form method="POST" action="{{ route('tickets.reopen', $ticket) }}">
+                                                @csrf
+                                                <div class="p-6">
+                                                    <div class="flex items-start gap-4">
+                                                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                                                            <svg class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                                            </svg>
+                                                        </div>
+                                                        <div class="min-w-0 flex-1">
+                                                            <h3 class="text-base font-semibold text-gray-900">{{ __('Reopen this ticket?') }}</h3>
+                                                            <p class="mt-2 text-sm text-gray-600">
+                                                                {{ __('Reopening moves the ticket back to') }} <span class="font-medium text-gray-900">{{ __('Open') }}</span>.
+                                                                @if($ticket->reopened_count > 0)
+                                                                    {{ __('Already reopened') }} <span class="font-medium">{{ $ticket->reopened_count }}</span> {{ __('time(s)') }}.
+                                                                @endif
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                    <div class="min-w-0 flex-1">
-                                                        <h3 class="text-base font-semibold text-gray-900">{{ __('Reopen this ticket?') }}</h3>
-                                                        <p class="mt-2 text-sm text-gray-600">
-                                                            {{ __('Reopening will move the ticket back to') }} <span class="font-medium text-gray-900">{{ __('Open') }}</span>.
-                                                            @if($ticket->reopened_count > 0)
-                                                                {{ __('This ticket has already been reopened') }} <span class="font-medium">{{ $ticket->reopened_count }}</span> {{ __('time(s)') }}.
-                                                            @endif
-                                                        </p>
-                                                        <p class="mt-2 text-xs text-gray-500">
-                                                            {{ __('Closing it again will generate a new service report tied to this reopen cycle.') }}
-                                                        </p>
+                                                    <div class="mt-4">
+                                                        <label for="reopen_reason" class="block text-xs font-medium text-gray-700">{{ __('Reason for reopening') }} <span class="text-gray-400 font-normal">({{ __('optional but recommended') }})</span></label>
+                                                        <textarea name="reason" id="reopen_reason" rows="2" maxlength="500" placeholder="{{ __('e.g. Issue not fully resolved, user reports recurrence, verification failed') }}" class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500"></textarea>
+                                                        <p class="mt-1 text-xs text-gray-500">{{ __('Shown on the ticket history and used in Reopen Analysis reports.') }}</p>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <div class="flex items-center justify-end gap-2 rounded-b-xl border-t border-gray-100 bg-gray-50 px-6 py-3">
-                                                <button type="button" @click="showReopenModal = false" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
-                                                    {{ __('Cancel') }}
-                                                </button>
-                                                <form method="POST" action="{{ route('tickets.reopen', $ticket) }}">
-                                                    @csrf
+                                                <div class="flex items-center justify-end gap-2 rounded-b-xl border-t border-gray-100 bg-gray-50 px-6 py-3">
+                                                    <button type="button" @click="showReopenModal = false" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+                                                        {{ __('Cancel') }}
+                                                    </button>
                                                     <button type="submit" class="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-500">
                                                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                                             <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                                                         </svg>
                                                         {{ __('Yes, Reopen Ticket') }}
                                                     </button>
-                                                </form>
-                                            </div>
+                                                </div>
+                                            </form>
                                         </div>
                                     </div>
                                 </div>

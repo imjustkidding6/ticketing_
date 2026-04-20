@@ -310,6 +310,14 @@
                                 {{ __('Service Reports') }}
                             </a>
                             @endif
+                            @if($planService->currentTenantHasFeature(\App\Enums\PlanFeature::TicketReopening))
+                            <a href="{{ route('reports.reopens') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('reports.reopens') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
+                                <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('reports.reopens') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                </svg>
+                                {{ __('Reopen Report') }}
+                            </a>
+                            @endif
                         </div>
                     </div>
                     @endif
@@ -486,19 +494,20 @@
                                 <span x-show="unreadCount > 0" x-cloak x-text="unreadCount > 99 ? '99+' : unreadCount" class="absolute -top-0.5 -right-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"></span>
                             </button>
 
-                            <div x-show="open" x-cloak @click.outside="open = false" x-transition class="absolute right-0 mt-2 w-[28rem] max-w-[92vw] rounded-xl border border-gray-200 bg-white shadow-lg z-50">
-                                <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-                                    <span class="text-sm font-semibold text-gray-900">{{ __('Notifications') }}</span>
-                                    <button x-show="unreadCount > 0" @click="markAllRead()" class="text-xs text-indigo-600 hover:text-indigo-800">{{ __('Mark all read') }}</button>
+                            <div x-show="open" x-cloak @click.outside="open = false" x-transition class="absolute right-0 mt-2 rounded-xl border border-gray-200 bg-white shadow-xl z-50"
+                                style="width: min(48rem, calc(100vw - 2rem)); min-width: 28rem;">
+                                <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+                                    <span class="text-base font-semibold text-gray-900">{{ __('Notifications') }}</span>
+                                    <button x-show="unreadCount > 0" @click="markAllRead()" class="text-sm text-indigo-600 hover:text-indigo-800">{{ __('Mark all read') }}</button>
                                 </div>
-                                <div class="max-h-96 overflow-y-auto">
+                                <div class="max-h-[32rem] overflow-y-auto">
                                     <template x-if="notifications.length === 0 && loaded">
-                                        <p class="px-4 py-8 text-center text-sm text-gray-500">{{ __('No notifications.') }}</p>
+                                        <p class="px-6 py-10 text-center text-sm text-gray-500">{{ __('No notifications.') }}</p>
                                     </template>
                                     <template x-for="n in notifications" :key="n.id">
-                                        <div @click="openNotification(n)" class="cursor-pointer border-b border-gray-100 px-4 py-3 hover:bg-gray-50" :class="{ 'bg-blue-50': !n.read_at }">
-                                            <div class="flex items-start gap-3">
-                                                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                                        <div @click="openNotification(n)" class="cursor-pointer border-b border-gray-100 px-6 py-4 hover:bg-gray-50" :class="{ 'bg-blue-50': !n.read_at }">
+                                            <div class="flex items-start gap-4">
+                                                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
                                                     :class="{
                                                         'bg-indigo-100 text-indigo-600': n.action === 'assigned',
                                                         'bg-emerald-100 text-emerald-600': n.action === 'created',
@@ -507,17 +516,17 @@
                                                         'bg-purple-100 text-purple-600': n.action === 'escalated',
                                                         'bg-gray-100 text-gray-500': !['assigned','created','status_changed','sla_breach_warning','escalated'].includes(n.action),
                                                     }">
-                                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                                                     </svg>
                                                 </div>
                                                 <div class="min-w-0 flex-1">
-                                                    <div class="flex items-start justify-between gap-2">
-                                                        <p class="text-sm font-medium text-gray-900" x-text="n.title"></p>
-                                                        <span x-show="!n.read_at" class="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-500"></span>
+                                                    <div class="flex items-start justify-between gap-3">
+                                                        <p class="text-sm font-medium text-gray-900 leading-snug" x-text="n.title"></p>
+                                                        <span x-show="!n.read_at" class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500"></span>
                                                     </div>
-                                                    <p x-show="n.subject" class="mt-0.5 truncate text-xs text-gray-600" x-text="n.subject"></p>
-                                                    <p class="mt-1 text-xs text-gray-400" x-text="n.created_ago"></p>
+                                                    <p x-show="n.subject" class="mt-1 truncate text-sm text-gray-600" x-text="n.subject"></p>
+                                                    <p class="mt-1.5 text-xs text-gray-400" x-text="n.created_ago"></p>
                                                 </div>
                                             </div>
                                         </div>

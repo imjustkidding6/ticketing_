@@ -53,6 +53,30 @@
                 </div>
             </div>
 
+            {{-- Lifecycle (closure vs reopen) --}}
+            <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="rounded-xl bg-white p-6 shadow-sm">
+                    <div class="text-sm font-medium text-gray-500">{{ __('Initially Resolved') }}</div>
+                    <div class="mt-2 text-3xl font-semibold text-gray-900">{{ $volume['initially_resolved'] ?? 0 }}</div>
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Closed at least once') }}</p>
+                </div>
+                <div class="rounded-xl bg-white p-6 shadow-sm">
+                    <div class="text-sm font-medium text-gray-500">{{ __('Finally Closed') }}</div>
+                    <div class="mt-2 text-3xl font-semibold text-green-600">{{ $volume['finally_closed'] ?? 0 }}</div>
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Currently closed') }}</p>
+                </div>
+                <div class="rounded-xl bg-white p-6 shadow-sm">
+                    <div class="text-sm font-medium text-gray-500">{{ __('Reopened') }}</div>
+                    <div class="mt-2 text-3xl font-semibold text-amber-600">{{ $volume['reopened'] ?? 0 }}</div>
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Reopened at least once') }}</p>
+                </div>
+                <div class="rounded-xl bg-white p-6 shadow-sm">
+                    <div class="text-sm font-medium text-gray-500">{{ __('Reopen Rate') }}</div>
+                    <div class="mt-2 text-3xl font-semibold {{ ($volume['reopen_rate'] ?? 0) > 20 ? 'text-red-600' : (($volume['reopen_rate'] ?? 0) > 10 ? 'text-amber-600' : 'text-gray-900') }}">{{ $volume['reopen_rate'] ?? 0 }}%</div>
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Reopened ÷ ever-closed') }}</p>
+                </div>
+            </div>
+
             <div class="mt-6 grid gap-6 lg:grid-cols-2">
                 {{-- By Priority --}}
                 <div class="rounded-xl bg-white p-6 shadow-sm">

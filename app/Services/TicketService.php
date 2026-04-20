@@ -333,6 +333,9 @@ class TicketService
             }
 
             $updates['closed_at'] = now();
+            if (! $ticket->first_closed_at) {
+                $updates['first_closed_at'] = now();
+            }
         }
 
         if ($status === 'on_hold') {

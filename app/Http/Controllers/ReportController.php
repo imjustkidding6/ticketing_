@@ -324,6 +324,61 @@ class ReportController extends Controller
     }
 
     /**
+     * Display reopen report.
+     */
+    public function reopens(Request $request): View
+    {
+        $this->checkPermission('view reports');
+
+        $filters = $this->extractFilters($request);
+        $report = $this->reportService->getReopenAnalysisReport($filters);
+
+        return view('reports.reopens', [
+            ...$this->getFilterData(),
+            'filters' => $filters,
+            'report' => $report,
+        ]);
+    }
+
+    /**
+     * Export reopen report rows as CSV.
+     */
+    public function exportReopens(Request $request): StreamedResponse
+    {
+        $this->checkPermission('view reports');
+
+        $filters = $this->extractFilters($request);
+        $report = $this->reportService->getReopenAnalysisReport($filters);
+
+        $rows = $report['tickets']->map(fn ($t) => [
+            $t->ticket_number,
+            $t->subject,
+            $t->client?->name ?? '-',
+            $t->department?->name ?? '-',
+            $t->category?->name ?? '-',
+            $t->assignee?->name ?? 'Unassigned',
+            ucfirst($t->priority ?? '-'),
+            ucfirst(str_replace('_', ' ', $t->status ?? '-')),
+            $t->reopened_count,
+            $t->first_closed_at?->format('Y-m-d H:i') ?? '-',
+            $t->last_reopened_at?->format('Y-m-d H:i') ?? '-',
+            $t->closed_at?->format('Y-m-d H:i') ?? '-',
+            $t->last_reopen_reason ?? '-',
+        ])->toArray();
+
+        return $this->reportService->exportToCsv(
+            $rows,
+            [
+                'Ticket #', 'Subject', 'Client', 'Department', 'Category', 'Agent',
+                'Priority', 'Status', 'Reopen Count',
+                'First Closed', 'Last Reopened', 'Last Closed',
+                'Last Reason',
+            ],
+            'reopen-report-'.($filters['from'] ?? 'all').'-to-'.($filters['to'] ?? 'now').'.csv'
+        );
+    }
+
+    /**
      * Export SLA compliance rows as CSV.
      */
     public function exportSlaCompliance(Request $request): StreamedResponse

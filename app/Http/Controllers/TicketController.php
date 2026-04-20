@@ -487,13 +487,27 @@ class TicketController extends Controller
     /**
      * Reopen a closed ticket.
      */
-    public function reopen(Ticket $ticket): RedirectResponse
+    public function reopen(Request $request, Ticket $ticket): RedirectResponse
     {
-        $this->ticketService->addHistory($ticket, 'reopened', 'status', $ticket->status, 'open', 'Ticket reopened (reopened ' . ($ticket->reopened_count + 1) . ' time(s))');
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $reason = $validated['reason'] ?? null;
+        $nextCount = $ticket->reopened_count + 1;
+
+        $description = 'Ticket reopened (cycle '.($nextCount + 1).')';
+        if ($reason) {
+            $description .= ' — reason: '.$reason;
+        }
+
+        $this->ticketService->addHistory($ticket, 'reopened', 'status', $ticket->status, 'open', $description);
 
         $ticket->update([
             'closed_at' => null,
-            'reopened_count' => $ticket->reopened_count + 1,
+            'reopened_count' => $nextCount,
+            'last_reopened_at' => now(),
+            'last_reopen_reason' => $reason,
         ]);
 
         $this->ticketService->changeStatus($ticket->fresh(), 'open');

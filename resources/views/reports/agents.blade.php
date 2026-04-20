@@ -26,6 +26,8 @@
                             <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Open') }}</th>
                             <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Closed') }}</th>
                             <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Avg Resolution (hrs)') }}</th>
+                            <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Reopened After') }}</th>
+                            <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Reopen Rate') }}</th>
                             <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
@@ -37,6 +39,8 @@
                                 <td class="px-6 py-4 text-right text-sm text-blue-600">{{ $agent['open'] }}</td>
                                 <td class="px-6 py-4 text-right text-sm text-green-600">{{ $agent['closed'] }}</td>
                                 <td class="px-6 py-4 text-right text-sm text-gray-500">{{ $agent['avg_resolution_hours'] }}h</td>
+                                <td class="px-6 py-4 text-right text-sm text-amber-700">{{ $agent['reopened_after_closure'] ?? 0 }}</td>
+                                <td class="px-6 py-4 text-right text-sm {{ ($agent['reopen_rate'] ?? 0) > 20 ? 'text-red-600 font-semibold' : (($agent['reopen_rate'] ?? 0) > 10 ? 'text-amber-600' : 'text-gray-500') }}">{{ $agent['reopen_rate'] ?? 0 }}%</td>
                                 <td class="px-6 py-4 text-right">
                                     <a href="{{ route('members.show', $agent['id']) }}#performance" class="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-800">
                                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">

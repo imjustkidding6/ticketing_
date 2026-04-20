@@ -35,6 +35,22 @@ class AgentPerformanceService
                 return $ticket->created_at->diffInMinutes($ticket->first_response_at);
             });
 
+        // Reopen analysis for this agent (lifetime, not range — reopen could happen months after close)
+        $everClosedByAgent = Ticket::where('assigned_to', $agent->id)
+            ->notMerged()
+            ->whereNotNull('first_closed_at')
+            ->count();
+        $reopenedAfterAgentClosure = Ticket::where('assigned_to', $agent->id)
+            ->notMerged()
+            ->where('reopened_count', '>', 0)
+            ->count();
+        $totalReopens = (int) (Ticket::where('assigned_to', $agent->id)
+            ->notMerged()
+            ->sum('reopened_count') ?? 0);
+        $avgReopensPerReopenedTicket = $reopenedAfterAgentClosure > 0
+            ? round($totalReopens / $reopenedAfterAgentClosure, 2)
+            : 0;
+
         return [
             'agent' => $agent,
             'total_assigned' => $assignedTickets->count(),
@@ -46,6 +62,15 @@ class AgentPerformanceService
             'by_priority' => $assignedTickets->groupBy('priority')->map->count()->toArray(),
             'by_status' => $assignedTickets->groupBy('status')->map->count()->toArray(),
             'overdue' => $assignedTickets->filter(fn ($t) => $t->isOverdue())->count(),
+            'reopen' => [
+                'ever_closed' => $everClosedByAgent,
+                'reopened_after_closure' => $reopenedAfterAgentClosure,
+                'total_reopens' => $totalReopens,
+                'avg_reopens_per_ticket' => $avgReopensPerReopenedTicket,
+                'reopen_rate' => $everClosedByAgent > 0
+                    ? round(($reopenedAfterAgentClosure / $everClosedByAgent) * 100, 1)
+                    : 0,
+            ],
         ];
     }
 

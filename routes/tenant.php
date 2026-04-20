@@ -191,6 +191,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::get('reports/billing', [ReportController::class, 'billing'])->name('reports.billing')->middleware('feature:billing');
     Route::get('reports/export/billing', [ReportController::class, 'exportBilling'])->name('reports.export.billing')->middleware('feature:billing');
     Route::get('reports/sla-compliance', [ReportController::class, 'slaCompliance'])->name('reports.sla-compliance')->middleware('feature:sla_report');
+    Route::get('reports/reopens', [ReportController::class, 'reopens'])->name('reports.reopens')->middleware('feature:ticket_reopening');
+    Route::get('reports/export/reopens', [ReportController::class, 'exportReopens'])->name('reports.export.reopens')->middleware(['feature:ticket_reopening', 'feature:detailed_reporting']);
     Route::get('reports/export/sla-compliance', [ReportController::class, 'exportSlaCompliance'])->name('reports.export.sla-compliance')->middleware(['feature:sla_report', 'feature:detailed_reporting']);
 
     // Activity Logs (Business+ via feature gate)
