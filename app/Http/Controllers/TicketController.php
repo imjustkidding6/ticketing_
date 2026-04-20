@@ -459,6 +459,8 @@ class TicketController extends Controller
      */
     public function merge(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('merge tickets');
+
         $validated = $request->validate([
             'target_ticket_id' => ['required', 'exists:tickets,id', 'different:ticket'],
         ]);
@@ -475,7 +477,7 @@ class TicketController extends Controller
      */
     public function unmerge(Ticket $ticket): RedirectResponse
     {
-        $this->checkPermission('update tickets');
+        $this->checkPermission('unmerge tickets');
 
         $target = $ticket->merged_into_ticket_id ? Ticket::find($ticket->merged_into_ticket_id) : null;
         $this->mergeService->unmerge($ticket);
@@ -489,6 +491,8 @@ class TicketController extends Controller
      */
     public function reopen(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('reopen tickets');
+
         $validated = $request->validate([
             'reason' => ['nullable', 'string', 'max:500'],
         ]);

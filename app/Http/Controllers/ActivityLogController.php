@@ -17,6 +17,8 @@ class ActivityLogController extends Controller
      */
     public function index(Request $request): View
     {
+        $this->checkPermission('view activity logs');
+
         // Build the list of action types the tenant's plan does NOT cover,
         // so those rows + filter options stay hidden.
         $hiddenActions = [];

@@ -104,6 +104,7 @@
                             $sidebarTenant = null;
                             $sidebarHasMultipleTenants = false;
                             $isAdminOrOwner = false;
+                            $sidebarRole = null;
                             if (session('current_tenant_id') && Auth::check() && Auth::user()->currentTenant()) {
                                 $sidebarTenant = Auth::user()->currentTenant();
                                 $sidebarTenant->load('license.plan');
@@ -162,9 +163,14 @@
 
                 <!-- Navigation Links -->
                 <nav class="flex-1 overflow-y-auto p-4">
-                    @php $planService = app(\App\Services\PlanService::class); @endphp
+                    @php
+                        $planService = app(\App\Services\PlanService::class);
+                        $sidebarRole = $sidebarRole ?? (Auth::check() && Auth::user()->currentTenant() ? Auth::user()->roleInTenant(Auth::user()->currentTenant()) : null);
+                        // Owners bypass every permission check; otherwise defer to Spatie.
+                        $sidebarCan = fn (string $perm) => $sidebarRole === 'owner' || (Auth::user()?->can($perm) ?? false);
+                    @endphp
 
-                    {{-- ========== MAIN (all users, all plans) ========== --}}
+                    {{-- ========== MAIN ========== --}}
                     <div class="space-y-1">
                         <a href="{{ route('dashboard') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('dashboard') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                             <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('dashboard') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -172,31 +178,39 @@
                             </svg>
                             {{ __('Dashboard') }}
                         </a>
+                        @if($sidebarCan('view tickets'))
                         <a href="{{ route('tickets.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('tickets.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                             <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('tickets.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
                             </svg>
                             {{ __('Tickets') }}
                         </a>
+                        @endif
+                        @if($sidebarCan('manage clients'))
                         <a href="{{ route('clients.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('clients.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                             <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('clients.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
                             </svg>
                             {{ __('Clients') }}
                         </a>
+                        @endif
                     </div>
 
-                    {{-- ========== MANAGEMENT (owner/admin only, all plans) ========== --}}
-                    @if($isAdminOrOwner ?? false)
+                    {{-- ========== MANAGEMENT ========== --}}
+                    @php $hasMgmt = $sidebarCan('manage users') || $sidebarCan('manage categories') || $sidebarCan('manage products') || ($planService->currentTenantHasFeature(\App\Enums\PlanFeature::DepartmentManagement) && $sidebarCan('manage departments')); @endphp
+                    @if($hasMgmt)
                     <div class="mt-6">
                         <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Management') }}</p>
                         <div class="mt-2 space-y-1">
+                            @if($sidebarCan('manage users'))
                             <a href="{{ route('members.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('members.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('members.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
                                 </svg>
                                 {{ __('User Management') }}
                             </a>
+                            @endif
+                            @if($sidebarCan('manage categories'))
                             <a href="{{ route('categories.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('categories.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('categories.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
@@ -204,14 +218,16 @@
                                 </svg>
                                 {{ __('Categories') }}
                             </a>
+                            @endif
+                            @if($sidebarCan('manage products'))
                             <a href="{{ route('products.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('products.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('products.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
                                 </svg>
                                 {{ __('Products & Services') }}
                             </a>
-                            {{-- Enterprise only --}}
-                            @if($planService->currentTenantHasFeature(\App\Enums\PlanFeature::DepartmentManagement))
+                            @endif
+                            @if($planService->currentTenantHasFeature(\App\Enums\PlanFeature::DepartmentManagement) && $sidebarCan('manage departments'))
                             <a href="{{ route('departments.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('departments.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('departments.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
@@ -223,8 +239,8 @@
                     </div>
                     @endif
 
-                    {{-- ========== SLA (Business+, owner/admin only) ========== --}}
-                    @if(($isAdminOrOwner ?? false) && $planService->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement))
+                    {{-- ========== SLA (Business+) ========== --}}
+                    @if($sidebarCan('manage sla') && $planService->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement))
                     <div class="mt-6">
                         <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('SLA') }}</p>
                         <div class="mt-2 space-y-1">
@@ -238,8 +254,8 @@
                     </div>
                     @endif
 
-                    {{-- ========== REPORTS (owner/admin only, items plan-gated) ========== --}}
-                    @if($isAdminOrOwner ?? false)
+                    {{-- ========== REPORTS ========== --}}
+                    @if($sidebarCan('view reports'))
                     <div class="mt-6">
                         <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Reports') }}</p>
                         <div class="mt-2 space-y-1">
@@ -323,7 +339,7 @@
                     @endif
 
                     {{-- ========== ACTIVITY LOGS (Business+) ========== --}}
-                    @if($planService->currentTenantHasFeature(\App\Enums\PlanFeature::AuditLogs))
+                    @if($planService->currentTenantHasFeature(\App\Enums\PlanFeature::AuditLogs) && $sidebarCan('view activity logs'))
                     <div class="mt-6">
                         <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Audit') }}</p>
                         <div class="mt-2 space-y-1">
@@ -348,7 +364,7 @@
                                 </svg>
                                 {{ __('My Schedule') }}
                             </a>
-                            @if($isAdminOrOwner ?? false)
+                            @if($sidebarCan('manage schedules'))
                             <a href="{{ route('schedules.team') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('schedules.team') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('schedules.team') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
@@ -360,8 +376,8 @@
                     </div>
                     @endif
 
-                    {{-- ========== SETTINGS (owner/admin only, items plan-gated) ========== --}}
-                    @if($isAdminOrOwner ?? false)
+                    {{-- ========== SETTINGS ========== --}}
+                    @if($sidebarCan('manage settings') || $sidebarCan('manage roles'))
                     <div class="mt-6">
                         <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Settings') }}</p>
                         <div class="mt-2 space-y-1">

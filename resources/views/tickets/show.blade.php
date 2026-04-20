@@ -561,7 +561,8 @@
                     <div class="rounded-xl bg-white p-6 shadow-sm">
                         <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Status') }}</h4>
                         @php
-                            $canReopen = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketReopening);
+                            $canReopen = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketReopening)
+                                && auth()->user()?->can('reopen tickets');
                             $statusLocked = $ticket->status === 'closed' && ! $canReopen;
                         @endphp
                         <div class="mt-4">
@@ -896,7 +897,7 @@
                     @endif
 
                     {{-- Ticket Merging --}}
-                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketMerging) && $ticket->mergedTickets->isNotEmpty())
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketMerging) && auth()->user()?->can('merge tickets') && $ticket->mergedTickets->isNotEmpty())
                     <div class="rounded-xl bg-white p-6 shadow-sm" x-data="{ unmergeAction: '', unmergeNumber: '', unmergeSubject: '' }">
                         <div class="flex items-center gap-2">
                             <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Merged Tickets') }}</h4>
@@ -985,7 +986,7 @@
                     </div>
                     @endif
 
-                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketMerging))
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketMerging) && auth()->user()?->can('merge tickets'))
                     <div class="rounded-xl bg-white p-6 shadow-sm">
                         <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Merge Ticket') }}</h4>
                         <div class="mt-4">
