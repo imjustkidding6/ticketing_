@@ -278,6 +278,18 @@ class Ticket extends Model
         return $query->where('is_spam', false);
     }
 
+    /**
+     * Exclude tickets that have been merged into another ticket.
+     * Reports should count the surviving target, not the archival source.
+     *
+     * @param  Builder<Ticket>  $query
+     * @return Builder<Ticket>
+     */
+    public function scopeNotMerged(Builder $query): Builder
+    {
+        return $query->where('is_merged', false);
+    }
+
     // ─── Helpers ─────────────────────────────────────────
 
     /**

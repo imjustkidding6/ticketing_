@@ -73,7 +73,9 @@ class TicketController extends Controller
 
         $tickets = $this->scopeByUserDepartments(Ticket::query())
             ->with(['client', 'category', 'department', 'creator', 'assignee'])
+            ->withCount('mergedTickets')
             ->notSpam()
+            ->when(! $request->boolean('show_merged'), fn ($q) => $q->where('is_merged', false))
             ->when($request->status, function ($query, $status) {
                 if ($status === 'open') {
                     $query->open();
@@ -95,6 +97,7 @@ class TicketController extends Controller
                         ->orWhere('description', 'like', "%{$search}%");
                 });
             })
+            ->orderByRaw("FIELD(status, 'open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled')")
             ->latest()
             ->paginate(20)
             ->withQueryString();
@@ -151,7 +154,11 @@ class TicketController extends Controller
             unset($data['attachments']);
         }
 
-        $ticket = $this->ticketService->createTicket($data);
+        try {
+            $ticket = $this->ticketService->createTicket($data);
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withInput()->withErrors(['assigned_to' => $e->getMessage()]);
+        }
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Ticket created successfully.');
@@ -179,6 +186,7 @@ class TicketController extends Controller
             'history' => fn ($q) => $q->with('user')->latest(),
             'comments' => fn ($q) => $q->with('user')->oldest(),
             'escalations' => fn ($q) => $q->with(['escalatedByUser', 'fromUser', 'toUser'])->latest(),
+            'mergedTickets' => fn ($q) => $q->with('client')->latest('merged_at'),
         ]);
 
         $agents = \App\Models\User::query()
@@ -249,7 +257,11 @@ class TicketController extends Controller
             unset($data['attachments']);
         }
 
-        $this->ticketService->updateTicket($ticket, $data);
+        try {
+            $this->ticketService->updateTicket($ticket, $data);
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withInput()->withErrors(['assigned_to' => $e->getMessage()]);
+        }
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Ticket updated successfully.');
@@ -266,15 +278,22 @@ class TicketController extends Controller
             'priority' => ['nullable', 'in:low,medium,high,critical'],
         ]);
 
-        // Update priority if changed
-        if (! empty($validated['priority']) && $validated['priority'] !== $ticket->priority) {
-            $this->ticketService->changePriority($ticket, $validated['priority']);
-        }
-
         $agent = User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
             ->findOrFail($validated['assigned_to']);
-        $this->ticketService->assignTicket($ticket, $agent);
+
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($ticket, $agent, $validated) {
+                if (! empty($validated['priority']) && $validated['priority'] !== $ticket->priority) {
+                    $this->ticketService->changePriority($ticket, $validated['priority']);
+                }
+                // assignTicket will guard against tier vs. the (possibly just-updated) priority;
+                // any exception rolls back the priority change above.
+                $this->ticketService->assignTicket($ticket, $agent);
+            });
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->route('tickets.show', $ticket)->with('error', $e->getMessage());
+        }
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Ticket assigned to '.$agent->name.'.');
@@ -285,7 +304,11 @@ class TicketController extends Controller
      */
     public function selfAssign(Ticket $ticket): RedirectResponse
     {
-        $this->ticketService->assignTicket($ticket, Auth::user());
+        try {
+            $this->ticketService->assignTicket($ticket, Auth::user());
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->route('tickets.show', $ticket)->with('error', $e->getMessage());
+        }
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Ticket assigned to you.');
@@ -346,6 +369,8 @@ class TicketController extends Controller
      */
     public function updateBilling(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('manage billing');
+
         $validated = $request->validate([
             'is_billable' => ['nullable'],
             'billable_amount' => ['nullable', 'numeric', 'min:0'],
@@ -401,6 +426,20 @@ class TicketController extends Controller
 
         return redirect()->route('tickets.show', $target)
             ->with('success', "Ticket {$ticket->ticket_number} merged into this ticket.");
+    }
+
+    /**
+     * Unmerge a previously merged ticket, restoring it as a standalone open ticket.
+     */
+    public function unmerge(Ticket $ticket): RedirectResponse
+    {
+        $this->checkPermission('update tickets');
+
+        $target = $ticket->merged_into_ticket_id ? Ticket::find($ticket->merged_into_ticket_id) : null;
+        $this->mergeService->unmerge($ticket);
+
+        return redirect()->route('tickets.show', $target ?? $ticket)
+            ->with('success', "Ticket {$ticket->ticket_number} was unmerged and reopened.");
     }
 
     /**

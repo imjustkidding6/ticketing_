@@ -32,6 +32,7 @@ class TenantRoleService
         'manage roles',
         'manage departments',
         'manage settings',
+        'manage billing',
     ];
 
     /**
@@ -57,6 +58,7 @@ class TenantRoleService
             'manage roles',
             'manage departments',
             'manage settings',
+            'manage billing',
         ],
         'manager' => [
             'view tickets',
@@ -73,6 +75,7 @@ class TenantRoleService
             'view reports',
             'manage users',
             'manage departments',
+            'manage billing',
         ],
         'agent' => [
             'view tickets',

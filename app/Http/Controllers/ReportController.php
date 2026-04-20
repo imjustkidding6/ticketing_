@@ -301,7 +301,7 @@ class ReportController extends Controller
                 $t->client?->name ?? '-',
                 $t->department?->name ?? '-',
                 $t->assignee?->name ?? '-',
-                number_format($t->billable_amount ?? 0, 2),
+                \App\Models\AppSetting::formatCurrency($t->billable_amount),
                 $t->billed_at ? $t->billed_at->format('m/d/Y') : 'Unbilled',
                 $t->billable_description ?? '',
             ])->toArray(),

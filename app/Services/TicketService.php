@@ -25,6 +25,35 @@ class TicketService
     ) {}
 
     /**
+     * Block assignment when the agent's tier can't handle the ticket's priority.
+     * Only enforced for tenants with the agent_escalation feature (Enterprise).
+     * Owners bypass.
+     */
+    private function guardAgentTier(Ticket $ticket, User $agent): void
+    {
+        if (! $this->planService->tenantHasFeature($ticket->tenant, PlanFeature::AgentEscalation)) {
+            return;
+        }
+
+        if (! $ticket->priority) {
+            return; // Untriaged tickets don't trigger the guard.
+        }
+
+        $pivot = $agent->tenants()->where('tenants.id', $ticket->tenant_id)->first()?->pivot;
+        if ($pivot?->role === 'owner') {
+            return;
+        }
+
+        if (! $agent->canHandlePriority($ticket->priority)) {
+            $tierLabel = $agent->support_tier ? strtoupper(str_replace('_', ' ', $agent->support_tier)) : 'untiered';
+            throw new \InvalidArgumentException(
+                "Cannot assign a {$ticket->priority} priority ticket to {$agent->name} ({$tierLabel}). ".
+                'Pick a higher-tier agent, or lower the ticket priority first.'
+            );
+        }
+    }
+
+    /**
      * Create a new ticket.
      *
      * @param  array<string, mixed>  $data
@@ -40,6 +69,17 @@ class TicketService
         $data['ticket_number'] = Ticket::generateTicketNumber();
         $data['created_by'] = $data['created_by'] ?? Auth::id();
         $data['status'] = 'open';
+
+        if (! empty($data['assigned_to']) && ! empty($data['tenant_id']) && ! empty($data['priority'])) {
+            $agent = User::find($data['assigned_to']);
+            if ($agent) {
+                $probe = new Ticket([
+                    'tenant_id' => $data['tenant_id'],
+                    'priority' => $data['priority'],
+                ]);
+                $this->guardAgentTier($probe, $agent);
+            }
+        }
 
         $ticket = Ticket::create($data);
 
@@ -113,6 +153,16 @@ class TicketService
         $productIds = $data['product_ids'] ?? null;
         unset($data['product_ids']);
 
+        $nextAssignee = array_key_exists('assigned_to', $data) ? $data['assigned_to'] : $ticket->assigned_to;
+        $nextPriority = array_key_exists('priority', $data) ? $data['priority'] : $ticket->priority;
+        if ($nextAssignee && $nextPriority) {
+            $agent = User::find($nextAssignee);
+            if ($agent) {
+                $probe = (clone $ticket)->forceFill(['priority' => $nextPriority]);
+                $this->guardAgentTier($probe, $agent);
+            }
+        }
+
         $tracked = ['subject', 'priority', 'status', 'department_id', 'category_id', 'client_id'];
 
         foreach ($tracked as $field) {
@@ -135,6 +185,8 @@ class TicketService
      */
     public function assignTicket(Ticket $ticket, User $agent, ?User $assignedBy = null): void
     {
+        $this->guardAgentTier($ticket, $agent);
+
         $oldAssignee = $ticket->assigned_to;
 
         $ticket->update([

@@ -133,6 +133,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::post('tickets/{ticket}/spam', [TicketController::class, 'markAsSpam'])->name('tickets.mark-spam')->middleware('feature:spam_management');
     Route::post('tickets/{ticket}/unspam', [TicketController::class, 'unmarkAsSpam'])->name('tickets.unmark-spam')->middleware('feature:spam_management');
     Route::post('tickets/{ticket}/merge', [TicketController::class, 'merge'])->name('tickets.merge')->middleware('feature:ticket_merging');
+    Route::post('tickets/{ticket}/unmerge', [TicketController::class, 'unmerge'])->name('tickets.unmerge')->middleware('feature:ticket_merging');
     Route::post('tickets/{ticket}/reopen', [TicketController::class, 'reopen'])->name('tickets.reopen')->middleware('feature:ticket_reopening');
 
     // Ticket Comments (Enterprise via feature gate)

@@ -36,6 +36,7 @@ class AppSettingController extends Controller
             'company_website' => ['nullable', 'url', 'max:255'],
             'timezone' => ['nullable', 'string', 'max:100'],
             'date_format' => ['nullable', 'string', 'max:50'],
+            'currency' => ['nullable', 'in:USD,PHP'],
         ]);
 
         foreach ($validated as $key => $value) {

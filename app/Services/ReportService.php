@@ -21,6 +21,10 @@ class ReportService
      */
     private function applyFilters(Builder $query, array $filters): Builder
     {
+        // Merged source tickets are archival artifacts (their counts, closed_at,
+        // and resolution metrics would otherwise double-count with their target).
+        $query->notMerged();
+
         if (! empty($filters['from'])) {
             $query->where('created_at', '>=', Carbon::parse($filters['from'])->startOfDay());
         }
@@ -255,7 +259,8 @@ class ReportService
         $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
-            $q->whereBetween('tickets.created_at', [$from, $to]);
+            $q->whereBetween('tickets.created_at', [$from, $to])
+                ->where('tickets.is_merged', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('tickets.priority', $filters['priority']);
@@ -285,6 +290,7 @@ class ReportService
             ->get()
             ->map(function ($agent) use ($from, $to, $filters) {
                 $closedQuery = Ticket::where('assigned_to', $agent->id)
+                    ->notMerged()
                     ->where('status', 'closed')
                     ->whereNotNull('closed_at')
                     ->whereBetween('closed_at', [$from, $to]);
@@ -418,7 +424,8 @@ class ReportService
         $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
-            $q->whereBetween('tickets.created_at', [$from, $to]);
+            $q->whereBetween('tickets.created_at', [$from, $to])
+                ->where('tickets.is_merged', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('tickets.priority', $filters['priority']);
@@ -751,6 +758,7 @@ class ReportService
         if ($entity === 'product') {
             foreach ($topIds as $name => $productId) {
                 $counts = Ticket::query()
+                    ->notMerged()
                     ->whereHas('products', fn ($q) => $q->where('products.id', $productId))
                     ->whereBetween('created_at', [$from, $to])
                     ->selectRaw("{$groupExpr} as period, COUNT(*) as cnt")

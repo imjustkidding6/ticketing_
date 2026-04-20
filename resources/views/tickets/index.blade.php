@@ -45,6 +45,12 @@
                             <option value="{{ $agent->id }}" {{ request('assigned_to') == $agent->id ? 'selected' : '' }}>{{ $agent->name }}</option>
                         @endforeach
                     </select>
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketMerging))
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-600">
+                            <input type="checkbox" name="show_merged" value="1" {{ request()->boolean('show_merged') ? 'checked' : '' }} class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            {{ __('Show merged') }}
+                        </label>
+                    @endif
                     <button type="submit" class="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">{{ __('Filter') }}</button>
                 </form>
             </div>
@@ -66,8 +72,19 @@
                     @forelse($tickets as $ticket)
                         <tr class="{{ $ticket->isOverdue() ? 'bg-red-50' : '' }}">
                             <td class="px-6 py-4">
-                                <div class="text-sm font-medium text-indigo-600">
+                                <div class="text-sm font-medium text-indigo-600 flex items-center gap-2 flex-wrap">
                                     <a href="{{ route('tickets.show', $ticket) }}">{{ $ticket->ticket_number }}</a>
+                                    @if(($ticket->merged_tickets_count ?? 0) > 0)
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700" title="{{ __('Merged from other tickets') }}">
+                                            <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a4 4 0 0 0 4 4 4 4 0 0 0 4-4V7M4 11h16" />
+                                            </svg>
+                                            +{{ $ticket->merged_tickets_count }} {{ __('merged') }}
+                                        </span>
+                                    @endif
+                                    @if($ticket->is_merged)
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700">{{ __('merged archive') }}</span>
+                                    @endif
                                 </div>
                                 <div class="text-sm text-gray-900">{{ Str::limit($ticket->subject, 50) }}</div>
                             </td>

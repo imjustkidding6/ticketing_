@@ -71,17 +71,17 @@
                 <div class="rounded-xl bg-white p-6 shadow-sm">
                     <div class="text-sm font-medium text-gray-500">{{ __('Total Billable') }}</div>
                     <div class="mt-2 text-3xl font-semibold text-gray-900">{{ $summary['total_billable'] }}</div>
-                    <div class="mt-1 text-sm text-gray-500">{{ number_format($summary['total_amount'], 2) }}</div>
+                    <div class="mt-1 text-sm text-gray-500">{{ \App\Models\AppSetting::formatCurrency($summary['total_amount']) }}</div>
                 </div>
                 <div class="rounded-xl bg-white p-6 shadow-sm">
                     <div class="text-sm font-medium text-gray-500">{{ __('Billed') }}</div>
                     <div class="mt-2 text-3xl font-semibold text-green-600">{{ $summary['total_billed'] }}</div>
-                    <div class="mt-1 text-sm text-green-600">{{ number_format($summary['billed_amount'], 2) }}</div>
+                    <div class="mt-1 text-sm text-green-600">{{ \App\Models\AppSetting::formatCurrency($summary['billed_amount']) }}</div>
                 </div>
                 <div class="rounded-xl bg-white p-6 shadow-sm">
                     <div class="text-sm font-medium text-gray-500">{{ __('Unbilled') }}</div>
                     <div class="mt-2 text-3xl font-semibold text-orange-600">{{ $summary['total_unbilled'] }}</div>
-                    <div class="mt-1 text-sm text-orange-600">{{ number_format($summary['unbilled_amount'], 2) }}</div>
+                    <div class="mt-1 text-sm text-orange-600">{{ \App\Models\AppSetting::formatCurrency($summary['unbilled_amount']) }}</div>
                 </div>
             </div>
 
@@ -111,7 +111,7 @@
                                     <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ $ticket->client?->name ?? '-' }}</td>
                                     <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ $ticket->department?->name ?? '-' }}</td>
                                     <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ $ticket->assignee?->name ?? '-' }}</td>
-                                    <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium text-gray-900">{{ number_format($ticket->billable_amount ?? 0, 2) }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium text-gray-900">{{ \App\Models\AppSetting::formatCurrency($ticket->billable_amount) }}</td>
                                     <td class="whitespace-nowrap px-4 py-3">
                                         @if($ticket->billed_at)
                                             <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">{{ __('Billed') }}</span>

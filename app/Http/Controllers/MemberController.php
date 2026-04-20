@@ -86,11 +86,13 @@ class MemberController extends Controller
                 ->with('error', 'No available seats. Please upgrade your plan to add more members.');
         }
 
+        $tenantRoles = Role::where('tenant_id', $tenant->id)->pluck('name')->all();
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email:rfc,dns', 'max:255', Rule::unique('users', 'email')->whereNull('deleted_at')],
             'password' => ['required', 'confirmed', Password::defaults()],
-            'role' => ['required', 'string', 'in:admin,manager,agent'],
+            'role' => ['required', 'string', Rule::in($tenantRoles)],
             'support_tier' => ['nullable', 'integer', 'in:1,2,3'],
             'is_available' => ['nullable', 'boolean'],
             'department_ids' => ['nullable', 'array'],
@@ -107,8 +109,8 @@ class MemberController extends Controller
                 'password' => Hash::make($validated['password']),
             ]);
 
-            // Support agent fields for agent/manager
-            if (in_array($validated['role'], ['agent', 'manager'])) {
+            // Support agent fields for any non-admin role
+            if ($validated['role'] !== 'admin') {
                 $tierMap = [1 => 'tier_1', 2 => 'tier_2', 3 => 'tier_3'];
                 $user->update([
                     'support_tier' => isset($validated['support_tier']) ? ($tierMap[$validated['support_tier']] ?? null) : null,
@@ -209,11 +211,13 @@ class MemberController extends Controller
             return back()->with('error', 'Owner cannot be modified.');
         }
 
+        $tenantRoles = Role::where('tenant_id', $tenant->id)->pluck('name')->all();
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email:rfc,dns', 'max:255', Rule::unique('users', 'email')->ignore($member->id)->whereNull('deleted_at')],
             'password' => ['nullable', 'confirmed', Password::defaults()],
-            'role' => ['required', 'string', 'in:admin,manager,agent'],
+            'role' => ['required', 'string', Rule::in($tenantRoles)],
             'support_tier' => ['nullable', 'integer', 'in:1,2,3'],
             'is_available' => ['nullable', 'boolean'],
             'department_ids' => ['nullable', 'array'],
@@ -230,8 +234,8 @@ class MemberController extends Controller
                 $member->update(['password' => Hash::make($validated['password'])]);
             }
 
-            // Support agent fields
-            if (in_array($validated['role'], ['agent', 'manager'])) {
+            // Support agent fields for any non-admin role
+            if ($validated['role'] !== 'admin') {
                 $tierMap = [1 => 'tier_1', 2 => 'tier_2', 3 => 'tier_3'];
                 $member->update([
                     'support_tier' => isset($validated['support_tier']) ? ($tierMap[$validated['support_tier']] ?? null) : null,
