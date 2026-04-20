@@ -169,6 +169,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::post('settings/notifications/test', [AppSettingController::class, 'testEmail'])->name('settings.notifications.test')->middleware('feature:email_notifications');
     Route::get('settings/branding', [AppSettingController::class, 'branding'])->name('settings.branding');
     Route::post('settings/branding', [AppSettingController::class, 'saveBranding']);
+    Route::get('settings/service-report', [AppSettingController::class, 'serviceReport'])->name('settings.service-report')->middleware('feature:service_reports');
+    Route::post('settings/service-report', [AppSettingController::class, 'saveServiceReport'])->middleware('feature:service_reports');
 
     // Reports
     Route::get('reports', [ReportController::class, 'overview'])->name('reports.overview');

@@ -199,6 +199,62 @@ class AppSettingController extends Controller
     }
 
     /**
+     * Display service-report settings.
+     */
+    public function serviceReport(): View
+    {
+        $this->checkPermission('manage settings');
+
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+        $settings = AppSetting::getByGroup('service_report');
+
+        return view('settings.service-report', compact('tenant', 'settings'));
+    }
+
+    /**
+     * Save service-report settings.
+     */
+    public function saveServiceReport(Request $request): RedirectResponse
+    {
+        $this->checkPermission('manage settings');
+
+        $validated = $request->validate([
+            'auto_generate_on_close' => ['nullable', 'boolean'],
+            'report_title' => ['nullable', 'string', 'max:255'],
+            'report_footer' => ['nullable', 'string', 'max:500'],
+            'show_sla_metrics' => ['nullable', 'boolean'],
+            'show_tasks' => ['nullable', 'boolean'],
+            'service_report_logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,svg', 'max:2048'],
+            'remove_service_report_logo' => ['nullable', 'string'],
+        ]);
+
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+
+        if ($request->hasFile('service_report_logo')) {
+            if ($tenant->service_report_logo_path) {
+                Storage::disk('public')->delete($tenant->service_report_logo_path);
+            }
+            $tenant->service_report_logo_path = $request->file('service_report_logo')->store('tenant-logos', 'public');
+            $tenant->save();
+        }
+
+        if (! empty($validated['remove_service_report_logo']) && $tenant->service_report_logo_path) {
+            Storage::disk('public')->delete($tenant->service_report_logo_path);
+            $tenant->service_report_logo_path = null;
+            $tenant->save();
+        }
+
+        AppSetting::set('auto_generate_on_close', $request->boolean('auto_generate_on_close') ? '1' : '0', 'boolean', 'service_report');
+        AppSetting::set('show_sla_metrics', $request->boolean('show_sla_metrics') ? '1' : '0', 'boolean', 'service_report');
+        AppSetting::set('show_tasks', $request->boolean('show_tasks') ? '1' : '0', 'boolean', 'service_report');
+        AppSetting::set('report_title', $validated['report_title'] ?? '', 'string', 'service_report');
+        AppSetting::set('report_footer', $validated['report_footer'] ?? '', 'string', 'service_report');
+
+        return redirect()->route('settings.service-report')
+            ->with('success', 'Service report settings saved.');
+    }
+
+    /**
      * Save branding settings.
      */
     public function saveBranding(Request $request): RedirectResponse

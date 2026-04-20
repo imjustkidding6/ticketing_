@@ -43,6 +43,7 @@ class EnsureTenantSession
 
             session(['current_tenant_id' => $tenant->id]);
             app(PermissionRegistrar::class)->setPermissionsTeamId($tenant->id);
+            $this->applyTenantTimezone();
 
             // Remove slug from route parameters so it is not passed to controllers
             $request->route()->forgetParameter('slug');
@@ -63,6 +64,7 @@ class EnsureTenantSession
             }
 
             app(PermissionRegistrar::class)->setPermissionsTeamId($tenant->id);
+            $this->applyTenantTimezone();
 
             return $next($request);
         }
@@ -75,6 +77,7 @@ class EnsureTenantSession
         if ($tenants->count() === 1) {
             $user->setCurrentTenant($tenants->first());
             app(PermissionRegistrar::class)->setPermissionsTeamId($tenants->first()->id);
+            $this->applyTenantTimezone();
 
             return $next($request);
         }
@@ -84,5 +87,20 @@ class EnsureTenantSession
         }
 
         return redirect()->route('dashboard.no-tenant');
+    }
+
+    /**
+     * Apply the current tenant's configured timezone to PHP + Laravel for this request.
+     */
+    private function applyTenantTimezone(): void
+    {
+        $tz = \App\Models\AppSetting::get('timezone');
+
+        if (! $tz || ! in_array($tz, timezone_identifiers_list(), true)) {
+            return;
+        }
+
+        config(['app.timezone' => $tz]);
+        date_default_timezone_set($tz);
     }
 }

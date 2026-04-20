@@ -38,6 +38,7 @@ class Ticket extends Model
         'resolution_due_at',
         'first_response_at',
         'closed_at',
+        'closing_remarks',
         'is_billable',
         'billable_amount',
         'billable_description',
@@ -199,6 +200,11 @@ class Ticket extends Model
     public function escalations(): HasMany
     {
         return $this->hasMany(TicketEscalation::class);
+    }
+
+    public function serviceReports(): HasMany
+    {
+        return $this->hasMany(ServiceReport::class);
     }
 
     public function mergedIntoTicket(): BelongsTo

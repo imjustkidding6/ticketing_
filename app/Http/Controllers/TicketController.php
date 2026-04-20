@@ -15,6 +15,7 @@ use App\Services\TicketService;
 use App\Services\TicketWorkflowService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -297,10 +298,25 @@ class TicketController extends Controller
     {
         $validated = $request->validate([
             'status' => ['required', 'in:open,assigned,in_progress,on_hold,closed,cancelled'],
+            'closing_remarks' => [
+                Rule::requiredIf(fn () => $request->input('status') === 'closed' && $ticket->status !== 'closed'),
+                'nullable', 'string', 'max:2000',
+            ],
         ]);
 
+        if ($ticket->status === 'closed'
+            && ! app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketReopening)
+        ) {
+            return redirect()->route('tickets.show', $ticket)
+                ->with('error', 'Reopening closed tickets requires the Enterprise plan.');
+        }
+
+        if ($validated['status'] === 'closed' && ! empty($validated['closing_remarks'])) {
+            $ticket->update(['closing_remarks' => $validated['closing_remarks']]);
+        }
+
         try {
-            $this->ticketService->changeStatus($ticket, $validated['status']);
+            $this->ticketService->changeStatus($ticket->fresh(), $validated['status']);
         } catch (\InvalidArgumentException $e) {
             return redirect()->route('tickets.show', $ticket)
                 ->with('error', $e->getMessage());

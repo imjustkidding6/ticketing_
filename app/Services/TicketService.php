@@ -21,6 +21,7 @@ class TicketService
     public function __construct(
         private SlaService $slaService,
         private PlanService $planService,
+        private ServiceReportService $serviceReportService,
     ) {}
 
     /**
@@ -223,6 +224,14 @@ class TicketService
         $ticket->update($updates);
 
         $this->addHistory($ticket, 'status_changed', 'status', $oldStatus, $status, "Status changed from {$oldStatus} to {$status}.");
+
+        if ($status === 'closed'
+            && $oldStatus !== 'closed'
+            && $this->planService->tenantHasFeature($ticket->tenant, PlanFeature::ServiceReports)
+            && (\App\Models\AppSetting::get('auto_generate_on_close', '1') === '1')
+        ) {
+            $this->serviceReportService->generate($ticket->fresh());
+        }
 
         if ($this->notificationsEnabled()) {
             $ticketId = $ticket->id;

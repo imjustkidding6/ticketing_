@@ -22,6 +22,7 @@ class Tenant extends Model
         'slug',
         'description',
         'logo_path',
+        'service_report_logo_path',
         'primary_color',
         'accent_color',
         'dark_primary_color',
@@ -54,6 +55,21 @@ class Tenant extends Model
         }
 
         return Storage::disk('public')->url($this->logo_path);
+    }
+
+    /**
+     * Logo to print on the service report PDF. Falls back to the portal logo.
+     */
+    public function serviceReportLogoPath(): ?string
+    {
+        return $this->service_report_logo_path ?: $this->logo_path;
+    }
+
+    public function serviceReportLogoUrl(): ?string
+    {
+        $path = $this->serviceReportLogoPath();
+
+        return $path ? Storage::disk('public')->url($path) : null;
     }
 
     /**
