@@ -64,18 +64,11 @@ class TicketController extends Controller
     }
 
     /**
-     * Maximum page number allowed for offset-based pagination.
-     * Beyond this, OFFSET costs become prohibitive on large datasets.
+     * Display a listing of tickets.
      */
-    private const MAX_PAGE = 100;
-
     public function index(Request $request): View
     {
         $this->checkPermission('view tickets');
-
-        // OFFSET 100 000+ scans and discards rows; cursor pagination would
-        $page = min((int) $request->input('page', 1), self::MAX_PAGE);
-        $request->merge(['page' => $page]);
 
         $tickets = $this->scopeByUserDepartments(Ticket::query())
             ->with(['client', 'category', 'department', 'creator', 'assignee'])
@@ -101,7 +94,7 @@ class TicketController extends Controller
                         ->orWhere('description', 'like', "%{$search}%");
                 });
             })
-            ->orderBy('id', 'desc')
+            ->latest()
             ->paginate(20)
             ->withQueryString();
 
@@ -245,12 +238,6 @@ class TicketController extends Controller
     public function update(UpdateTicketRequest $request, Ticket $ticket): RedirectResponse
     {
         $data = $request->validated();
-        $submittedVersion = $request->input('ticket_lock_version');
-        if ($submittedVersion && (string) $ticket->updated_at->timestamp !== (string) $submittedVersion) {
-            return redirect()->route('tickets.edit', $ticket)
-                ->withInput()
-                ->with('error', 'This ticket has been modified by another user. Please review the changes and try again.');
-        }
 
         if ($request->hasFile('attachments')) {
             $existing = $ticket->attachments ?? [];

@@ -106,11 +106,6 @@
                 </tbody>
             </x-data-table>
             <div class="mt-4">
-                @if(request()->input('page') >= 100 && $tickets->hasMorePages())
-                    <p class="mb-2 text-sm text-amber-600">
-                        {{ __('You\'ve reached the maximum browsable page (100). Use the search or filters above to narrow results.') }}
-                    </p>
-                @endif
                 {{ $tickets->links() }}
             </div>
         </div>
