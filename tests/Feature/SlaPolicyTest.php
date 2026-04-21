@@ -40,26 +40,154 @@ class SlaPolicyTest extends TestCase
         $this->get($this->tenantUrl('/sla'))->assertOk();
     }
 
-    public function test_create_sla_policy(): void
+    public function test_create_page_loads(): void
+    {
+        $this->setupContext('business');
+        $this->get($this->tenantUrl('/sla/create'))->assertOk()->assertSee('Priority');
+    }
+
+    public function test_batch_create_sla_policies(): void
     {
         [$tenant] = $this->setupContext('business');
 
         $this->post($this->tenantUrl('/sla'), [
-            'name' => 'Premium SLA',
+            'name' => 'Standard SLA',
             'client_tier' => 'premium',
-            'priority' => 'high',
-            'response_time_hours' => 4,
-            'resolution_time_hours' => 24,
+            'priorities' => [
+                'critical' => ['enabled' => 1, 'response_time_hours' => 1, 'resolution_time_hours' => 4],
+                'high' => ['enabled' => 1, 'response_time_hours' => 4, 'resolution_time_hours' => 8],
+                'medium' => ['enabled' => 1, 'response_time_hours' => 8, 'resolution_time_hours' => 24],
+                'low' => ['enabled' => 1, 'response_time_hours' => 24, 'resolution_time_hours' => 72],
+            ],
             'is_active' => true,
         ])->assertRedirect();
 
-        $this->assertDatabaseHas('sla_policies', ['name' => 'Premium SLA', 'tenant_id' => $tenant->id]);
+        $this->assertDatabaseCount('sla_policies', 4);
+        $this->assertDatabaseHas('sla_policies', [
+            'name' => 'Standard SLA - Critical',
+            'tenant_id' => $tenant->id,
+            'client_tier' => 'premium',
+            'priority' => 'critical',
+            'response_time_hours' => 1,
+            'resolution_time_hours' => 4,
+        ]);
+        $this->assertDatabaseHas('sla_policies', [
+            'name' => 'Standard SLA - Low',
+            'tenant_id' => $tenant->id,
+            'priority' => 'low',
+            'response_time_hours' => 24,
+            'resolution_time_hours' => 72,
+        ]);
+    }
+
+    public function test_batch_create_with_partial_priorities(): void
+    {
+        [$tenant] = $this->setupContext('business');
+
+        $this->post($this->tenantUrl('/sla'), [
+            'name' => 'Partial SLA',
+            'priorities' => [
+                'critical' => ['enabled' => 1, 'response_time_hours' => 1, 'resolution_time_hours' => 4],
+                'high' => ['enabled' => 0, 'response_time_hours' => 4, 'resolution_time_hours' => 8],
+                'medium' => ['enabled' => 0, 'response_time_hours' => 8, 'resolution_time_hours' => 24],
+                'low' => ['enabled' => 1, 'response_time_hours' => 24, 'resolution_time_hours' => 72],
+            ],
+            'is_active' => true,
+        ])->assertRedirect();
+
+        $this->assertDatabaseCount('sla_policies', 2);
+        $this->assertDatabaseHas('sla_policies', ['priority' => 'critical', 'tenant_id' => $tenant->id]);
+        $this->assertDatabaseHas('sla_policies', ['priority' => 'low', 'tenant_id' => $tenant->id]);
+        $this->assertDatabaseMissing('sla_policies', ['priority' => 'high', 'tenant_id' => $tenant->id]);
+    }
+
+    public function test_batch_create_fails_when_no_priorities_enabled(): void
+    {
+        $this->setupContext('business');
+
+        $this->post($this->tenantUrl('/sla'), [
+            'name' => 'Empty SLA',
+            'priorities' => [
+                'critical' => ['enabled' => 0, 'response_time_hours' => 1, 'resolution_time_hours' => 4],
+                'high' => ['enabled' => 0, 'response_time_hours' => 4, 'resolution_time_hours' => 8],
+                'medium' => ['enabled' => 0, 'response_time_hours' => 8, 'resolution_time_hours' => 24],
+                'low' => ['enabled' => 0, 'response_time_hours' => 24, 'resolution_time_hours' => 72],
+            ],
+        ])->assertSessionHasErrors('priorities');
+
+        $this->assertDatabaseCount('sla_policies', 0);
+    }
+
+    public function test_batch_create_with_any_tier(): void
+    {
+        [$tenant] = $this->setupContext('business');
+
+        $this->post($this->tenantUrl('/sla'), [
+            'name' => 'Default SLA',
+            'client_tier' => '',
+            'priorities' => [
+                'critical' => ['enabled' => 1, 'response_time_hours' => 2, 'resolution_time_hours' => 8],
+                'high' => ['enabled' => 0, 'response_time_hours' => 4, 'resolution_time_hours' => 8],
+                'medium' => ['enabled' => 0, 'response_time_hours' => 8, 'resolution_time_hours' => 24],
+                'low' => ['enabled' => 0, 'response_time_hours' => 24, 'resolution_time_hours' => 72],
+            ],
+            'is_active' => true,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('sla_policies', [
+            'tenant_id' => $tenant->id,
+            'client_tier' => null,
+            'priority' => 'critical',
+            'response_time_hours' => 2,
+        ]);
+    }
+
+    public function test_batch_create_updates_existing_duplicate(): void
+    {
+        [$tenant] = $this->setupContext('business');
+
+        SlaPolicy::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Old SLA - Critical',
+            'client_tier' => 'premium',
+            'priority' => 'critical',
+            'response_time_hours' => 10,
+            'resolution_time_hours' => 48,
+            'is_active' => true,
+        ]);
+
+        $this->post($this->tenantUrl('/sla'), [
+            'name' => 'Updated SLA',
+            'client_tier' => 'premium',
+            'priorities' => [
+                'critical' => ['enabled' => 1, 'response_time_hours' => 1, 'resolution_time_hours' => 4],
+                'high' => ['enabled' => 0, 'response_time_hours' => 4, 'resolution_time_hours' => 8],
+                'medium' => ['enabled' => 0, 'response_time_hours' => 8, 'resolution_time_hours' => 24],
+                'low' => ['enabled' => 0, 'response_time_hours' => 24, 'resolution_time_hours' => 72],
+            ],
+            'is_active' => true,
+        ])->assertRedirect();
+
+        $this->assertDatabaseCount('sla_policies', 1);
+        $this->assertDatabaseHas('sla_policies', [
+            'tenant_id' => $tenant->id,
+            'name' => 'Updated SLA - Critical',
+            'response_time_hours' => 1,
+            'resolution_time_hours' => 4,
+        ]);
     }
 
     public function test_update_sla_policy(): void
     {
         [$tenant] = $this->setupContext('business');
-        $sla = SlaPolicy::factory()->create(['tenant_id' => $tenant->id]);
+        $sla = SlaPolicy::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Test SLA',
+            'priority' => 'low',
+            'response_time_hours' => 4,
+            'resolution_time_hours' => 24,
+            'is_active' => true,
+        ]);
 
         $this->put($this->tenantUrl("/sla/{$sla->id}"), [
             'name' => 'Updated SLA',
@@ -77,7 +205,14 @@ class SlaPolicyTest extends TestCase
     public function test_delete_sla_policy(): void
     {
         [$tenant] = $this->setupContext('business');
-        $sla = SlaPolicy::factory()->create(['tenant_id' => $tenant->id]);
+        $sla = SlaPolicy::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Delete Me',
+            'priority' => 'high',
+            'response_time_hours' => 4,
+            'resolution_time_hours' => 24,
+            'is_active' => true,
+        ]);
 
         $this->delete($this->tenantUrl("/sla/{$sla->id}"))->assertRedirect();
 
