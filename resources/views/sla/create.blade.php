@@ -19,9 +19,9 @@
                                 <label for="client_tier" class="block text-sm font-medium text-gray-700">{{ __('Client Tier') }}</label>
                                 <select name="client_tier" id="client_tier" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                     <option value="">{{ __('Any Tier') }}</option>
-                                    <option value="basic" {{ old('client_tier') === 'basic' ? 'selected' : '' }}>{{ __('Basic') }}</option>
-                                    <option value="premium" {{ old('client_tier') === 'premium' ? 'selected' : '' }}>{{ __('Premium') }}</option>
-                                    <option value="enterprise" {{ old('client_tier') === 'enterprise' ? 'selected' : '' }}>{{ __('Enterprise') }}</option>
+                                    @foreach($tiers as $tier)
+                                        <option value="{{ $tier }}" {{ old('client_tier') === $tier ? 'selected' : '' }}>{{ __(ucfirst($tier)) }}</option>
+                                    @endforeach
                                 </select>
                             </div>
                         </div>
@@ -34,7 +34,6 @@
                         <div>
                             <h3 class="text-sm font-medium text-gray-700 mb-3">{{ __('Response & Resolution Times by Priority') }}</h3>
                             <p class="text-xs text-gray-500 mb-4">{{ __('Define the response and resolution times (in hours) for each priority level. Uncheck a priority to skip it.') }}</p>
-
                             @if($errors->any())
                                 <div class="mb-4 rounded-md bg-red-50 p-3">
                                     <p class="text-sm text-red-700">{{ __('Please correct the errors below.') }}</p>

@@ -53,7 +53,7 @@ class SlaPolicyController extends Controller
         $created = 0;
 
         foreach ($validated['priorities'] as $priority => $data) {
-            if (! in_array($priority, $validPriorities) || ! ($data['enabled'] ?? false)) {
+            if (! in_array($priority, $validPriorities, true) || ! ($data['enabled'] ?? false)) {
                 continue;
             }
 
