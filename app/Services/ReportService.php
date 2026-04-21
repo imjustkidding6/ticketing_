@@ -21,6 +21,11 @@ class ReportService
      */
     private function applyFilters(Builder $query, array $filters): Builder
     {
+        // Merged source tickets are archival artifacts (their counts, closed_at,
+        // and resolution metrics would otherwise double-count with their target).
+        // Spam is excluded from the tickets list and should be excluded here too.
+        $query->notMerged()->notSpam();
+
         if (! empty($filters['from'])) {
             $query->where('created_at', '>=', Carbon::parse($filters['from'])->startOfDay());
         }
@@ -80,12 +85,23 @@ class ReportService
     {
         $query = $this->applyFilters(Ticket::query(), $filters);
 
+        $everReopened = (clone $query)->where('reopened_count', '>', 0)->count();
+        $initiallyResolved = (clone $query)->whereNotNull('first_closed_at')->count();
+        $finallyClosed = (clone $query)->where('status', 'closed')->count();
+
         return [
             'total' => (clone $query)->count(),
             'open' => (clone $query)->whereIn('status', ['open', 'assigned', 'in_progress', 'on_hold'])->count(),
             'closed' => (clone $query)->whereIn('status', ['closed', 'cancelled'])->count(),
             'in_progress' => (clone $query)->where('status', 'in_progress')->count(),
             'on_hold' => (clone $query)->where('status', 'on_hold')->count(),
+            'initially_resolved' => $initiallyResolved,
+            'finally_closed' => $finallyClosed,
+            'reopened' => $everReopened,
+            'reopen_rate' => $initiallyResolved > 0 ? round(($everReopened / $initiallyResolved) * 100, 1) : 0,
+            'avg_reopen_count' => $everReopened > 0
+                ? round((clone $query)->where('reopened_count', '>', 0)->avg('reopened_count') ?? 0, 2)
+                : 0,
             'by_priority' => [
                 'critical' => (clone $query)->where('priority', 'critical')->count(),
                 'high' => (clone $query)->where('priority', 'high')->count(),
@@ -100,6 +116,53 @@ class ReportService
                 'closed' => (clone $query)->where('status', 'closed')->count(),
                 'cancelled' => (clone $query)->where('status', 'cancelled')->count(),
             ],
+        ];
+    }
+
+    /**
+     * Reopen analysis report — dedicated quality-check view.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function getReopenAnalysisReport(array $filters = []): array
+    {
+        $query = $this->applyFilters(Ticket::query(), $filters)
+            ->where('reopened_count', '>', 0)
+            ->with(['client', 'department', 'category', 'assignee']);
+
+        $tickets = (clone $query)->get();
+
+        // Tickets with at least one reopen within the filter range
+        $byDepartment = $tickets->groupBy(fn ($t) => $t->department?->name ?? '—')
+            ->map->count()
+            ->sortDesc();
+
+        $byCategory = $tickets->groupBy(fn ($t) => $t->category?->name ?? '—')
+            ->map->count()
+            ->sortDesc();
+
+        $byAgent = $tickets->groupBy(fn ($t) => $t->assignee?->name ?? __('Unassigned'))
+            ->map->count()
+            ->sortDesc();
+
+        $byClient = $tickets->groupBy(fn ($t) => $t->client?->name ?? '—')
+            ->map->count()
+            ->sortDesc();
+
+        $avgDaysBeforeReopen = $tickets
+            ->filter(fn ($t) => $t->first_closed_at && $t->last_reopened_at)
+            ->avg(fn ($t) => $t->first_closed_at->diffInDays($t->last_reopened_at, false));
+
+        return [
+            'tickets' => $tickets,
+            'total' => $tickets->count(),
+            'avg_reopen_count' => round($tickets->avg('reopened_count') ?? 0, 2),
+            'avg_days_before_reopen' => round($avgDaysBeforeReopen ?? 0, 1),
+            'by_department' => $byDepartment,
+            'by_category' => $byCategory,
+            'by_agent' => $byAgent,
+            'by_client' => $byClient,
         ];
     }
 
@@ -144,6 +207,8 @@ class ReportService
     public function getResolutionReport(array $filters = []): array
     {
         $query = Ticket::query()
+            ->notMerged()
+            ->notSpam()
             ->where('status', 'closed')
             ->whereNotNull('closed_at');
 
@@ -205,7 +270,9 @@ class ReportService
         $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
-            $q->whereBetween('created_at', [$from, $to]);
+            $q->whereBetween('created_at', [$from, $to])
+                ->where('is_merged', false)
+                ->where('is_spam', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('priority', $filters['priority']);
@@ -255,7 +322,8 @@ class ReportService
         $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
-            $q->whereBetween('tickets.created_at', [$from, $to]);
+            $q->whereBetween('tickets.created_at', [$from, $to])
+                ->where('tickets.is_merged', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('tickets.priority', $filters['priority']);
@@ -285,6 +353,7 @@ class ReportService
             ->get()
             ->map(function ($agent) use ($from, $to, $filters) {
                 $closedQuery = Ticket::where('assigned_to', $agent->id)
+                    ->notMerged()
                     ->where('status', 'closed')
                     ->whereNotNull('closed_at')
                     ->whereBetween('closed_at', [$from, $to]);
@@ -300,6 +369,16 @@ class ReportService
                 $closedTickets = $closedQuery->get();
                 $avgHours = $closedTickets->avg(fn ($t) => $t->created_at->diffInHours($t->closed_at));
 
+                // Reopen rate: of tickets this agent has ever-closed, how many were later reopened?
+                $everClosedByAgent = Ticket::where('assigned_to', $agent->id)
+                    ->notMerged()
+                    ->whereNotNull('first_closed_at')
+                    ->count();
+                $reopenedAfterAgentClosure = Ticket::where('assigned_to', $agent->id)
+                    ->notMerged()
+                    ->where('reopened_count', '>', 0)
+                    ->count();
+
                 return [
                     'id' => $agent->id,
                     'name' => $agent->name,
@@ -307,6 +386,10 @@ class ReportService
                     'open' => $agent->open_tickets,
                     'closed' => $agent->closed_tickets,
                     'avg_resolution_hours' => round($avgHours ?? 0, 1),
+                    'reopened_after_closure' => $reopenedAfterAgentClosure,
+                    'reopen_rate' => $everClosedByAgent > 0
+                        ? round(($reopenedAfterAgentClosure / $everClosedByAgent) * 100, 1)
+                        : 0,
                 ];
             });
     }
@@ -323,7 +406,9 @@ class ReportService
         $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
-            $q->whereBetween('created_at', [$from, $to]);
+            $q->whereBetween('created_at', [$from, $to])
+                ->where('is_merged', false)
+                ->where('is_spam', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('priority', $filters['priority']);
@@ -371,7 +456,9 @@ class ReportService
         $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
-            $q->whereBetween('created_at', [$from, $to]);
+            $q->whereBetween('created_at', [$from, $to])
+                ->where('is_merged', false)
+                ->where('is_spam', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('priority', $filters['priority']);
@@ -418,7 +505,8 @@ class ReportService
         $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
-            $q->whereBetween('tickets.created_at', [$from, $to]);
+            $q->whereBetween('tickets.created_at', [$from, $to])
+                ->where('tickets.is_merged', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('tickets.priority', $filters['priority']);
@@ -541,18 +629,20 @@ class ReportService
 
         return Department::query()
             ->withCount(['tickets as total' => function ($q) use ($filters, $from, $to) {
-                $q->whereBetween('created_at', [$from, $to]);
+                $q->whereBetween('tickets.created_at', [$from, $to])
+                    ->where('tickets.is_merged', false)
+                    ->where('tickets.is_spam', false);
 
                 if (! empty($filters['priority'])) {
-                    $q->where('priority', $filters['priority']);
+                    $q->where('tickets.priority', $filters['priority']);
                 }
 
                 if (! empty($filters['client_id'])) {
-                    $q->where('client_id', $filters['client_id']);
+                    $q->where('tickets.client_id', $filters['client_id']);
                 }
 
                 if (! empty($filters['assigned_to'])) {
-                    $q->where('assigned_to', $filters['assigned_to']);
+                    $q->where('tickets.assigned_to', $filters['assigned_to']);
                 }
             }])
             ->orderByDesc('total')
@@ -574,18 +664,20 @@ class ReportService
 
         return Client::query()
             ->withCount(['tickets as total' => function ($q) use ($filters, $from, $to) {
-                $q->whereBetween('created_at', [$from, $to]);
+                $q->whereBetween('tickets.created_at', [$from, $to])
+                    ->where('tickets.is_merged', false)
+                    ->where('tickets.is_spam', false);
 
                 if (! empty($filters['priority'])) {
-                    $q->where('priority', $filters['priority']);
+                    $q->where('tickets.priority', $filters['priority']);
                 }
 
                 if (! empty($filters['department_id'])) {
-                    $q->where('department_id', $filters['department_id']);
+                    $q->where('tickets.department_id', $filters['department_id']);
                 }
 
                 if (! empty($filters['assigned_to'])) {
-                    $q->where('assigned_to', $filters['assigned_to']);
+                    $q->where('tickets.assigned_to', $filters['assigned_to']);
                 }
             }])
             ->orderByDesc('total')
@@ -608,7 +700,9 @@ class ReportService
         return User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
             ->withCount(['tickets as total' => function ($q) use ($filters, $from, $to) {
-                $q->whereBetween('tickets.created_at', [$from, $to]);
+                $q->whereBetween('tickets.created_at', [$from, $to])
+                    ->where('tickets.is_merged', false)
+                    ->where('tickets.is_spam', false);
 
                 if (! empty($filters['priority'])) {
                     $q->where('tickets.priority', $filters['priority']);
@@ -692,7 +786,11 @@ class ReportService
 
         if ($entity === 'product') {
             $topIds = \App\Models\Product::query()
-                ->withCount(['tickets as tc' => fn ($q) => $q->whereBetween('tickets.created_at', [$from, $to])])
+                ->withCount(['tickets as tc' => fn ($q) => $q
+                    ->whereBetween('tickets.created_at', [$from, $to])
+                    ->where('tickets.is_merged', false)
+                    ->where('tickets.is_spam', false)
+                ])
                 ->orderByDesc('tc')
                 ->limit($limit)
                 ->pluck('id', 'name');
@@ -751,6 +849,8 @@ class ReportService
         if ($entity === 'product') {
             foreach ($topIds as $name => $productId) {
                 $counts = Ticket::query()
+                    ->notMerged()
+                    ->notSpam()
                     ->whereHas('products', fn ($q) => $q->where('products.id', $productId))
                     ->whereBetween('created_at', [$from, $to])
                     ->selectRaw("{$groupExpr} as period, COUNT(*) as cnt")

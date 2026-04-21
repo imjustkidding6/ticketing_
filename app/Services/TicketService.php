@@ -21,7 +21,85 @@ class TicketService
     public function __construct(
         private SlaService $slaService,
         private PlanService $planService,
+        private ServiceReportService $serviceReportService,
     ) {}
+
+    /**
+     * Block assignment when the agent's tier can't handle the ticket's priority.
+     * Only enforced for tenants with the agent_escalation feature (Enterprise).
+     * Owners bypass.
+     */
+    /**
+     * Block a priority assignment if the tenant requires an SLA policy
+     * and none exists for the given (client_tier, priority) pair.
+     */
+    private function guardSlaPolicy(int $tenantId, ?string $clientTier, ?string $priority, \App\Models\Tenant $tenant): void
+    {
+        if (! $priority) {
+            return;
+        }
+
+        if (! $this->planService->tenantHasFeature($tenant, PlanFeature::SlaManagement)) {
+            return;
+        }
+
+        if (! \App\Models\SlaPolicy::hasPolicyFor($tenantId, $clientTier, $priority)) {
+            $tierLabel = $clientTier ? " for {$clientTier} clients" : '';
+            throw new \InvalidArgumentException(
+                "Cannot set priority to '{$priority}'{$tierLabel}: no SLA policy defined. ".
+                'Create or seed SLA policies under Settings → SLA first.'
+            );
+        }
+    }
+
+    private function guardAgentTier(Ticket $ticket, User $agent): void
+    {
+        if (! $this->planService->tenantHasFeature($ticket->tenant, PlanFeature::AgentEscalation)) {
+            return;
+        }
+
+        if (! $ticket->priority) {
+            return; // Untriaged tickets don't trigger the guard.
+        }
+
+        $pivot = $agent->tenants()->where('tenants.id', $ticket->tenant_id)->first()?->pivot;
+        if ($pivot?->role === 'owner') {
+            return;
+        }
+
+        if (! $agent->canHandlePriority($ticket->priority)) {
+            $tierLabel = $agent->support_tier ? strtoupper(str_replace('_', ' ', $agent->support_tier)) : 'untiered';
+            throw new \InvalidArgumentException(
+                "Cannot assign a {$ticket->priority} priority ticket to {$agent->name} ({$tierLabel}). ".
+                'Pick a higher-tier agent, or lower the ticket priority first.'
+            );
+        }
+    }
+
+    /**
+     * Block assignment when the agent is outside their weekly schedule window.
+     * Only enforced when the tenant has the agent_schedule feature.
+     * Users with no configured schedule are allowed (not configured = no rule).
+     * Owners bypass.
+     */
+    private function guardAgentAvailability(Ticket $ticket, User $agent): void
+    {
+        if (! $this->planService->tenantHasFeature($ticket->tenant, PlanFeature::AgentSchedule)) {
+            return;
+        }
+
+        $pivot = $agent->tenants()->where('tenants.id', $ticket->tenant_id)->first()?->pivot;
+        if ($pivot?->role === 'owner') {
+            return;
+        }
+
+        if (! $agent->isOnScheduleAt(now())) {
+            throw new \InvalidArgumentException(
+                "Cannot assign to {$agent->name}: they're off-schedule right now. ".
+                'Pick an available agent or wait until their working hours.'
+            );
+        }
+    }
 
     /**
      * Create a new ticket.
@@ -39,6 +117,29 @@ class TicketService
         $data['ticket_number'] = Ticket::generateTicketNumber();
         $data['created_by'] = $data['created_by'] ?? (Auth::check() ? Auth::id() : null);
         $data['status'] = 'open';
+
+        if (! empty($data['priority']) && ! empty($data['tenant_id'])) {
+            $tenant = \App\Models\Tenant::find($data['tenant_id']);
+            if ($tenant) {
+                $clientTier = null;
+                if (! empty($data['client_id'])) {
+                    $clientTier = \App\Models\Client::withoutGlobalScopes()->find($data['client_id'])?->tier;
+                }
+                $this->guardSlaPolicy($data['tenant_id'], $clientTier, $data['priority'], $tenant);
+            }
+        }
+
+        if (! empty($data['assigned_to']) && ! empty($data['tenant_id']) && ! empty($data['priority'])) {
+            $agent = User::find($data['assigned_to']);
+            if ($agent) {
+                $probe = new Ticket([
+                    'tenant_id' => $data['tenant_id'],
+                    'priority' => $data['priority'],
+                ]);
+                $this->guardAgentTier($probe, $agent);
+                $this->guardAgentAvailability($probe, $agent);
+            }
+        }
 
         $ticket = Ticket::create($data);
 
@@ -118,6 +219,22 @@ class TicketService
         $productIds = $data['product_ids'] ?? null;
         unset($data['product_ids']);
 
+        $nextAssignee = array_key_exists('assigned_to', $data) ? $data['assigned_to'] : $ticket->assigned_to;
+        $nextPriority = array_key_exists('priority', $data) ? $data['priority'] : $ticket->priority;
+
+        if ($nextPriority && array_key_exists('priority', $data) && $data['priority'] !== $ticket->priority) {
+            $this->guardSlaPolicy($ticket->tenant_id, $ticket->client?->tier, $nextPriority, $ticket->tenant);
+        }
+
+        if ($nextAssignee && $nextPriority) {
+            $agent = User::find($nextAssignee);
+            if ($agent) {
+                $probe = (clone $ticket)->forceFill(['priority' => $nextPriority]);
+                $this->guardAgentTier($probe, $agent);
+                $this->guardAgentAvailability($probe, $agent);
+            }
+        }
+
         $tracked = ['subject', 'priority', 'status', 'department_id', 'category_id', 'client_id'];
 
         foreach ($tracked as $field) {
@@ -140,6 +257,9 @@ class TicketService
      */
     public function assignTicket(Ticket $ticket, User $agent, ?User $assignedBy = null): void
     {
+        $this->guardAgentTier($ticket, $agent);
+        $this->guardAgentAvailability($ticket, $agent);
+
         $oldAssignee = $ticket->assigned_to;
 
         $ticket->update([
@@ -200,6 +320,11 @@ class TicketService
             $updates['in_progress_at'] = now();
         }
 
+        // Response time ends when a ticket first moves to "in progress".
+        if ($status === 'in_progress' && ! $ticket->first_response_at) {
+            $updates['first_response_at'] = now();
+        }
+
         if ($status === 'closed') {
             $tasks = $ticket->tasks;
 
@@ -214,6 +339,9 @@ class TicketService
             }
 
             $updates['closed_at'] = now();
+            if (! $ticket->first_closed_at) {
+                $updates['first_closed_at'] = now();
+            }
         }
 
         if ($status === 'on_hold') {
@@ -229,6 +357,14 @@ class TicketService
         $ticket->update($updates);
 
         $this->addHistory($ticket, 'status_changed', 'status', $oldStatus, $status, "Status changed from {$oldStatus} to {$status}.");
+
+        if ($status === 'closed'
+            && $oldStatus !== 'closed'
+            && $this->planService->tenantHasFeature($ticket->tenant, PlanFeature::ServiceReports)
+            && (\App\Models\AppSetting::get('auto_generate_on_close', '1') === '1')
+        ) {
+            $this->serviceReportService->generate($ticket->fresh());
+        }
 
         if ($this->notificationsEnabled()) {
             $ticketId = $ticket->id;
@@ -262,6 +398,8 @@ class TicketService
      */
     public function changePriority(Ticket $ticket, string $priority): void
     {
+        $this->guardSlaPolicy($ticket->tenant_id, $ticket->client?->tier, $priority, $ticket->tenant);
+
         $oldPriority = $ticket->priority;
         $ticket->update(['priority' => $priority]);
         $this->addHistory($ticket, 'updated', 'priority', $oldPriority, $priority, "Priority changed from {$oldPriority} to {$priority}.");

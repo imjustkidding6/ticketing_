@@ -382,7 +382,9 @@ class ClientPortalController extends Controller
             ? route('portal.knowledge-base.search', ['slug' => $tenant->slug])
             : null;
 
-        return view('tenant.submit-ticket', compact('tenant', 'departments', 'categories', 'products', 'kbSearchUrl'));
+        $allowAttachments = $this->planService->tenantHasFeature($tenant, PlanFeature::Attachments);
+
+        return view('tenant.submit-ticket', compact('tenant', 'departments', 'categories', 'products', 'kbSearchUrl', 'allowAttachments'));
     }
 
     /**
@@ -393,18 +395,39 @@ class ClientPortalController extends Controller
         $tenant = $this->resolvePublicTenant($slug);
         $this->abortIfStarter($tenant);
 
-        $validated = $request->validate([
+        $allowAttachments = $this->planService->tenantHasFeature($tenant, PlanFeature::Attachments);
+
+        $rules = [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
-            'priority' => ['required', 'in:low,medium,high,critical'],
             'department_id' => ['required', 'integer'],
             'category_id' => ['nullable', 'integer'],
             'incident_date' => ['nullable', 'date'],
             'product_ids' => ['nullable', 'array'],
             'product_ids.*' => ['integer'],
-        ]);
+        ];
+
+        if ($allowAttachments) {
+            $rules['attachments'] = ['nullable', 'array', 'max:3'];
+            $rules['attachments.*'] = ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,pdf,doc,docx,txt'];
+        }
+
+        $validated = $request->validate($rules);
+
+        $attachments = [];
+        if ($allowAttachments && $request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $path = $file->store("tenants/{$tenant->id}/attachments", config('filesystems.default'));
+                $attachments[] = [
+                    'name' => $file->getClientOriginalName(),
+                    'path' => $path,
+                    'size' => $file->getSize(),
+                    'mime' => $file->getMimeType(),
+                ];
+            }
+        }
 
         $client = $this->findOrCreateGuestClient($tenant, $validated['email'], $validated['name']);
         $trackingToken = Str::random(64);
@@ -413,13 +436,14 @@ class ClientPortalController extends Controller
             'tenant_id' => $tenant->id,
             'subject' => $validated['subject'],
             'description' => $validated['description'],
-            'priority' => $validated['priority'],
+            'priority' => null,
             'department_id' => $validated['department_id'],
             'category_id' => $validated['category_id'],
             'incident_date' => $validated['incident_date'] ?? null,
             'client_id' => $client->id,
             'created_by' => null,
             'tracking_token' => $trackingToken,
+            'attachments' => $attachments ?: null,
         ]);
 
         if (! empty($validated['product_ids'])) {
@@ -456,6 +480,13 @@ class ClientPortalController extends Controller
             return view('tenant.track-ticket', ['tenant' => $tenant, 'searched' => true]);
         }
 
+        if ($ticket->is_merged && $ticket->merged_into_ticket_id) {
+            $target = $this->resolveMergeTarget($ticket);
+            if ($target) {
+                $ticket = $target;
+            }
+        }
+
         if (! $ticket->tracking_token) {
             $ticket->update(['tracking_token' => Str::random(64)]);
         }
@@ -469,7 +500,7 @@ class ClientPortalController extends Controller
     /**
      * Public track ticket by token (under /{slug}/track-ticket/{token}).
      */
-    public function publicTrackByToken(string $slug, string $token): View
+    public function publicTrackByToken(string $slug, string $token): View|RedirectResponse
     {
         $tenant = $this->resolvePublicTenant($slug);
         $this->abortIfStarter($tenant);
@@ -477,13 +508,57 @@ class ClientPortalController extends Controller
         $ticket = Ticket::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('tracking_token', $token)
-            ->with(['department', 'category', 'client', 'comments' => fn ($q) => $q->where('is_public', true)->with('user')->oldest()])
             ->firstOrFail();
+
+        // Merged tickets forward to their final target so the client sees the live conversation.
+        if ($ticket->is_merged && $ticket->merged_into_ticket_id) {
+            $target = $this->resolveMergeTarget($ticket);
+            if ($target && $target->id !== $ticket->id) {
+                if (! $target->tracking_token) {
+                    $target->update(['tracking_token' => Str::random(64)]);
+                }
+
+                return redirect()
+                    ->route('tenant.track-ticket.token', ['slug' => $tenant->slug, 'token' => $target->tracking_token])
+                    ->with('info', "Ticket {$ticket->ticket_number} was merged into {$target->ticket_number}. You're now viewing the combined conversation.");
+            }
+        }
+
+        $ticket->load(['department', 'category', 'client', 'comments' => fn ($q) => $q->where('is_public', true)->with('user')->oldest()]);
 
         $canReply = $this->planService->tenantHasFeature($tenant, PlanFeature::ClientComments)
             && ! in_array($ticket->status, ['closed', 'cancelled']);
 
         return view('tenant.track-result', compact('tenant', 'ticket', 'canReply'));
+    }
+
+    /**
+     * Follow the merge chain (A merged into B merged into C → C).
+     * Caps depth to avoid circular references.
+     */
+    private function resolveMergeTarget(Ticket $ticket): ?Ticket
+    {
+        $current = $ticket;
+        $seen = [];
+        for ($i = 0; $i < 10; $i++) {
+            if (! $current->is_merged || ! $current->merged_into_ticket_id) {
+                return $current;
+            }
+            if (in_array($current->id, $seen, true)) {
+                return null;
+            }
+            $seen[] = $current->id;
+
+            $current = Ticket::withoutGlobalScopes()
+                ->where('tenant_id', $current->tenant_id)
+                ->find($current->merged_into_ticket_id);
+
+            if (! $current) {
+                return null;
+            }
+        }
+
+        return $current;
     }
 
     /**
@@ -503,8 +578,16 @@ class ClientPortalController extends Controller
             ->where('tracking_token', $token)
             ->firstOrFail();
 
+        // If the client somehow posts to a merged ticket's URL, forward the reply to the target.
+        if ($ticket->is_merged && $ticket->merged_into_ticket_id) {
+            $target = $this->resolveMergeTarget($ticket);
+            if ($target && $target->id !== $ticket->id) {
+                $ticket = $target;
+            }
+        }
+
         if (in_array($ticket->status, ['closed', 'cancelled'])) {
-            return redirect()->route('tenant.track-ticket.token', ['slug' => $slug, 'token' => $token])
+            return redirect()->route('tenant.track-ticket.token', ['slug' => $slug, 'token' => $ticket->tracking_token])
                 ->with('error', 'This ticket is closed and cannot receive new replies.');
         }
 

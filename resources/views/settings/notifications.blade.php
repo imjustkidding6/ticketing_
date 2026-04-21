@@ -13,6 +13,9 @@
                 <a href="{{ route('settings.notifications') }}" class="border-b-2 border-indigo-500 px-4 py-2 text-sm font-medium text-indigo-600">{{ __('Notifications') }}</a>
                 @endif
                 <a href="{{ route('settings.branding') }}" class="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">{{ __('Branding') }}</a>
+                @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::ServiceReports))
+                <a href="{{ route('settings.service-report') }}" class="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">{{ __('Service Report') }}</a>
+                @endif
             </div>
 
             <form method="POST" action="{{ route('settings.notifications') }}">

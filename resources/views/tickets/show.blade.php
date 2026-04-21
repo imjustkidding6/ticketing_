@@ -60,6 +60,70 @@
                         </div>
                     </div>
 
+                    {{-- Service Report (Business+) --}}
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::ServiceReports))
+                        @php $serviceReports = $ticket->serviceReports()->latest()->get(); @endphp
+                        @if($serviceReports->isNotEmpty())
+                            <div class="rounded-xl bg-white p-6 shadow-sm">
+                                <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Service Report') }}</h4>
+                                <ul class="mt-3 divide-y divide-gray-100 rounded-md border border-gray-200">
+                                    @foreach($serviceReports as $report)
+                                        <li class="flex items-center justify-between py-2 pl-3 pr-4 text-sm">
+                                            <div class="flex min-w-0 flex-1 items-center gap-2">
+                                                <svg class="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                                                </svg>
+                                                <span class="truncate font-medium text-gray-900">{{ $report->report_number }}</span>
+                                                <span class="shrink-0 text-xs text-gray-500">{{ $report->generated_at?->format('M j, Y g:i A') }}</span>
+                                            </div>
+                                            <a href="{{ route('service-reports.download', $report) }}"
+                                                class="ml-4 shrink-0 text-indigo-600 hover:text-indigo-500">
+                                                {{ __('Download PDF') }}
+                                            </a>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @elseif($ticket->status === 'closed')
+                            <div class="rounded-xl bg-white p-6 shadow-sm">
+                                <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Service Report') }}</h4>
+                                <div class="mt-3 flex items-center justify-between">
+                                    <p class="text-sm text-gray-500">{{ __('No service report on file for this ticket.') }}</p>
+                                    <form method="POST" action="{{ route('service-reports.generate', $ticket) }}">
+                                        @csrf
+                                        <button type="submit" class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100">
+                                            {{ __('Generate Now') }}
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        @endif
+                    @endif
+
+                    {{-- Ticket Attachments (Business+) --}}
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments) && $ticket->attachments && count($ticket->attachments) > 0)
+                    <div class="rounded-xl bg-white p-6 shadow-sm">
+                        <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Attachments') }}</h4>
+                        <ul class="mt-3 divide-y divide-gray-100 rounded-md border border-gray-200">
+                            @foreach($ticket->attachments as $idx => $attachment)
+                                <li class="flex items-center justify-between py-2 pl-3 pr-4 text-sm">
+                                    <div class="flex min-w-0 flex-1 items-center gap-2">
+                                        <svg class="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                                        </svg>
+                                        <span class="truncate font-medium text-gray-900">{{ $attachment['name'] }}</span>
+                                        <span class="shrink-0 text-xs text-gray-500">{{ number_format(($attachment['size'] ?? 0) / 1024, 0) }} KB</span>
+                                    </div>
+                                    <a href="{{ route('tickets.attachment', [$ticket, $idx]) }}"
+                                        class="ml-4 shrink-0 text-indigo-600 hover:text-indigo-500">
+                                        {{ __('Download') }}
+                                    </a>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                    @endif
+
                     {{-- Ticket Details --}}
                     <div class="rounded-xl bg-white p-6 shadow-sm">
                         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
@@ -228,14 +292,21 @@
                         @if($ticket->comments->isNotEmpty())
                             <div class="space-y-4">
                                 @foreach($ticket->comments as $comment)
-                                    <div class="rounded-lg border {{ $comment->type === 'internal' ? 'border-yellow-200 bg-yellow-50' : 'border-gray-200 bg-gray-50' }} p-4">
+                                    @php
+                                        $authorName = $comment->user?->name ?? $ticket->client?->name ?? __('Unknown');
+                                        $isClientReply = ! $comment->user_id;
+                                    @endphp
+                                    <div class="rounded-lg border {{ $comment->type === 'internal' ? 'border-yellow-200 bg-yellow-50' : ($isClientReply ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-gray-50') }} p-4">
                                         <div class="flex items-start justify-between gap-2">
                                             <div class="flex items-center gap-2">
-                                                <div class="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700 shrink-0">
-                                                    {{ strtoupper(substr($comment->user?->name ?? '?', 0, 1)) }}
+                                                <div class="flex h-7 w-7 items-center justify-center rounded-full {{ $isClientReply ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700' }} text-xs font-semibold shrink-0">
+                                                    {{ strtoupper(substr($authorName, 0, 1)) }}
                                                 </div>
                                                 <div>
-                                                    <span class="text-sm font-medium text-gray-900">{{ $comment->user?->name ?? __('Unknown') }}</span>
+                                                    <span class="text-sm font-medium text-gray-900">{{ $authorName }}</span>
+                                                    @if($isClientReply)
+                                                        <span class="ml-1 inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">{{ __('Client') }}</span>
+                                                    @endif
                                                     <span class="ml-1 text-xs text-gray-400">{{ $comment->created_at->format('m/d/Y, g:i A') }}</span>
                                                     @if($comment->edited_at)
                                                         <span class="ml-1 text-xs text-gray-400 italic">({{ __('edited') }})</span>
@@ -262,7 +333,7 @@
                                         <div class="mt-2 text-sm text-gray-700 prose prose-sm max-w-none">
                                             {!! nl2br(e($comment->content)) !!}
                                         </div>
-                                        @if($comment->attachments)
+                                        @if($comment->attachments && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments))
                                             <div class="mt-2 flex flex-wrap gap-2">
                                                 @foreach($comment->attachments as $idx => $attachment)
                                                     <a href="{{ route('tickets.comments.attachment', [$ticket, $comment, $idx]) }}" class="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-100 hover:text-gray-800">
@@ -304,13 +375,12 @@
                                 @endif
                                 <div class="space-y-3">
                                     <textarea name="content" id="comment_content" rows="3" required class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="{{ __('Write a comment...') }}"></textarea>
-                                    <div>
-                                        <input type="file" name="attachments[]" multiple class="block w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200">
-                                        @if($errors->has('attachments') || $errors->has('attachments.*'))
-                                            <p class="mt-1 text-sm text-red-600">{{ __('File type not allowed for security reasons') }}</p>
-                                        @endif
-                                        <p class="mt-1 text-xs text-gray-400">{{ __('Max 5 files, 10MB each. Images, PDF, docs, zip.') }}</p>
-                                    </div>
+                                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments))
+                                        <div>
+                                            <input type="file" name="attachments[]" multiple class="block w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200">
+                                            <p class="mt-1 text-xs text-gray-400">{{ __('Max 5 files, 10MB each. Images, PDF, docs, zip.') }}</p>
+                                        </div>
+                                    @endif
                                     <div class="flex items-center justify-between">
                                         <select name="type" class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                             <option value="public">{{ __('Public') }}</option>
@@ -329,6 +399,100 @@
 
                 {{-- Right Column (Sidebar) --}}
                 <div class="lg:col-span-1 space-y-6">
+                    {{-- Billing (Business+, admin/manager only) --}}
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Billing) && (auth()->user()?->isAdmin() || auth()->user()?->can('manage billing')))
+                        <div class="rounded-xl bg-white p-6 shadow-sm" x-data="{ isBillable: {{ $ticket->is_billable ? 'true' : 'false' }} }">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Billing') }}</h4>
+                                @if($ticket->billed_at)
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                                        <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                        </svg>
+                                        {{ __('Billed') }} {{ $ticket->billed_at->format('M j') }}
+                                    </span>
+                                @endif
+                            </div>
+
+                            <form method="POST" action="{{ route('tickets.billing', $ticket) }}" class="mt-4 space-y-3">
+                                @csrf
+                                <label class="flex items-start gap-3">
+                                    <input type="checkbox" name="is_billable" value="1" x-model="isBillable" {{ $ticket->is_billable ? 'checked' : '' }} class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                    <span class="text-sm">
+                                        <span class="font-medium text-gray-900">{{ __('Billable ticket') }}</span>
+                                        <span class="block text-xs text-gray-500">{{ __('Include on the billing report.') }}</span>
+                                    </span>
+                                </label>
+
+                                <div x-show="isBillable" x-cloak class="space-y-3">
+                                    <div>
+                                        <label for="billable_amount" class="block text-xs font-medium text-gray-700">{{ __('Amount') }}</label>
+                                        <div class="relative mt-1 rounded-md shadow-sm">
+                                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2">
+                                                <span class="text-sm text-gray-500">{{ \App\Models\AppSetting::currencySymbol() }}</span>
+                                            </div>
+                                            <input type="number" step="0.01" min="0" name="billable_amount" id="billable_amount" value="{{ $ticket->billable_amount }}" class="block w-full rounded-md border-gray-300 pl-6 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="0.00">
+                                        </div>
+                                        @error('billable_amount') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                    </div>
+                                    <div>
+                                        <label for="billable_description" class="block text-xs font-medium text-gray-700">{{ __('Description') }}</label>
+                                        <textarea name="billable_description" id="billable_description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="{{ __('e.g. Labor + parts') }}">{{ $ticket->billable_description }}</textarea>
+                                        @error('billable_description') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                    </div>
+                                    @if(! $ticket->billed_at)
+                                        <label class="flex items-center gap-2">
+                                            <input type="checkbox" name="mark_billed" value="1" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                            <span class="text-xs text-gray-700">{{ __('Mark as billed') }}</span>
+                                        </label>
+                                    @endif
+                                </div>
+
+                                <button type="submit" class="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Save Billing') }}</button>
+                            </form>
+                        </div>
+                    @endif
+
+                    {{-- Lifecycle (reopen metrics) --}}
+                    @if($ticket->first_closed_at || $ticket->reopened_count > 0)
+                    <div class="rounded-xl bg-white p-6 shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Lifecycle') }}</h4>
+                            @if($ticket->reopened_count > 0)
+                                <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">{{ __('Reopened') }} × {{ $ticket->reopened_count }}</span>
+                            @endif
+                        </div>
+                        <dl class="mt-3 space-y-2 text-sm">
+                            <div class="flex items-center justify-between">
+                                <dt class="text-gray-500">{{ __('First closed') }}</dt>
+                                <dd class="text-gray-900">{{ $ticket->first_closed_at?->format('M j, Y g:i A') ?? '—' }}</dd>
+                            </div>
+                            @if($ticket->reopened_count > 0)
+                                <div class="flex items-center justify-between">
+                                    <dt class="text-gray-500">{{ __('Last reopened') }}</dt>
+                                    <dd class="text-gray-900">{{ $ticket->last_reopened_at?->format('M j, Y g:i A') ?? '—' }}</dd>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <dt class="text-gray-500">{{ __('Current cycle') }}</dt>
+                                    <dd class="text-gray-900">#{{ $ticket->reopened_count + 1 }}</dd>
+                                </div>
+                                @if($ticket->last_reopen_reason)
+                                    <div>
+                                        <dt class="text-gray-500">{{ __('Last reopen reason') }}</dt>
+                                        <dd class="mt-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-1 text-xs text-amber-900">{{ $ticket->last_reopen_reason }}</dd>
+                                    </div>
+                                @endif
+                            @endif
+                            @if($ticket->status === 'closed' && $ticket->closed_at && $ticket->first_closed_at && $ticket->closed_at->ne($ticket->first_closed_at))
+                                <div class="flex items-center justify-between">
+                                    <dt class="text-gray-500">{{ __('Last closed') }}</dt>
+                                    <dd class="text-gray-900">{{ $ticket->closed_at->format('M j, Y g:i A') }}</dd>
+                                </div>
+                            @endif
+                        </dl>
+                    </div>
+                    @endif
+
                     {{-- Assignment & Priority --}}
                     <div class="rounded-xl bg-white p-6 shadow-sm">
                         <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Assignment & Priority') }}</h4>
@@ -358,13 +522,23 @@
                                     @csrf
                                     <div class="space-y-3">
                                         <div>
+                                            @php $scheduleFeature = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AgentSchedule); @endphp
                                             <label for="sidebar_assigned_to" class="block text-sm font-medium text-gray-500">{{ __('Assign To') }}</label>
                                             <select name="assigned_to" id="sidebar_assigned_to" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                                 <option value="">{{ __('Select agent') }}</option>
                                                 @foreach($agents as $agent)
-                                                    <option value="{{ $agent->id }}" {{ $ticket->assigned_to == $agent->id ? 'selected' : '' }}>{{ $agent->name }}</option>
+                                                    @php
+                                                        $offSchedule = $scheduleFeature && ! $agent->isOnScheduleAt();
+                                                        $isCurrent = $ticket->assigned_to == $agent->id;
+                                                    @endphp
+                                                    <option value="{{ $agent->id }}" {{ $isCurrent ? 'selected' : '' }} {{ $offSchedule && ! $isCurrent ? 'disabled' : '' }}>
+                                                        {{ $agent->name }}{{ $offSchedule ? ' — '.__('off-schedule') : '' }}
+                                                    </option>
                                                 @endforeach
                                             </select>
+                                            @if($scheduleFeature)
+                                                <p class="mt-1 text-xs text-gray-500">{{ __('Off-schedule agents are disabled.') }}</p>
+                                            @endif
                                         </div>
                                         <div>
                                             <label for="sidebar_priority" class="block text-sm font-medium text-gray-500">{{ __('Priority') }}</label>
@@ -386,36 +560,114 @@
                     {{-- Status --}}
                     <div class="rounded-xl bg-white p-6 shadow-sm">
                         <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Status') }}</h4>
+                        @php
+                            $canReopen = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketReopening)
+                                && auth()->user()?->can('reopen tickets');
+                            $statusLocked = $ticket->status === 'closed' && ! $canReopen;
+                        @endphp
                         <div class="mt-4">
-                            <form method="POST" action="{{ route('tickets.change-status', $ticket) }}">
-                                @csrf
-                                <select name="status" id="sidebar_status" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                    @php
-                                        $availableStatuses = ['open', 'assigned', 'in_progress', 'closed', 'cancelled'];
-                                        if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement)) {
-                                            $availableStatuses = ['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled'];
-                                        }
-                                    @endphp
-                                    @foreach($availableStatuses as $status)
-                                        <option value="{{ $status }}" {{ $ticket->status === $status ? 'selected' : '' }}>
-                                            {{ ucfirst(str_replace('_', ' ', $status)) }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <button type="submit" class="mt-2 w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Update Status') }}</button>
-                            </form>
+                            @if($statusLocked)
+                                <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                                    <span class="inline-flex items-center gap-2">
+                                        <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                        </svg>
+                                        {{ __('Closed — status locked') }}
+                                    </span>
+                                </div>
+                                <p class="mt-2 text-xs text-gray-500">{{ __('Reopening closed tickets requires the Enterprise plan.') }}</p>
+                            @else
+                                <form method="POST" action="{{ route('tickets.change-status', $ticket) }}" x-data="{ status: '{{ $ticket->status }}' }">
+                                    @csrf
+                                    <select name="status" id="sidebar_status" x-model="status" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                        @php
+                                            $availableStatuses = ['open', 'assigned', 'in_progress', 'closed', 'cancelled'];
+                                            if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement)) {
+                                                $availableStatuses = ['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled'];
+                                            }
+                                        @endphp
+                                        @foreach($availableStatuses as $status)
+                                            <option value="{{ $status }}" {{ $ticket->status === $status ? 'selected' : '' }}>
+                                                {{ ucfirst(str_replace('_', ' ', $status)) }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+
+                                    <div x-show="status === 'closed'" x-cloak class="mt-3">
+                                        <label for="closing_remarks" class="block text-xs font-medium text-gray-700">{{ __('Final Remarks') }} <span class="text-red-500">*</span></label>
+                                        <textarea name="closing_remarks" id="closing_remarks" rows="3" :required="status === 'closed'" class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="{{ __('Summarize the resolution. Shown on the service report PDF.') }}">{{ old('closing_remarks', $ticket->closing_remarks) }}</textarea>
+                                        @error('closing_remarks') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                    </div>
+
+                                    <button type="submit" class="mt-2 w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Update Status') }}</button>
+                                </form>
+                            @endif
 
                             {{-- Reopen Ticket --}}
-                            @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketReopening) && $ticket->status === 'closed')
-                                <form method="POST" action="{{ route('tickets.reopen', $ticket) }}" class="mt-3 border-t border-gray-100 pt-3">
-                                    @csrf
-                                    <button type="submit" class="w-full rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100" onclick="return confirm('{{ __('Reopen this ticket?') }}')">
+                            @if($canReopen && $ticket->status === 'closed')
+                                <div x-data="{ showReopenModal: false }" class="mt-3 border-t border-gray-100 pt-3">
+                                    <button type="button" @click="showReopenModal = true" class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100">
+                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                        </svg>
                                         {{ __('Reopen Ticket') }}
                                     </button>
                                     @if($ticket->reopened_count > 0)
                                         <p class="mt-1 text-center text-xs text-gray-400">{{ __('Reopened') }} {{ $ticket->reopened_count }} {{ __('time(s)') }}</p>
                                     @endif
-                                </form>
+
+                                    {{-- Modal --}}
+                                    <div x-show="showReopenModal" x-cloak
+                                        x-transition.opacity
+                                        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                                        style="background-color: rgba(17,24,39,0.5);"
+                                        @keydown.escape.window="showReopenModal = false"
+                                        @click.self="showReopenModal = false">
+                                        <div x-show="showReopenModal"
+                                            x-transition:enter="ease-out duration-200"
+                                            x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+                                            x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                                            class="w-full max-w-md rounded-xl bg-white shadow-xl">
+                                            <form method="POST" action="{{ route('tickets.reopen', $ticket) }}">
+                                                @csrf
+                                                <div class="p-6">
+                                                    <div class="flex items-start gap-4">
+                                                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                                                            <svg class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                                            </svg>
+                                                        </div>
+                                                        <div class="min-w-0 flex-1">
+                                                            <h3 class="text-base font-semibold text-gray-900">{{ __('Reopen this ticket?') }}</h3>
+                                                            <p class="mt-2 text-sm text-gray-600">
+                                                                {{ __('Reopening moves the ticket back to') }} <span class="font-medium text-gray-900">{{ __('Open') }}</span>.
+                                                                @if($ticket->reopened_count > 0)
+                                                                    {{ __('Already reopened') }} <span class="font-medium">{{ $ticket->reopened_count }}</span> {{ __('time(s)') }}.
+                                                                @endif
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="mt-4">
+                                                        <label for="reopen_reason" class="block text-xs font-medium text-gray-700">{{ __('Reason for reopening') }} <span class="text-gray-400 font-normal">({{ __('optional but recommended') }})</span></label>
+                                                        <textarea name="reason" id="reopen_reason" rows="2" maxlength="500" placeholder="{{ __('e.g. Issue not fully resolved, user reports recurrence, verification failed') }}" class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500"></textarea>
+                                                        <p class="mt-1 text-xs text-gray-500">{{ __('Shown on the ticket history and used in Reopen Analysis reports.') }}</p>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center justify-end gap-2 rounded-b-xl border-t border-gray-100 bg-gray-50 px-6 py-3">
+                                                    <button type="button" @click="showReopenModal = false" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+                                                        {{ __('Cancel') }}
+                                                    </button>
+                                                    <button type="submit" class="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-500">
+                                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                                        </svg>
+                                                        {{ __('Yes, Reopen Ticket') }}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
                             @endif
                         </div>
                     </div>
@@ -645,7 +897,96 @@
                     @endif
 
                     {{-- Ticket Merging --}}
-                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketMerging))
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketMerging) && auth()->user()?->can('merge tickets') && $ticket->mergedTickets->isNotEmpty())
+                    <div class="rounded-xl bg-white p-6 shadow-sm" x-data="{ unmergeAction: '', unmergeNumber: '', unmergeSubject: '' }">
+                        <div class="flex items-center gap-2">
+                            <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Merged Tickets') }}</h4>
+                            <span class="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700">{{ $ticket->mergedTickets->count() }}</span>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">{{ __('These tickets were absorbed into this one. Their tasks and comments were moved here.') }}</p>
+                        <ul class="mt-3 divide-y divide-gray-100 rounded-md border border-gray-200">
+                            @foreach($ticket->mergedTickets as $merged)
+                                <li class="flex items-center justify-between gap-3 py-2 pl-3 pr-4">
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center gap-2">
+                                            <a href="{{ route('tickets.show', $merged) }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-500">{{ $merged->ticket_number }}</a>
+                                            <span class="inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">{{ __('archived') }}</span>
+                                        </div>
+                                        <div class="truncate text-xs text-gray-700 mt-0.5">{{ Str::limit($merged->subject, 70) }}</div>
+                                        <div class="text-[11px] text-gray-500">
+                                            {{ $merged->client?->name ?? __('No client') }}
+                                            @if($merged->merged_at)
+                                                · {{ __('merged') }} {{ $merged->merged_at->diffForHumans() }}
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <a href="{{ route('tickets.show', $merged) }}" class="text-xs text-indigo-600 hover:text-indigo-500">{{ __('View') }}</a>
+                                        <button type="button"
+                                            @click="unmergeAction = '{{ route('tickets.unmerge', $merged) }}'; unmergeNumber = '{{ $merged->ticket_number }}'; unmergeSubject = @js(Str::limit($merged->subject, 80))"
+                                            class="text-xs text-gray-500 hover:text-gray-700">
+                                            {{ __('Unmerge') }}
+                                        </button>
+                                    </div>
+                                </li>
+                            @endforeach
+                        </ul>
+
+                        {{-- Unmerge Modal --}}
+                        <div x-show="unmergeAction !== ''" x-cloak
+                            x-transition.opacity
+                            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                            style="background-color: rgba(17,24,39,0.5);"
+                            @keydown.escape.window="unmergeAction = ''"
+                            @click.self="unmergeAction = ''">
+                            <div x-show="unmergeAction !== ''"
+                                x-transition:enter="ease-out duration-200"
+                                x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+                                x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                                class="w-full max-w-md rounded-xl bg-white shadow-xl">
+                                <div class="p-6">
+                                    <div class="flex items-start gap-4">
+                                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                                            <svg class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                            </svg>
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <h3 class="text-base font-semibold text-gray-900">
+                                                {{ __('Unmerge') }} <span x-text="unmergeNumber" class="font-mono text-indigo-700"></span>?
+                                            </h3>
+                                            <p class="mt-1 text-sm text-gray-600 truncate" x-text="unmergeSubject"></p>
+                                            <div class="mt-3 rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                                                <p class="font-medium">{{ __('What happens when you unmerge:') }}</p>
+                                                <ul class="mt-2 list-disc pl-5 space-y-1 text-xs text-amber-800">
+                                                    <li>{{ __('The archived ticket is reopened and becomes a standalone ticket again.') }}</li>
+                                                    <li>{{ __('Tasks and comments already moved to this ticket will STAY here — they are not moved back.') }}</li>
+                                                    <li>{{ __('Any service report generated from this ticket keeps the merged history.') }}</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-end gap-2 rounded-b-xl border-t border-gray-100 bg-gray-50 px-6 py-3">
+                                    <button type="button" @click="unmergeAction = ''" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+                                        {{ __('Cancel') }}
+                                    </button>
+                                    <form method="POST" :action="unmergeAction">
+                                        @csrf
+                                        <button type="submit" class="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-500">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                                            </svg>
+                                            {{ __('Yes, Unmerge') }}
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketMerging) && auth()->user()?->can('merge tickets'))
                     <div class="rounded-xl bg-white p-6 shadow-sm">
                         <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Merge Ticket') }}</h4>
                         <div class="mt-4">
@@ -662,21 +1003,117 @@
                                     @endif
                                 </div>
                             @elseif(!in_array($ticket->status, ['closed', 'cancelled']))
-                                <form method="POST" action="{{ route('tickets.merge', $ticket) }}" class="space-y-3">
-                                    @csrf
-                                    <div>
-                                        <label for="merge_target" class="block text-sm font-medium text-gray-500">{{ __('Merge into') }}</label>
-                                        <select name="target_ticket_id" id="merge_target" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                            <option value="">{{ __('Select target ticket') }}</option>
-                                            @foreach($mergeableTickets as $mt)
-                                                <option value="{{ $mt->id }}">{{ $mt->ticket_number }} — {{ Str::limit($mt->subject, 40) }}</option>
-                                            @endforeach
-                                        </select>
+                                @if($mergeableTickets->isEmpty())
+                                    <p class="text-sm text-gray-500">{{ __('No other open tickets available to merge into.') }}</p>
+                                @else
+                                    @php
+                                        $mergeTargets = $mergeableTickets->map(fn ($mt) => [
+                                            'id' => $mt->id,
+                                            'number' => $mt->ticket_number,
+                                            'subject' => $mt->subject,
+                                            'status' => $mt->status,
+                                            'priority' => $mt->priority,
+                                            'client' => $mt->client?->name,
+                                            'assignee' => $mt->assignee?->name,
+                                        ])->values();
+                                    @endphp
+                                    <div x-data="{
+                                        open: false,
+                                        search: '',
+                                        selectedId: null,
+                                        targets: {{ Js::from($mergeTargets) }},
+                                        get filtered() {
+                                            const s = this.search.trim().toLowerCase();
+                                            if (!s) return this.targets;
+                                            return this.targets.filter(t =>
+                                                (t.number || '').toLowerCase().includes(s) ||
+                                                (t.subject || '').toLowerCase().includes(s) ||
+                                                (t.client || '').toLowerCase().includes(s)
+                                            );
+                                        },
+                                        get selected() { return this.targets.find(t => t.id === this.selectedId) || null; },
+                                    }">
+                                        <button type="button" @click="open = true" class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a4 4 0 0 0 4 4 4 4 0 0 0 4-4V7M4 11h16" />
+                                            </svg>
+                                            {{ __('Merge into another ticket') }}
+                                        </button>
+
+                                        {{-- Merge Modal --}}
+                                        <div x-show="open" x-cloak x-transition.opacity
+                                            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                                            style="background-color: rgba(17,24,39,0.5);"
+                                            @keydown.escape.window="open = false"
+                                            @click.self="open = false">
+                                            <div x-show="open"
+                                                x-transition:enter="ease-out duration-200"
+                                                x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+                                                x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                                                class="w-full max-w-lg rounded-xl bg-white shadow-xl flex flex-col max-h-[85vh]">
+                                                <div class="p-6 border-b border-gray-100">
+                                                    <div class="flex items-start gap-4">
+                                                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-100">
+                                                            <svg class="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a4 4 0 0 0 4 4 4 4 0 0 0 4-4V7M4 11h16" />
+                                                            </svg>
+                                                        </div>
+                                                        <div class="min-w-0 flex-1">
+                                                            <h3 class="text-base font-semibold text-gray-900">{{ __('Merge :number into another ticket', ['number' => $ticket->ticket_number]) }}</h3>
+                                                            <p class="mt-1 text-sm text-gray-600">{{ __('Tasks and comments will move to the target. This ticket will be closed and archived as a merged copy.') }}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="mt-4">
+                                                        <label class="block text-xs font-medium text-gray-700">{{ __('Search target ticket') }}</label>
+                                                        <input type="text" x-model="search" placeholder="{{ __('Number, subject, or client') }}" class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                                    </div>
+                                                </div>
+                                                <div class="flex-1 overflow-y-auto p-3">
+                                                    <template x-if="filtered.length === 0">
+                                                        <p class="text-center py-8 text-sm text-gray-500">{{ __('No matching tickets.') }}</p>
+                                                    </template>
+                                                    <ul class="space-y-1">
+                                                        <template x-for="t in filtered" :key="t.id">
+                                                            <li>
+                                                                <button type="button"
+                                                                    @click="selectedId = t.id"
+                                                                    :class="selectedId === t.id ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200' : 'border-gray-200 hover:bg-gray-50'"
+                                                                    class="w-full text-left rounded-md border px-3 py-2 transition">
+                                                                    <div class="flex items-center justify-between gap-2">
+                                                                        <span class="text-sm font-semibold text-indigo-700" x-text="t.number"></span>
+                                                                        <span class="text-[10px] uppercase tracking-wide font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600" x-text="(t.status || '').replace('_',' ')"></span>
+                                                                    </div>
+                                                                    <div class="mt-1 text-sm text-gray-900 truncate" x-text="t.subject"></div>
+                                                                    <div class="mt-0.5 text-xs text-gray-500">
+                                                                        <span x-text="t.client || '{{ __('No client') }}'"></span>
+                                                                        <span class="mx-1">·</span>
+                                                                        <span x-text="t.assignee ? ('{{ __('Assigned to') }} ' + t.assignee) : '{{ __('Unassigned') }}'"></span>
+                                                                    </div>
+                                                                </button>
+                                                            </li>
+                                                        </template>
+                                                    </ul>
+                                                </div>
+                                                <div class="flex items-center justify-between gap-2 rounded-b-xl border-t border-gray-100 bg-gray-50 px-6 py-3">
+                                                    <p class="text-xs text-gray-500">
+                                                        <span x-show="!selected">{{ __('Select a target to continue') }}</span>
+                                                        <span x-show="selected">{{ __('Merging into') }} <strong x-text="selected && selected.number"></strong></span>
+                                                    </p>
+                                                    <div class="flex items-center gap-2">
+                                                        <button type="button" @click="open = false" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">{{ __('Cancel') }}</button>
+                                                        <form method="POST" action="{{ route('tickets.merge', $ticket) }}" x-show="selected">
+                                                            @csrf
+                                                            <input type="hidden" name="target_ticket_id" :value="selectedId">
+                                                            <button type="submit" class="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-purple-500">
+                                                                {{ __('Merge') }}
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <button type="submit" class="w-full rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100" onclick="return confirm('{{ __('Merge this ticket? This action will close this ticket and move its data to the target.') }}')">
-                                        {{ __('Merge into Selected') }}
-                                    </button>
-                                </form>
+                                @endif
                             @endif
                         </div>
                     </div>

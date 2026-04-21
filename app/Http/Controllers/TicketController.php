@@ -15,6 +15,7 @@ use App\Services\TicketService;
 use App\Services\TicketWorkflowService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -22,6 +23,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TicketController extends Controller
 {
+    use \App\Http\Controllers\Concerns\HasSortableQuery;
+
     public function __construct(
         private TicketService $ticketService,
         private TicketMergeService $mergeService,
@@ -64,22 +67,17 @@ class TicketController extends Controller
     }
 
     /**
-     * Maximum page number allowed for offset-based pagination.
-     * Beyond this, OFFSET costs become prohibitive on large datasets.
+     * Display a listing of tickets.
      */
-    private const MAX_PAGE = 100;
-
     public function index(Request $request): View
     {
         $this->checkPermission('view tickets');
 
-        // OFFSET 100 000+ scans and discards rows; cursor pagination would
-        $page = min((int) $request->input('page', 1), self::MAX_PAGE);
-        $request->merge(['page' => $page]);
-
         $tickets = $this->scopeByUserDepartments(Ticket::query())
             ->with(['client', 'category', 'department', 'creator', 'assignee'])
+            ->withCount('mergedTickets')
             ->notSpam()
+            ->when(! $request->boolean('show_merged'), fn ($q) => $q->where('is_merged', false))
             ->when($request->status, function ($query, $status) {
                 if ($status === 'open') {
                     $query->open();
@@ -100,10 +98,49 @@ class TicketController extends Controller
                         ->orWhere('ticket_number', 'like', "%{$search}%")
                         ->orWhere('description', 'like', "%{$search}%");
                 });
-            })
-            ->orderBy('id', 'desc')
-            ->paginate(20)
-            ->withQueryString();
+            });
+
+        // If a sort is explicitly requested, honor it; otherwise use the default
+        // status-priority order from the list spec.
+        if ($request->filled('sort')) {
+            $sort = $request->input('sort');
+            $direction = strtolower($request->input('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+            switch ($sort) {
+                case 'client':
+                    $tickets->leftJoin('clients', 'tickets.client_id', '=', 'clients.id')
+                        ->select('tickets.*')
+                        ->orderBy('clients.name', $direction);
+                    break;
+                case 'assignee':
+                    $tickets->leftJoin('users', 'tickets.assigned_to', '=', 'users.id')
+                        ->select('tickets.*')
+                        ->orderBy('users.name', $direction);
+                    break;
+                case 'resolution':
+                    // Sort by elapsed hours (closed_at - created_at); open tickets use NOW().
+                    $tickets->orderByRaw("TIMESTAMPDIFF(MINUTE, tickets.created_at, COALESCE(tickets.closed_at, NOW())) {$direction}");
+                    break;
+                case 'priority':
+                    // Order priority by severity: critical > high > medium > low
+                    $tickets->orderByRaw("FIELD(priority, 'critical', 'high', 'medium', 'low') {$direction}");
+                    break;
+                case 'ticket_number':
+                case 'subject':
+                case 'status':
+                case 'created_at':
+                    $tickets->orderBy($sort, $direction);
+                    break;
+                default:
+                    $tickets->orderByRaw("FIELD(status, 'open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled')")
+                        ->latest();
+            }
+        } else {
+            $tickets->orderByRaw("FIELD(status, 'open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled')")
+                ->latest();
+        }
+
+        $tickets = $tickets->paginate(20)->withQueryString();
 
         $departments = Department::active()->ordered()->get();
         $agents = User::query()
@@ -127,8 +164,9 @@ class TicketController extends Controller
         $products = Product::active()->ordered()->get();
         $agents = User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+            ->with('schedules')
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'support_tier']);
 
         // Build SLA lookup: { tier: { priority: { response, resolution } } }
         $slaLookup = \App\Models\SlaPolicy::active()
@@ -151,11 +189,17 @@ class TicketController extends Controller
     {
         $data = $request->validated();
 
-        if ($request->hasFile('attachments')) {
+        if ($request->hasFile('attachments') && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments)) {
             $data['attachments'] = $this->storeAttachments($request);
+        } else {
+            unset($data['attachments']);
         }
 
-        $ticket = $this->ticketService->createTicket($data);
+        try {
+            $ticket = $this->ticketService->createTicket($data);
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withInput()->withErrors(['assigned_to' => $e->getMessage()]);
+        }
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Ticket created successfully.');
@@ -183,10 +227,12 @@ class TicketController extends Controller
             'history' => fn ($q) => $q->with('user')->latest(),
             'comments' => fn ($q) => $q->with('user')->oldest(),
             'escalations' => fn ($q) => $q->with(['escalatedByUser', 'fromUser', 'toUser'])->latest(),
+            'mergedTickets' => fn ($q) => $q->with('client')->latest('merged_at'),
         ]);
 
         $agents = \App\Models\User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
+            ->with('schedules')
             ->orderBy('name')
             ->get(['id', 'name', 'support_tier']);
 
@@ -245,19 +291,19 @@ class TicketController extends Controller
     public function update(UpdateTicketRequest $request, Ticket $ticket): RedirectResponse
     {
         $data = $request->validated();
-        $submittedVersion = $request->input('ticket_lock_version');
-        if ($submittedVersion && (string) $ticket->updated_at->timestamp !== (string) $submittedVersion) {
-            return redirect()->route('tickets.edit', $ticket)
-                ->withInput()
-                ->with('error', 'This ticket has been modified by another user. Please review the changes and try again.');
-        }
 
-        if ($request->hasFile('attachments')) {
+        if ($request->hasFile('attachments') && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments)) {
             $existing = $ticket->attachments ?? [];
             $data['attachments'] = array_merge($existing, $this->storeAttachments($request));
+        } else {
+            unset($data['attachments']);
         }
 
-        $this->ticketService->updateTicket($ticket, $data);
+        try {
+            $this->ticketService->updateTicket($ticket, $data);
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withInput()->withErrors(['assigned_to' => $e->getMessage()]);
+        }
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Ticket updated successfully.');
@@ -274,15 +320,22 @@ class TicketController extends Controller
             'priority' => ['nullable', 'in:low,medium,high,critical'],
         ]);
 
-        // Update priority if changed
-        if (! empty($validated['priority']) && $validated['priority'] !== $ticket->priority) {
-            $this->ticketService->changePriority($ticket, $validated['priority']);
-        }
-
         $agent = User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
             ->findOrFail($validated['assigned_to']);
-        $this->ticketService->assignTicket($ticket, $agent);
+
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($ticket, $agent, $validated) {
+                if (! empty($validated['priority']) && $validated['priority'] !== $ticket->priority) {
+                    $this->ticketService->changePriority($ticket, $validated['priority']);
+                }
+                // assignTicket will guard against tier vs. the (possibly just-updated) priority;
+                // any exception rolls back the priority change above.
+                $this->ticketService->assignTicket($ticket, $agent);
+            });
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->route('tickets.show', $ticket)->with('error', $e->getMessage());
+        }
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Ticket assigned to '.$agent->name.'.');
@@ -293,7 +346,11 @@ class TicketController extends Controller
      */
     public function selfAssign(Ticket $ticket): RedirectResponse
     {
-        $this->ticketService->assignTicket($ticket, Auth::user());
+        try {
+            $this->ticketService->assignTicket($ticket, Auth::user());
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->route('tickets.show', $ticket)->with('error', $e->getMessage());
+        }
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Ticket assigned to you.');
@@ -306,10 +363,25 @@ class TicketController extends Controller
     {
         $validated = $request->validate([
             'status' => ['required', 'in:open,assigned,in_progress,on_hold,closed,cancelled'],
+            'closing_remarks' => [
+                Rule::requiredIf(fn () => $request->input('status') === 'closed' && $ticket->status !== 'closed'),
+                'nullable', 'string', 'max:2000',
+            ],
         ]);
 
+        if ($ticket->status === 'closed'
+            && ! app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketReopening)
+        ) {
+            return redirect()->route('tickets.show', $ticket)
+                ->with('error', 'Reopening closed tickets requires the Enterprise plan.');
+        }
+
+        if ($validated['status'] === 'closed' && ! empty($validated['closing_remarks'])) {
+            $ticket->update(['closing_remarks' => $validated['closing_remarks']]);
+        }
+
         try {
-            $this->ticketService->changeStatus($ticket, $validated['status']);
+            $this->ticketService->changeStatus($ticket->fresh(), $validated['status']);
         } catch (\InvalidArgumentException $e) {
             return redirect()->route('tickets.show', $ticket)
                 ->with('error', $e->getMessage());
@@ -339,6 +411,8 @@ class TicketController extends Controller
      */
     public function updateBilling(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('manage billing');
+
         $validated = $request->validate([
             'is_billable' => ['nullable'],
             'billable_amount' => ['nullable', 'numeric', 'min:0'],
@@ -385,6 +459,8 @@ class TicketController extends Controller
      */
     public function merge(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('merge tickets');
+
         $validated = $request->validate([
             'target_ticket_id' => ['required', 'exists:tickets,id', 'different:ticket'],
         ]);
@@ -397,15 +473,45 @@ class TicketController extends Controller
     }
 
     /**
+     * Unmerge a previously merged ticket, restoring it as a standalone open ticket.
+     */
+    public function unmerge(Ticket $ticket): RedirectResponse
+    {
+        $this->checkPermission('unmerge tickets');
+
+        $target = $ticket->merged_into_ticket_id ? Ticket::find($ticket->merged_into_ticket_id) : null;
+        $this->mergeService->unmerge($ticket);
+
+        return redirect()->route('tickets.show', $target ?? $ticket)
+            ->with('success', "Ticket {$ticket->ticket_number} was unmerged and reopened.");
+    }
+
+    /**
      * Reopen a closed ticket.
      */
-    public function reopen(Ticket $ticket): RedirectResponse
+    public function reopen(Request $request, Ticket $ticket): RedirectResponse
     {
-        $this->ticketService->addHistory($ticket, 'reopened', 'status', $ticket->status, 'open', 'Ticket reopened (reopened '.($ticket->reopened_count + 1).' time(s))');
+        $this->checkPermission('reopen tickets');
+
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $reason = $validated['reason'] ?? null;
+        $nextCount = $ticket->reopened_count + 1;
+
+        $description = 'Ticket reopened (cycle '.($nextCount + 1).')';
+        if ($reason) {
+            $description .= ' — reason: '.$reason;
+        }
+
+        $this->ticketService->addHistory($ticket, 'reopened', 'status', $ticket->status, 'open', $description);
 
         $ticket->update([
             'closed_at' => null,
-            'reopened_count' => $ticket->reopened_count + 1,
+            'reopened_count' => $nextCount,
+            'last_reopened_at' => now(),
+            'last_reopen_reason' => $reason,
         ]);
 
         $this->ticketService->changeStatus($ticket->fresh(), 'open');
@@ -435,7 +541,7 @@ class TicketController extends Controller
     {
         $this->checkPermission('delete tickets');
 
-        $this->ticketService->addHistory($ticket, 'deleted', null, null, null, 'Ticket deleted'.($request->input('reason') ? ': '.$request->input('reason') : ''));
+        $this->ticketService->addHistory($ticket, 'deleted', null, null, null, 'Ticket deleted' . ($request->input('reason') ? ': ' . $request->input('reason') : ''));
 
         $ticket->update([
             'deleted_by' => Auth::id(),
@@ -455,8 +561,9 @@ class TicketController extends Controller
     {
         $query = $request->input('q', '');
 
+        $tickets = collect();
         if (strlen($query) >= 2) {
-            $tickets = $this->scopeByUserDepartments(Ticket::query())
+            $tickets = Ticket::query()
                 ->with(['client', 'assignee', 'department'])
                 ->notSpam()
                 ->where(function ($q) use ($query) {
@@ -466,13 +573,8 @@ class TicketController extends Controller
                         ->orWhereHas('client', fn ($cq) => $cq->where('name', 'like', "%{$query}%"));
                 })
                 ->latest()
-                ->paginate(50)
-                ->withQueryString();
-        } else {
-            $tickets = Ticket::query()
-                ->whereRaw('1 = 0')
-                ->paginate(50)
-                ->withQueryString();
+                ->limit(50)
+                ->get();
         }
 
         return view('tickets.search', compact('tickets', 'query'));

@@ -70,33 +70,29 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-3">{{ __('Role') }}</label>
                                 <div class="space-y-3">
-                                    <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-4 cursor-pointer hover:bg-gray-50" :class="selectedRole === 'admin' && 'ring-2 ring-indigo-500 border-indigo-500'">
-                                        <input type="radio" name="role" value="admin" x-model="selectedRole" class="mt-0.5 h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                        <div>
-                                            <p class="text-sm font-medium text-gray-900">{{ __('Admin') }}</p>
-                                            <p class="text-sm text-gray-500">{{ __('Full system access and user management.') }}</p>
-                                        </div>
-                                    </label>
-                                    <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-4 cursor-pointer hover:bg-gray-50" :class="selectedRole === 'manager' && 'ring-2 ring-indigo-500 border-indigo-500'">
-                                        <input type="radio" name="role" value="manager" x-model="selectedRole" class="mt-0.5 h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                        <div>
-                                            <p class="text-sm font-medium text-gray-900">{{ __('Manager') }}</p>
-                                            <p class="text-sm text-gray-500">{{ __('Manage tickets, clients, and view reports. Can assign tickets.') }}</p>
-                                        </div>
-                                    </label>
-                                    <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-4 cursor-pointer hover:bg-gray-50" :class="selectedRole === 'agent' && 'ring-2 ring-indigo-500 border-indigo-500'">
-                                        <input type="radio" name="role" value="agent" x-model="selectedRole" class="mt-0.5 h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                        <div>
-                                            <p class="text-sm font-medium text-gray-900">{{ __('Agent') }}</p>
-                                            <p class="text-sm text-gray-500">{{ __('Handle tickets and respond to clients.') }}</p>
-                                        </div>
-                                    </label>
+                                    @foreach($roles as $roleName)
+                                        @php
+                                            $description = match($roleName) {
+                                                'admin' => __('Full system access and user management.'),
+                                                'manager' => __('Manage tickets, clients, and view reports. Can assign tickets.'),
+                                                'agent' => __('Handle tickets and respond to clients.'),
+                                                default => __('Custom role with permissions set in Role Management.'),
+                                            };
+                                        @endphp
+                                        <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-4 cursor-pointer hover:bg-gray-50" :class="selectedRole === '{{ $roleName }}' && 'ring-2 ring-indigo-500 border-indigo-500'">
+                                            <input type="radio" name="role" value="{{ $roleName }}" x-model="selectedRole" class="mt-0.5 h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-900">{{ ucfirst(str_replace('_', ' ', $roleName)) }}</p>
+                                                <p class="text-sm text-gray-500">{{ $description }}</p>
+                                            </div>
+                                        </label>
+                                    @endforeach
                                 </div>
                                 @error('role') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
 
                             <!-- Support Agent Configuration -->
-                            <div x-show="selectedRole === 'agent' || selectedRole === 'manager'" x-cloak class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
+                            <div x-show="selectedRole !== 'admin'" x-cloak class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
                                 <p class="text-sm font-semibold text-gray-700">{{ __('Support Agent Configuration') }}</p>
 
                                 @if($departments->isNotEmpty())

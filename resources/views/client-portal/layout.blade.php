@@ -5,7 +5,10 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ $tenant->name }} - {{ __('Support Portal') }}</title>
+        <title>{{ $tenant->displayName() }} - {{ __('Support Portal') }}</title>
+
+        <link rel="icon" type="image/png" href="{{ $tenant->logoUrl() ?? asset('cliqueha-logo.png') }}">
+        <link rel="apple-touch-icon" href="{{ $tenant->logoUrl() ?? asset('cliqueha-logo.png') }}">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -31,14 +34,14 @@
                         <div class="flex items-center gap-4">
                             <a href="{{ route('tenant.landing', ['slug' => $tenant->slug]) }}" class="flex items-center gap-2">
                                 @if($tenant->logo_path)
-                                    <img src="{{ $tenant->logoUrl() }}" alt="{{ $tenant->name }}" class="h-10 w-auto">
+                                    <img src="{{ $tenant->logoUrl() }}" alt="{{ $tenant->displayName() }}" class="h-10 w-auto">
                                 @else
                                     <svg class="h-8 w-8 text-white/80" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
                                     </svg>
                                 @endif
                                 <div>
-                                    <span class="text-lg font-semibold text-white">{{ $tenant->name }}</span>
+                                    <span class="text-lg font-semibold text-white">{{ $tenant->displayName() }}</span>
                                     <span class="ml-2 text-sm text-white/70">{{ __('Support Portal') }}</span>
                                 </div>
                             </a>
@@ -81,7 +84,7 @@
             <!-- Footer -->
             <footer class="border-t border-gray-200 bg-white py-4">
                 <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6 text-center text-sm text-gray-500">
-                    &copy; {{ date('Y') }} {{ $tenant->name }}. {{ __('All rights reserved.') }}
+                    &copy; {{ date('Y') }} CliqueHA Information Services OPC. {{ __('All rights reserved.') }}
                 </div>
             </footer>
         </div>

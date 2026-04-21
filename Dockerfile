@@ -3,6 +3,12 @@
 # =============================================================================
 FROM php:8.3-fpm AS development
 
+# Match www-data to the host user's UID/GID so bind-mounted files are writable.
+# Pass --build-arg HOST_UID=$(id -u) --build-arg HOST_GID=$(id -g) at build time,
+# or let them default to 1000 (typical Linux/WSL default).
+ARG HOST_UID=1000
+ARG HOST_GID=1000
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
@@ -23,6 +29,11 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Remap www-data to match the host user. Uses usermod/groupmod rather than
+# creating a new user so PHP-FPM's default pool config keeps working.
+RUN groupmod -o -g "${HOST_GID}" www-data \
+    && usermod -o -u "${HOST_UID}" -g "${HOST_GID}" www-data
+
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
@@ -39,8 +50,8 @@ COPY . .
 
 # Set proper permissions
 RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html/storage \
-    && chmod -R 755 /var/www/html/bootstrap/cache
+    && chmod -R 775 /var/www/html/storage \
+    && chmod -R 775 /var/www/html/bootstrap/cache
 
 # Expose port 9000 for PHP-FPM
 EXPOSE 9000

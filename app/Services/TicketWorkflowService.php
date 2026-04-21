@@ -151,15 +151,17 @@ class TicketWorkflowService
      */
     public function getMetrics(): array
     {
+        $base = fn () => Ticket::query()->notMerged()->notSpam();
+
         return [
-            'open' => Ticket::where('status', 'open')->count(),
-            'assigned' => Ticket::where('status', 'assigned')->count(),
-            'in_progress' => Ticket::where('status', 'in_progress')->count(),
-            'on_hold' => Ticket::where('status', 'on_hold')->count(),
-            'closed_today' => Ticket::where('status', 'closed')->whereDate('closed_at', today())->count(),
-            'closed_this_week' => Ticket::where('status', 'closed')->where('closed_at', '>=', now()->startOfWeek())->count(),
-            'overdue' => Ticket::whereNotNull('resolution_due_at')->where('resolution_due_at', '<', now())->whereNotIn('status', ['closed', 'cancelled'])->count(),
-            'unassigned' => Ticket::whereNull('assigned_to')->whereNotIn('status', ['closed', 'cancelled'])->count(),
+            'open' => $base()->where('status', 'open')->count(),
+            'assigned' => $base()->where('status', 'assigned')->count(),
+            'in_progress' => $base()->where('status', 'in_progress')->count(),
+            'on_hold' => $base()->where('status', 'on_hold')->count(),
+            'closed_today' => $base()->where('status', 'closed')->whereDate('closed_at', today())->count(),
+            'closed_this_week' => $base()->where('status', 'closed')->where('closed_at', '>=', now()->startOfWeek())->count(),
+            'overdue' => $base()->whereNotNull('resolution_due_at')->where('resolution_due_at', '<', now())->whereNotIn('status', ['closed', 'cancelled'])->count(),
+            'unassigned' => $base()->whereNull('assigned_to')->whereNotIn('status', ['closed', 'cancelled'])->count(),
         ];
     }
 
@@ -170,7 +172,11 @@ class TicketWorkflowService
      */
     public function getAnalytics(string $from, string $to): array
     {
-        $tickets = Ticket::whereBetween('created_at', [$from, $to])->get();
+        $tickets = Ticket::query()
+            ->notMerged()
+            ->notSpam()
+            ->whereBetween('created_at', [$from, $to])
+            ->get();
 
         $avgResolution = $tickets->filter(fn ($t) => $t->closed_at)
             ->avg(fn ($t) => $t->created_at->diffInHours($t->closed_at));

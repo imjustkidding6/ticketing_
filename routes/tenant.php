@@ -135,6 +135,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::post('tickets/{ticket}/spam', [TicketController::class, 'markAsSpam'])->name('tickets.mark-spam')->middleware('feature:spam_management');
     Route::post('tickets/{ticket}/unspam', [TicketController::class, 'unmarkAsSpam'])->name('tickets.unmark-spam')->middleware('feature:spam_management');
     Route::post('tickets/{ticket}/merge', [TicketController::class, 'merge'])->name('tickets.merge')->middleware('feature:ticket_merging');
+    Route::post('tickets/{ticket}/unmerge', [TicketController::class, 'unmerge'])->name('tickets.unmerge')->middleware('feature:ticket_merging');
     Route::post('tickets/{ticket}/reopen', [TicketController::class, 'reopen'])->name('tickets.reopen')->middleware('feature:ticket_reopening');
 
     // Ticket Comments (Enterprise via feature gate)
@@ -171,6 +172,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::post('settings/notifications/test', [AppSettingController::class, 'testEmail'])->name('settings.notifications.test')->middleware('feature:email_notifications');
     Route::get('settings/branding', [AppSettingController::class, 'branding'])->name('settings.branding');
     Route::post('settings/branding', [AppSettingController::class, 'saveBranding']);
+    Route::get('settings/service-report', [AppSettingController::class, 'serviceReport'])->name('settings.service-report')->middleware('feature:service_reports');
+    Route::post('settings/service-report', [AppSettingController::class, 'saveServiceReport'])->middleware('feature:service_reports');
 
     // Reports
     Route::get('reports', [ReportController::class, 'overview'])->name('reports.overview');
@@ -190,12 +193,21 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::get('reports/billing', [ReportController::class, 'billing'])->name('reports.billing')->middleware('feature:billing');
     Route::get('reports/export/billing', [ReportController::class, 'exportBilling'])->name('reports.export.billing')->middleware('feature:billing');
     Route::get('reports/sla-compliance', [ReportController::class, 'slaCompliance'])->name('reports.sla-compliance')->middleware('feature:sla_report');
+    Route::get('reports/reopens', [ReportController::class, 'reopens'])->name('reports.reopens')->middleware('feature:ticket_reopening');
+    Route::get('reports/export/reopens', [ReportController::class, 'exportReopens'])->name('reports.export.reopens')->middleware(['feature:ticket_reopening', 'feature:detailed_reporting']);
+    Route::get('reports/export/sla-compliance', [ReportController::class, 'exportSlaCompliance'])->name('reports.export.sla-compliance')->middleware(['feature:sla_report', 'feature:detailed_reporting']);
 
     // Activity Logs (Business+ via feature gate)
     Route::get('activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index')->middleware('feature:audit_logs');
 
     // SLA Policies (Business+ via feature gate)
-    Route::resource('sla', SlaPolicyController::class)->except(['show'])->middleware('feature:sla_management');
+    Route::middleware('feature:sla_management')->group(function () {
+        Route::get('sla', [SlaPolicyController::class, 'index'])->name('sla.index');
+        Route::post('sla/seed-defaults', [SlaPolicyController::class, 'seedDefaults'])->name('sla.seed-defaults');
+        Route::get('sla/tier/{tier}/edit', [SlaPolicyController::class, 'editTier'])->name('sla.edit-tier');
+        Route::post('sla/tier/{tier}', [SlaPolicyController::class, 'updateTier'])->name('sla.update-tier');
+        Route::delete('sla/tier/{tier}', [SlaPolicyController::class, 'destroyTier'])->name('sla.destroy-tier');
+    });
 
     // Service Reports (Business+ via feature gate)
     Route::get('service-reports', [ServiceReportController::class, 'index'])->name('service-reports.index')->middleware('feature:service_reports');
@@ -203,11 +215,11 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::get('service-reports/{report}/download', [ServiceReportController::class, 'download'])->name('service-reports.download')->middleware('feature:service_reports');
 
     // Agent Schedules (Business+ via feature gate)
-    Route::get('schedules', [AgentScheduleController::class, 'index'])->name('schedules.index')->middleware('feature:agent_schedule');
-    Route::get('schedules/team', [AgentScheduleController::class, 'team'])->name('schedules.team')->middleware('feature:agent_schedule');
-    Route::post('schedules', [AgentScheduleController::class, 'store'])->name('schedules.store')->middleware('feature:agent_schedule');
-    Route::put('schedules/{schedule}', [AgentScheduleController::class, 'update'])->name('schedules.update')->middleware('feature:agent_schedule');
-    Route::delete('schedules/{schedule}', [AgentScheduleController::class, 'destroy'])->name('schedules.destroy')->middleware('feature:agent_schedule');
+    Route::middleware('feature:agent_schedule')->group(function () {
+        Route::get('schedules', [AgentScheduleController::class, 'index'])->name('schedules.index');
+        Route::get('schedules/team', [AgentScheduleController::class, 'team'])->name('schedules.team');
+        Route::post('schedules', [AgentScheduleController::class, 'save'])->name('schedules.save');
+    });
 
     // Custom Roles (Enterprise via feature gate)
     Route::resource('roles', RoleController::class)->except(['show'])->middleware('feature:custom_roles');

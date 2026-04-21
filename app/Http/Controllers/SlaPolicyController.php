@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Client;
 use App\Models\SlaPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,116 +10,122 @@ use Illuminate\View\View;
 class SlaPolicyController extends Controller
 {
     /**
-     * Display a listing of SLA policies.
+     * Display SLA policies grouped by client tier.
      */
     public function index(): View
     {
-        $policies = SlaPolicy::query()->latest()->paginate(20);
+        $tenantId = session('current_tenant_id');
+        $policies = SlaPolicy::query()->orderBy('priority')->get();
 
-        return view('sla.index', compact('policies'));
-    }
-
-    /**
-     * Show the form for creating a new SLA policy.
-     */
-    public function create(): View
-    {
-        $priorities = ['critical', 'high', 'medium', 'low'];
-        $tiers = Client::tiers();
-
-        return view('sla.create', compact('priorities', 'tiers'));
-    }
-
-    /**
-     * Store newly created SLA policies (batch by priority level).
-     */
-    public function store(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'client_tier' => ['nullable', 'in:basic,premium,enterprise'],
-            'is_active' => ['nullable', 'boolean'],
-            'priorities' => ['required', 'array'],
-            'priorities.*.enabled' => ['required'],
-            'priorities.*.response_time_hours' => ['required_if:priorities.*.enabled,1', 'nullable', 'integer', 'min:1'],
-            'priorities.*.resolution_time_hours' => ['required_if:priorities.*.enabled,1', 'nullable', 'integer', 'min:1'],
-        ]);
-
-        $validPriorities = ['low', 'medium', 'high', 'critical'];
-        $isActive = $request->boolean('is_active', true);
-        $clientTier = $validated['client_tier'] ?? null;
-        $created = 0;
-
-        foreach ($validated['priorities'] as $priority => $data) {
-            if (! in_array($priority, $validPriorities, true) || ! ($data['enabled'] ?? false)) {
-                continue;
+        $grouped = [];
+        foreach (SlaPolicy::TIERS as $tier) {
+            $grouped[$tier] = [];
+            foreach (SlaPolicy::PRIORITIES as $priority) {
+                $grouped[$tier][$priority] = $policies->first(
+                    fn (SlaPolicy $p) => $p->client_tier === $tier && $p->priority === $priority
+                );
             }
+        }
 
-            SlaPolicy::updateOrCreate(
+        return view('sla.index', [
+            'grouped' => $grouped,
+            'tiers' => SlaPolicy::TIERS,
+            'priorities' => SlaPolicy::PRIORITIES,
+            'hasAny' => $policies->isNotEmpty(),
+        ]);
+    }
+
+    /**
+     * Create/Update all 4 priority rows for a single tier.
+     */
+    public function editTier(string $tier): View
+    {
+        abort_unless(in_array($tier, SlaPolicy::TIERS, true), 404);
+
+        $policies = SlaPolicy::query()
+            ->where('client_tier', $tier)
+            ->get()
+            ->keyBy('priority');
+
+        // Fill missing priorities with standard defaults as placeholders (not saved yet)
+        $defaults = SlaPolicy::STANDARD_DEFAULTS[$tier] ?? [];
+        $rows = [];
+        foreach (SlaPolicy::PRIORITIES as $priority) {
+            $existing = $policies->get($priority);
+            $rows[$priority] = [
+                'response' => $existing?->response_time_hours ?? $defaults[$priority][0] ?? null,
+                'resolution' => $existing?->resolution_time_hours ?? $defaults[$priority][1] ?? null,
+                'is_active' => $existing ? $existing->is_active : true,
+            ];
+        }
+
+        return view('sla.edit-tier', compact('tier', 'rows'));
+    }
+
+    /**
+     * Upsert all 4 priority rows for a tier.
+     */
+    public function updateTier(Request $request, string $tier): RedirectResponse
+    {
+        abort_unless(in_array($tier, SlaPolicy::TIERS, true), 404);
+
+        $rules = [];
+        foreach (SlaPolicy::PRIORITIES as $priority) {
+            $rules["rows.{$priority}.response"] = ['required', 'integer', 'min:1'];
+            $rules["rows.{$priority}.resolution"] = ['required', 'integer', 'min:1'];
+        }
+
+        $validated = $request->validate($rules);
+
+        $tenantId = session('current_tenant_id');
+
+        foreach (SlaPolicy::PRIORITIES as $priority) {
+            $response = (int) $validated['rows'][$priority]['response'];
+            $resolution = (int) $validated['rows'][$priority]['resolution'];
+            $active = $request->boolean("rows.{$priority}.is_active", true);
+
+            SlaPolicy::withoutGlobalScopes()->updateOrCreate(
                 [
-                    'tenant_id' => session('current_tenant_id'),
-                    'client_tier' => $clientTier,
+                    'tenant_id' => $tenantId,
+                    'client_tier' => $tier,
                     'priority' => $priority,
                 ],
                 [
-                    'name' => $validated['name'].' - '.ucfirst($priority),
-                    'description' => $validated['description'] ?? null,
-                    'response_time_hours' => $data['response_time_hours'],
-                    'resolution_time_hours' => $data['resolution_time_hours'],
-                    'is_active' => $isActive,
+                    'name' => ucfirst($tier).' - '.ucfirst($priority),
+                    'response_time_hours' => $response,
+                    'resolution_time_hours' => $resolution,
+                    'is_active' => $active,
                 ]
             );
-            $created++;
         }
 
-        if ($created === 0) {
-            return back()->withInput()->withErrors(['priorities' => __('At least one priority level must be enabled.')]);
-        }
-
-        return redirect()->route('sla.index')
-            ->with('success', __(':count SLA policies created.', ['count' => $created]));
+        return redirect()->route('sla.index')->with('success', ucfirst($tier).' SLA policies saved.');
     }
 
     /**
-     * Show the form for editing an SLA policy.
+     * Seed industry-standard defaults for any missing (tier, priority) pairs.
      */
-    public function edit(SlaPolicy $sla): View
+    public function seedDefaults(): RedirectResponse
     {
-        return view('sla.edit', ['policy' => $sla]);
+        $tenantId = session('current_tenant_id');
+        $count = SlaPolicy::seedStandardDefaults($tenantId);
+
+        return redirect()->route('sla.index')
+            ->with('success', $count === 0
+                ? 'Standard policies already in place.'
+                : "Seeded {$count} standard SLA policies.");
     }
 
     /**
-     * Update the specified SLA policy.
+     * Delete all policies for a tier (safety net for cleanup).
      */
-    public function update(Request $request, SlaPolicy $sla): RedirectResponse
+    public function destroyTier(string $tier): RedirectResponse
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'client_tier' => ['nullable', 'in:basic,premium,enterprise'],
-            'priority' => ['nullable', 'in:low,medium,high,critical'],
-            'response_time_hours' => ['required', 'integer', 'min:1'],
-            'resolution_time_hours' => ['required', 'integer', 'min:1'],
-            'is_active' => ['nullable', 'boolean'],
-        ]);
+        abort_unless(in_array($tier, SlaPolicy::TIERS, true), 404);
 
-        $validated['is_active'] = $request->boolean('is_active', true);
-
-        $sla->update($validated);
+        SlaPolicy::where('client_tier', $tier)->delete();
 
         return redirect()->route('sla.index')
-            ->with('success', 'SLA policy updated.');
-    }
-
-    /**
-     * Remove the specified SLA policy.
-     */
-    public function destroy(SlaPolicy $sla): RedirectResponse
-    {
-        $sla->delete();
-
-        return redirect()->route('sla.index')
-            ->with('success', 'SLA policy deleted.');
+            ->with('success', ucfirst($tier).' SLA policies removed.');
     }
 }

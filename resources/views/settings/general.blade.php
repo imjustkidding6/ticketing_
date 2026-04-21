@@ -13,6 +13,9 @@
                 <a href="{{ route('settings.notifications') }}" class="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">{{ __('Notifications') }}</a>
                 @endif
                 <a href="{{ route('settings.branding') }}" class="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">{{ __('Branding') }}</a>
+                @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::ServiceReports))
+                <a href="{{ route('settings.service-report') }}" class="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">{{ __('Service Report') }}</a>
+                @endif
             </div>
 
             <div class="rounded-xl bg-white p-6 shadow-sm">
@@ -79,6 +82,15 @@
                                     @endforeach
                                 </select>
                                 @error('date_format') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label for="currency" class="block text-sm font-medium text-gray-700">{{ __('Billing Currency') }}</label>
+                                <select name="currency" id="currency" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    <option value="USD" {{ ($settings['currency'] ?? 'USD') === 'USD' ? 'selected' : '' }}>{{ __('US Dollar ($)') }}</option>
+                                    <option value="PHP" {{ ($settings['currency'] ?? 'USD') === 'PHP' ? 'selected' : '' }}>{{ __('Philippine Peso (₱)') }}</option>
+                                </select>
+                                <p class="mt-1 text-xs text-gray-500">{{ __('Display-only. Existing amounts are not converted when you switch.') }}</p>
+                                @error('currency') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
                         </div>
                     </div>

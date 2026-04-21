@@ -12,6 +12,8 @@ use Illuminate\View\View;
 
 class ClientController extends Controller
 {
+    use \App\Http\Controllers\Concerns\HasSortableQuery;
+
     /**
      * Display a listing of clients.
      */
@@ -19,7 +21,7 @@ class ClientController extends Controller
     {
         $this->checkPermission('manage clients');
 
-        $clients = Client::query()
+        $query = Client::query()
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
@@ -28,10 +30,18 @@ class ClientController extends Controller
                 });
             })
             ->when($request->status, fn ($query, $status) => $query->where('status', $status))
-            ->when($request->tier, fn ($query, $tier) => $query->where('tier', $tier))
-            ->latest()
-            ->paginate(15)
-            ->withQueryString();
+            ->when($request->tier, fn ($query, $tier) => $query->where('tier', $tier));
+
+        $this->applySort($query, $request, [
+            'name' => 'name',
+            'email' => 'email',
+            'contact_person' => 'contact_person',
+            'tier' => 'tier',
+            'status' => 'status',
+            'created_at' => 'created_at',
+        ], 'created_at,desc');
+
+        $clients = $query->paginate(15)->withQueryString();
 
         return view('clients.index', compact('clients'));
     }

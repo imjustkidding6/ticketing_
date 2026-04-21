@@ -3,7 +3,7 @@
     <div class="-mt-8 pb-20 pt-20" style="background-color: var(--portal-primary);">
         <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
             @if($tenant->logo_path)
-                <img src="{{ $tenant->logoUrl() }}" alt="{{ $tenant->name }}" class="mx-auto h-16 w-auto mb-6">
+                <img src="{{ $tenant->logoUrl() }}" alt="{{ $tenant->displayName() }}" class="mx-auto h-16 w-auto mb-6">
             @endif
             <h1 class="text-3xl font-bold text-white sm:text-4xl">{{ __('How can we help you today?') }}</h1>
             <p class="mt-4 text-lg text-white/70 max-w-2xl mx-auto">

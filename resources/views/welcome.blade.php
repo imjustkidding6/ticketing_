@@ -239,7 +239,7 @@
         {{-- Footer --}}
         <footer class="border-t border-gray-200 bg-gray-50 py-8">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center text-sm text-gray-500">
-                &copy; {{ date('Y') }} {{ config('app.name', 'Ticketing') }}. {{ __('All rights reserved.') }}
+                &copy; {{ date('Y') }} CliqueHA Information Services OPC. {{ __('All rights reserved.') }}
             </div>
         </footer>
 

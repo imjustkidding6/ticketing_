@@ -40,27 +40,25 @@ class DashboardController extends Controller
         $tenant = $tenantId ? \App\Models\Tenant::find($tenantId) : null;
         $role = $tenant ? $user->roleInTenant($tenant) : null;
         $isAdminOrOwner = in_array($role, ['owner', 'admin']);
-        $shouldCountAllOpenTickets = in_array($role, ['owner', 'admin', 'manager'], true);
 
         // ── My Ticket Stats ──
-        $myOpenTicketsQuery = Ticket::query()->open();
-        if (! $shouldCountAllOpenTickets) {
-            $myOpenTicketsQuery->where('assigned_to', $userId);
-        }
-
         $myTicketStats = [
-            'open' => $myOpenTicketsQuery->count(),
-            'in_progress' => Ticket::query()->where('assigned_to', $userId)->where('status', 'in_progress')->count(),
+            'open' => Ticket::query()->notMerged()->notSpam()->where('assigned_to', $userId)->whereIn('status', ['open', 'assigned'])->count(),
+            'in_progress' => Ticket::query()->notMerged()->notSpam()->where('assigned_to', $userId)->where('status', 'in_progress')->count(),
             'closed_this_month' => Ticket::query()
+                ->notMerged()
+                ->notSpam()
                 ->where('assigned_to', $userId)
                 ->where('status', 'closed')
                 ->where('closed_at', '>=', now()->startOfMonth())
                 ->count(),
-            'total_closed' => Ticket::query()->where('assigned_to', $userId)->where('status', 'closed')->count(),
+            'total_closed' => Ticket::query()->notMerged()->notSpam()->where('assigned_to', $userId)->where('status', 'closed')->count(),
         ];
 
         // ── My Performance (last 30 days) ──
         $myClosedRecent = Ticket::query()
+            ->notMerged()
+            ->notSpam()
             ->where('assigned_to', $userId)
             ->where('status', 'closed')
             ->whereNotNull('closed_at')
@@ -69,6 +67,8 @@ class DashboardController extends Controller
 
         $myPerformance = [
             'resolved_today' => Ticket::query()
+                ->notMerged()
+                ->notSpam()
                 ->where('assigned_to', $userId)
                 ->where('status', 'closed')
                 ->whereDate('closed_at', today())
@@ -82,6 +82,8 @@ class DashboardController extends Controller
 
         // ── My Open Tickets ──
         $myTickets = Ticket::query()
+            ->notMerged()
+            ->notSpam()
             ->with(['client', 'department'])
             ->where('assigned_to', $userId)
             ->open()
@@ -111,6 +113,8 @@ class DashboardController extends Controller
 
         // ── My Tickets by Status (donut) ──
         $myTicketsByStatus = Ticket::query()
+            ->notMerged()
+            ->notSpam()
             ->where('assigned_to', $userId)
             ->select('status', DB::raw('COUNT(*) as count'))
             ->groupBy('status')
@@ -119,6 +123,8 @@ class DashboardController extends Controller
 
         // ── My Tickets by Priority (donut) ──
         $myTicketsByPriority = Ticket::query()
+            ->notMerged()
+            ->notSpam()
             ->where('assigned_to', $userId)
             ->open()
             ->select('priority', DB::raw('COUNT(*) as count'))
@@ -159,6 +165,8 @@ class DashboardController extends Controller
     private function getMyTicketTrend(int $userId): array
     {
         $counts = Ticket::query()
+            ->notMerged()
+            ->notSpam()
             ->where('assigned_to', $userId)
             ->where('created_at', '>=', now()->subDays(13)->startOfDay())
             ->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count'))

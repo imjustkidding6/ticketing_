@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\AppSetting;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -22,6 +23,7 @@ class Tenant extends Model
         'slug',
         'description',
         'logo_path',
+        'service_report_logo_path',
         'primary_color',
         'accent_color',
         'dark_primary_color',
@@ -54,6 +56,36 @@ class Tenant extends Model
         }
 
         return Storage::disk('public')->url($this->logo_path);
+    }
+
+    /**
+     * Display name preferring the "Company Name" in General Settings, falling
+     * back to the tenant's own name. Bypasses the tenant-session scope so it
+     * works on public portal requests where no session is set.
+     */
+    public function displayName(): string
+    {
+        $companyName = AppSetting::withoutGlobalScopes()
+            ->where('tenant_id', $this->id)
+            ->where('key', 'company_name')
+            ->value('value');
+
+        return $companyName ?: $this->name;
+    }
+
+    /**
+     * Logo to print on the service report PDF. Falls back to the portal logo.
+     */
+    public function serviceReportLogoPath(): ?string
+    {
+        return $this->service_report_logo_path ?: $this->logo_path;
+    }
+
+    public function serviceReportLogoUrl(): ?string
+    {
+        $path = $this->serviceReportLogoPath();
+
+        return $path ? Storage::disk('public')->url($path) : null;
     }
 
     /**
