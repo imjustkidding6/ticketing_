@@ -1,7 +1,7 @@
 # =============================================================================
 # Development Stage
 # =============================================================================
-FROM php:8.2-fpm AS development
+FROM php:8.3-fpm AS development
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -50,7 +50,7 @@ CMD ["php-fpm"]
 # =============================================================================
 # Production Stage
 # =============================================================================
-FROM php:8.2-fpm-alpine AS production
+FROM php:8.3-fpm-alpine AS production
 
 # Install system dependencies
 RUN apk add --no-cache \
