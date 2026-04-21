@@ -68,9 +68,9 @@ All Starter features, plus:
 - Ticket Activity History (Audit Logs)
 - Billing
 - Mark as Spam
-- Auto-Generated Service Reports
+- Auto-Generated Service Reports (with tenant branding/logo)
 - Attachments
-- Agent Availability Schedule + Dashboard
+- Agent Availability Schedule + Dashboard (schedule-aware assignment)
 - SLA Management
 - SLA Compliance Report
 - Email Notifications
@@ -82,10 +82,12 @@ All Starter features, plus:
 All Business features, plus:
 - Ticket Merging
 - Ticket Re-Opening
+- Ticket Unmerge
 - Custom Roles & Permissions
 - Department Management
 - Agent Tiering & Escalation
 - Client ↔ Agent Comments & Updates
+- Reopen Tracking & Reporting
 
 ## 7. Core User Journeys
 **Tenant onboarding**
@@ -94,7 +96,7 @@ All Business features, plus:
 3. Tenant created; owner assigned; plan limits enforced.
 
 **Ticket lifecycle**
-Create → Assign → In Progress → On Hold → Closed/Cancelled, with history and SLA tracking.
+Create → Assign → In Progress → On Hold → Closed/Cancelled, with history, closing remarks, reopen tracking, and SLA tracking (merge/unmerge supported).
 
 **Client portal**
 Guest submits ticket → receives tracking link → tracks status by token → replies (Enterprise).
