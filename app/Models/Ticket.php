@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Traits\BelongsToTenant;
+use App\Models\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +16,21 @@ use Illuminate\Support\Str;
 class Ticket extends Model
 {
     /** @use HasFactory<\Database\Factories\TicketFactory> */
-    use BelongsToTenant, HasFactory, SoftDeletes;
+    use BelongsToTenant, HasFactory, LogsActivity, SoftDeletes;
+
+    /**
+     * Fields that shouldn't show up in activity log changes (noise).
+     *
+     * @var list<string>
+     */
+    public array $activityLogIgnore = [
+        'tracking_token',
+        'sla_breach_notified_at',
+        'first_response_at',
+        'in_progress_at',
+        'hold_started_at',
+        'total_hold_time_minutes',
+    ];
 
     /**
      * @var list<string>
@@ -227,6 +242,11 @@ class Ticket extends Model
         return $this->belongsTo(User::class, 'deleted_by');
     }
 
+    public function markedSpamBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'marked_spam_by');
+    }
+
     // ─── Scopes ──────────────────────────────────────────
 
     /**
@@ -281,6 +301,15 @@ class Ticket extends Model
     public function scopeNotSpam(Builder $query): Builder
     {
         return $query->where('is_spam', false);
+    }
+
+    /**
+     * @param  Builder<Ticket>  $query
+     * @return Builder<Ticket>
+     */
+    public function scopeOnlySpam(Builder $query): Builder
+    {
+        return $query->where('is_spam', true);
     }
 
     /**

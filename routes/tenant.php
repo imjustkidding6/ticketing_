@@ -132,6 +132,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::get('tickets/{ticket}/attachments/{index}', [TicketController::class, 'downloadAttachment'])->name('tickets.attachment')->middleware('feature:attachments');
     Route::post('tickets/{ticket}/spam', [TicketController::class, 'markAsSpam'])->name('tickets.mark-spam')->middleware('feature:spam_management');
     Route::post('tickets/{ticket}/unspam', [TicketController::class, 'unmarkAsSpam'])->name('tickets.unmark-spam')->middleware('feature:spam_management');
+    Route::get('tickets-spam', [TicketController::class, 'spam'])->name('tickets.spam')->middleware('feature:spam_management');
+    Route::delete('tickets-spam', [TicketController::class, 'destroySpam'])->name('tickets.spam.destroy')->middleware('feature:spam_management');
     Route::post('tickets/{ticket}/merge', [TicketController::class, 'merge'])->name('tickets.merge')->middleware('feature:ticket_merging');
     Route::post('tickets/{ticket}/unmerge', [TicketController::class, 'unmerge'])->name('tickets.unmerge')->middleware('feature:ticket_merging');
     Route::post('tickets/{ticket}/reopen', [TicketController::class, 'reopen'])->name('tickets.reopen')->middleware('feature:ticket_reopening');

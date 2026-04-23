@@ -555,6 +555,64 @@ class TicketController extends Controller
     }
 
     /**
+     * Spam repository — list all spam tickets, with bulk delete.
+     */
+    public function spam(Request $request): View
+    {
+        $this->checkPermission('view tickets');
+
+        $tickets = Ticket::query()
+            ->onlySpam()
+            ->with(['client', 'department', 'markedSpamBy'])
+            ->when($request->search, function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('subject', 'like', "%{$search}%")
+                        ->orWhere('ticket_number', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            })
+            ->latest('marked_spam_at')
+            ->paginate(25)
+            ->withQueryString();
+
+        return view('tickets.spam', compact('tickets'));
+    }
+
+    /**
+     * Permanently delete one or more spam tickets.
+     */
+    public function destroySpam(Request $request): RedirectResponse
+    {
+        $this->checkPermission('delete tickets');
+
+        $validated = $request->validate([
+            'ticket_ids' => ['required', 'array', 'min:1'],
+            'ticket_ids.*' => ['integer'],
+        ]);
+
+        $tickets = Ticket::query()
+            ->onlySpam()
+            ->whereIn('id', $validated['ticket_ids'])
+            ->get();
+
+        $count = 0;
+        foreach ($tickets as $ticket) {
+            if ($ticket->attachments) {
+                foreach ($ticket->attachments as $attachment) {
+                    Storage::delete($attachment['path'] ?? '');
+                }
+            }
+            $ticket->forceDelete();
+            $count++;
+        }
+
+        return redirect()->route('tickets.spam')
+            ->with('success', $count === 1
+                ? '1 spam ticket deleted.'
+                : "{$count} spam tickets deleted.");
+    }
+
+    /**
      * Search tickets by keyword.
      */
     public function search(Request $request): View

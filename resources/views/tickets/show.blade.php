@@ -896,6 +896,59 @@
                     </div>
                     @endif
 
+                    {{-- Delete Ticket --}}
+                    @can('delete tickets')
+                    <div class="rounded-xl bg-white p-6 shadow-sm" x-data="{ showDelete: false }">
+                        <h4 class="text-xs font-semibold uppercase tracking-wider text-red-400">{{ __('Danger Zone') }}</h4>
+                        <p class="mt-2 text-xs text-gray-500">{{ __('Moves the ticket to Trash. It can be restored by an admin.') }}</p>
+                        <button type="button" @click="showDelete = true"
+                            class="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m11.478.5a48.11 48.11 0 00-3.478-.397m-12 .562A48.72 48.72 0 015.5 5.25m9 .44a48.72 48.72 0 00-4.999 0M5.5 5.25A48.62 48.62 0 0112 4.5c2.291 0 4.545.16 6.75.47" />
+                            </svg>
+                            {{ __('Delete Ticket') }}
+                        </button>
+
+                        <div x-show="showDelete" x-cloak x-transition.opacity
+                            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                            style="background-color: rgba(17,24,39,0.5);"
+                            @keydown.escape.window="showDelete = false"
+                            @click.self="showDelete = false">
+                            <div class="w-full max-w-md rounded-xl bg-white shadow-xl">
+                                <form method="POST" action="{{ route('tickets.destroy', $ticket) }}">
+                                    @csrf
+                                    @method('DELETE')
+                                    <div class="p-6">
+                                        <div class="flex items-start gap-4">
+                                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
+                                                <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                                </svg>
+                                            </div>
+                                            <div class="min-w-0 flex-1">
+                                                <h3 class="text-base font-semibold text-gray-900">{{ __('Delete this ticket?') }}</h3>
+                                                <p class="mt-1 text-sm text-gray-600">{{ __('Ticket') }} <span class="font-mono font-semibold">{{ $ticket->ticket_number }}</span> {{ __('will be moved to Trash.') }}</p>
+                                                <div class="mt-3">
+                                                    <label for="delete_reason" class="block text-xs font-medium text-gray-500">{{ __('Reason (optional)') }}</label>
+                                                    <textarea name="reason" id="delete_reason" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm" placeholder="{{ __('Why are you deleting this?') }}"></textarea>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-end gap-2 rounded-b-xl border-t border-gray-100 bg-gray-50 px-6 py-3">
+                                        <button type="button" @click="showDelete = false" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+                                            {{ __('Cancel') }}
+                                        </button>
+                                        <button type="submit" class="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500">
+                                            {{ __('Yes, Delete') }}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    @endcan
+
                     {{-- Ticket Merging --}}
                     @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketMerging) && auth()->user()?->can('merge tickets') && $ticket->mergedTickets->isNotEmpty())
                     <div class="rounded-xl bg-white p-6 shadow-sm" x-data="{ unmergeAction: '', unmergeNumber: '', unmergeSubject: '' }">

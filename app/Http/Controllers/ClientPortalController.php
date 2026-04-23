@@ -280,14 +280,15 @@ class ClientPortalController extends Controller
         $recentTickets = $client->tickets()
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
+            ->where('is_spam', false)
             ->latest()
             ->take(10)
             ->get();
 
         $stats = [
-            'open' => $client->tickets()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->whereIn('status', ['open', 'assigned', 'in_progress'])->count(),
-            'closed' => $client->tickets()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('status', 'closed')->count(),
-            'total' => $client->tickets()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->count(),
+            'open' => $client->tickets()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_spam', false)->whereIn('status', ['open', 'assigned', 'in_progress'])->count(),
+            'closed' => $client->tickets()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_spam', false)->where('status', 'closed')->count(),
+            'total' => $client->tickets()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_spam', false)->count(),
         ];
 
         return view('client-portal.dashboard', compact('tenant', 'client', 'recentTickets', 'stats'));

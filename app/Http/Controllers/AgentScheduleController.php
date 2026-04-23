@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AgentSchedule;
 use App\Models\User;
+use App\Services\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -119,6 +120,9 @@ class AgentScheduleController extends Controller
                 ]
             );
         }
+
+        $target->tenant_id = session('current_tenant_id');
+        ActivityLogger::log($target, 'schedule_updated', "Weekly schedule updated for {$target->name}.");
 
         return redirect()->route('schedules.index', $target->id !== Auth::id() ? ['user_id' => $target->id] : [])
             ->with('success', $target->id === Auth::id()

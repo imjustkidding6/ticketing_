@@ -323,7 +323,8 @@ class ReportService
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
             $q->whereBetween('tickets.created_at', [$from, $to])
-                ->where('tickets.is_merged', false);
+                ->where('tickets.is_merged', false)
+                ->where('tickets.is_spam', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('tickets.priority', $filters['priority']);
@@ -354,6 +355,7 @@ class ReportService
             ->map(function ($agent) use ($from, $to, $filters) {
                 $closedQuery = Ticket::where('assigned_to', $agent->id)
                     ->notMerged()
+                    ->notSpam()
                     ->where('status', 'closed')
                     ->whereNotNull('closed_at')
                     ->whereBetween('closed_at', [$from, $to]);
@@ -372,10 +374,12 @@ class ReportService
                 // Reopen rate: of tickets this agent has ever-closed, how many were later reopened?
                 $everClosedByAgent = Ticket::where('assigned_to', $agent->id)
                     ->notMerged()
+                    ->notSpam()
                     ->whereNotNull('first_closed_at')
                     ->count();
                 $reopenedAfterAgentClosure = Ticket::where('assigned_to', $agent->id)
                     ->notMerged()
+                    ->notSpam()
                     ->where('reopened_count', '>', 0)
                     ->count();
 
@@ -506,7 +510,8 @@ class ReportService
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
             $q->whereBetween('tickets.created_at', [$from, $to])
-                ->where('tickets.is_merged', false);
+                ->where('tickets.is_merged', false)
+                ->where('tickets.is_spam', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('tickets.priority', $filters['priority']);

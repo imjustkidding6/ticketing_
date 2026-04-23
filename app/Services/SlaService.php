@@ -35,6 +35,7 @@ class SlaService
         return Ticket::withoutGlobalScopes()
             ->open()
             ->notMerged()
+            ->notSpam()
             ->where(function ($q) {
                 $q->where('resolution_due_at', '<', now())
                     ->orWhere(function ($q2) {
@@ -56,6 +57,7 @@ class SlaService
         return Ticket::withoutGlobalScopes()
             ->open()
             ->notMerged()
+            ->notSpam()
             ->whereNull('sla_breach_notified_at')
             ->where(function ($q) {
                 $q->where('resolution_due_at', '<', now())

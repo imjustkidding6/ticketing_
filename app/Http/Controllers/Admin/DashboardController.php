@@ -23,8 +23,9 @@ class DashboardController extends Controller
             'pending_licenses' => License::pending()->count(),
             'distributors' => Distributor::count(),
             'plans' => Plan::count(),
-            'total_tickets' => Ticket::withoutGlobalScopes()->count(),
+            'total_tickets' => Ticket::withoutGlobalScopes()->where('is_spam', false)->count(),
             'tickets_this_month' => Ticket::withoutGlobalScopes()
+                ->where('is_spam', false)
                 ->where('created_at', '>=', now()->startOfMonth())
                 ->count(),
         ];
@@ -63,6 +64,7 @@ class DashboardController extends Controller
             ->map(function (Tenant $tenant) {
                 $tenant->ticket_count = Ticket::withoutGlobalScopes()
                     ->where('tenant_id', $tenant->id)
+                    ->where('is_spam', false)
                     ->count();
 
                 return $tenant;
