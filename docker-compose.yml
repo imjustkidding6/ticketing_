@@ -37,10 +37,10 @@ services:
     container_name: ticketing-mysql
     restart: unless-stopped
     ports:
-      - "3315:3306"
+      - "3320:3306"
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-ticketing}
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_ROOT_PASSWORD: root
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
