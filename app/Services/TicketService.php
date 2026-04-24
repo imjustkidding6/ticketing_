@@ -343,8 +343,8 @@ class TicketService
         }
 
         if ($ticket->status === 'on_hold' && $status !== 'on_hold' && $ticket->hold_started_at) {
-            $holdMinutes = (int) now()->diffInMinutes($ticket->hold_started_at);
-            $updates['total_hold_time_minutes'] = $ticket->total_hold_time_minutes + $holdMinutes;
+            $holdMinutes = max(0, (int) $ticket->hold_started_at->diffInMinutes(now()));
+            $updates['total_hold_time_minutes'] = ($ticket->total_hold_time_minutes ?? 0) + $holdMinutes;
             $updates['hold_started_at'] = null;
         }
 

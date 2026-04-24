@@ -361,9 +361,9 @@ class Ticket extends Model
     public function endHold(): void
     {
         if ($this->hold_started_at) {
-            $holdMinutes = (int) now()->diffInMinutes($this->hold_started_at);
+            $holdMinutes = max(0, (int) $this->hold_started_at->diffInMinutes(now()));
             $this->update([
-                'total_hold_time_minutes' => $this->total_hold_time_minutes + $holdMinutes,
+                'total_hold_time_minutes' => ($this->total_hold_time_minutes ?? 0) + $holdMinutes,
                 'hold_started_at' => null,
             ]);
         }
@@ -377,7 +377,7 @@ class Ticket extends Model
         $total = $this->total_hold_time_minutes ?? 0;
 
         if ($this->hold_started_at) {
-            $total += (int) now()->diffInMinutes($this->hold_started_at);
+            $total += max(0, (int) $this->hold_started_at->diffInMinutes(now()));
         }
 
         return $total;
