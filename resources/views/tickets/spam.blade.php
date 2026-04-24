@@ -87,7 +87,7 @@
                                 <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ $ticket->client?->name ?? '-' }}</td>
                                 <td class="px-4 py-3 text-sm text-gray-500">{{ Str::limit($ticket->spam_reason ?? '-', 40) }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ $ticket->markedSpamBy?->name ?? '-' }}</td>
-                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ $ticket->marked_spam_at?->format('m/d/Y g:i A') ?? '-' }}</td>
+                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ $ticket->marked_spam_at ? \App\Support\TenantTime::format($ticket->marked_spam_at, 'm/d/Y g:i A') : '-' }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-right text-sm">
                                     <form method="POST" action="{{ route('tickets.unmark-spam', $ticket) }}" class="inline">
                                         @csrf

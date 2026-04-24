@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Department;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Support\TenantTime;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -188,9 +189,9 @@ class ReportService
             'priority' => $t->priority,
             'status' => $t->status,
             'assigned_to' => $t->assignee?->name ?? '-',
-            'created_at' => $t->created_at->format('m/d/Y g:i A'),
-            'in_progress_at' => $t->in_progress_at?->format('m/d/Y g:i A') ?? '-',
-            'closed_at' => $t->closed_at?->format('m/d/Y g:i A') ?? '-',
+            'created_at' => TenantTime::format($t->created_at, 'm/d/Y g:i A'),
+            'in_progress_at' => $t->in_progress_at ? TenantTime::format($t->in_progress_at, 'm/d/Y g:i A') : '-',
+            'closed_at' => $t->closed_at ? TenantTime::format($t->closed_at, 'm/d/Y g:i A') : '-',
             'resolution_hours' => $t->getEffectiveResolutionTimeHours(),
             'work_hours' => $t->getWorkResolutionTimeHours(),
             'resolution_formatted' => Ticket::formatHours($t->getEffectiveResolutionTimeHours()),

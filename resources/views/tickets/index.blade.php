@@ -111,7 +111,7 @@
                                 {{ $ticket->assignee?->name ?? __('Unassigned') }}
                             </td>
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                                {{ $ticket->created_at->format('M d, Y') }}
+                                @localdt($ticket->created_at, 'M d, Y')
                             </td>
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                                 {{ \App\Models\Ticket::formatHours($ticket->getEffectiveResolutionTimeHours()) }}

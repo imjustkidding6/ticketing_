@@ -42,7 +42,7 @@
                     <dd class="mt-1">
                         @if($tenant->isSuspended())
                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Suspended</span>
-                            <span class="text-sm text-gray-500 ml-2">since {{ $tenant->suspended_at->format('M d, Y') }}</span>
+                            <span class="text-sm text-gray-500 ml-2">since @localdt($tenant->suspended_at, 'M d, Y')</span>
                         @elseif($tenant->is_active)
                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Active</span>
                         @else
@@ -52,7 +52,7 @@
                 </div>
                 <div>
                     <dt class="text-sm font-medium text-gray-500">Created At</dt>
-                    <dd class="mt-1 text-sm text-gray-900">{{ $tenant->created_at->format('M d, Y H:i') }}</dd>
+                    <dd class="mt-1 text-sm text-gray-900">@localdt($tenant->created_at, 'M d, Y H:i')</dd>
                 </div>
                 <div>
                     <dt class="text-sm font-medium text-gray-500">Description</dt>
@@ -145,7 +145,7 @@
                         <div>
                             <dt class="text-sm font-medium text-gray-500">Expires At</dt>
                             <dd class="mt-1 text-sm text-gray-900">
-                                {{ $tenant->license->expires_at->format('M d, Y') }}
+                                @localdt($tenant->license->expires_at, 'M d, Y')
                                 @if($tenant->license->isExpired())
                                     <span class="text-red-600">(Expired)</span>
                                 @else
@@ -218,7 +218,7 @@
                                             {{ ucfirst($user->pivot->role) }}
                                         </span>
                                     </td>
-                                    <td class="px-4 py-2 text-sm text-gray-500">{{ $user->pivot->joined_at ? \Carbon\Carbon::parse($user->pivot->joined_at)->format('M d, Y') : '-' }}</td>
+                                    <td class="px-4 py-2 text-sm text-gray-500">{{ $user->pivot->joined_at ? \App\Support\TenantTime::format($user->pivot->joined_at, 'M d, Y') : '-' }}</td>
                                 </tr>
                             @endforeach
                         </tbody>

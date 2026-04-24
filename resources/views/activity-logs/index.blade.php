@@ -124,7 +124,7 @@
                                     @endif
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ $log->user?->name ?? __('System') }}</td>
-                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-400">{{ $log->created_at->format('m/d/Y g:i A') }}</td>
+                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-400">@localdt($log->created_at, 'm/d/Y g:i A')</td>
                             </tr>
                         @empty
                             <tr>

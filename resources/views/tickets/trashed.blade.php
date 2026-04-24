@@ -33,7 +33,7 @@
                             <td class="px-6 py-4 text-sm text-gray-900">{{ Str::limit($ticket->subject, 50) }}</td>
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{{ $ticket->client?->name ?? '-' }}</td>
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{{ $ticket->department?->name ?? '-' }}</td>
-                            <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{{ $ticket->deleted_at->format('M d, Y H:i') }}</td>
+                            <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">@localdt($ticket->deleted_at, 'M d, Y H:i')</td>
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{{ $ticket->deletedBy?->name ?? '-' }}</td>
                             <td class="px-6 py-4 text-sm text-gray-500">{{ Str::limit($ticket->deletion_reason ?? '-', 40) }}</td>
                             <td class="whitespace-nowrap px-6 py-4 text-right text-sm">

@@ -74,7 +74,7 @@
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                                                 </svg>
                                                 <span class="truncate font-medium text-gray-900">{{ $report->report_number }}</span>
-                                                <span class="shrink-0 text-xs text-gray-500">{{ $report->generated_at?->format('M j, Y g:i A') }}</span>
+                                                <span class="shrink-0 text-xs text-gray-500">@localdt($report->generated_at, 'M j, Y g:i A')</span>
                                             </div>
                                             <a href="{{ route('service-reports.download', $report) }}"
                                                 class="ml-4 shrink-0 text-indigo-600 hover:text-indigo-500">
@@ -168,16 +168,16 @@
                             </div>
                             <div>
                                 <dt class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Created') }}</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ $ticket->created_at->format('m/d/Y, g:i:s A') }}</dd>
+                                <dd class="mt-1 text-sm text-gray-900">@localdt($ticket->created_at, 'm/d/Y, g:i:s A')</dd>
                             </div>
                             <div>
                                 <dt class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Incident Date/Time') }}</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ $ticket->incident_date ? $ticket->incident_date->format('m/d/Y, g:i:s A') : '-' }}</dd>
+                                <dd class="mt-1 text-sm text-gray-900">{{ $ticket->incident_date ? \App\Support\TenantTime::format($ticket->incident_date, 'm/d/Y, g:i:s A') : '-' }}</dd>
                             </div>
                             @if($ticket->preferred_service_date)
                             <div>
                                 <dt class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Preferred Service Time') }}</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ $ticket->preferred_service_date->format('m/d/Y, g:i:s A') }}</dd>
+                                <dd class="mt-1 text-sm text-gray-900">@localdt($ticket->preferred_service_date, 'm/d/Y, g:i:s A')</dd>
                             </div>
                             @endif
                         </dl>
@@ -220,7 +220,7 @@
                                                             <span class="text-xs text-gray-400">{{ $task->assignee->name }}</span>
                                                         @endif
                                                         @if($task->completed_at)
-                                                            <span class="text-xs text-green-600">{{ __('Completed') }} {{ $task->completed_at->format('m/d/Y, g:i A') }}</span>
+                                                            <span class="text-xs text-green-600">{{ __('Completed') }} @localdt($task->completed_at, 'm/d/Y, g:i A')</span>
                                                         @endif
                                                     </div>
                                                     @if($task->notes)
@@ -307,7 +307,7 @@
                                                     @if($isClientReply)
                                                         <span class="ml-1 inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">{{ __('Client') }}</span>
                                                     @endif
-                                                    <span class="ml-1 text-xs text-gray-400">{{ $comment->created_at->format('m/d/Y, g:i A') }}</span>
+                                                    <span class="ml-1 text-xs text-gray-400">@localdt($comment->created_at, 'm/d/Y, g:i A')</span>
                                                     @if($comment->edited_at)
                                                         <span class="ml-1 text-xs text-gray-400 italic">({{ __('edited') }})</span>
                                                     @endif
@@ -409,7 +409,7 @@
                                         <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                                         </svg>
-                                        {{ __('Billed') }} {{ $ticket->billed_at->format('M j') }}
+                                        {{ __('Billed') }} @localdt($ticket->billed_at, 'M j')
                                     </span>
                                 @endif
                             </div>
@@ -465,12 +465,12 @@
                         <dl class="mt-3 space-y-2 text-sm">
                             <div class="flex items-center justify-between">
                                 <dt class="text-gray-500">{{ __('First closed') }}</dt>
-                                <dd class="text-gray-900">{{ $ticket->first_closed_at?->format('M j, Y g:i A') ?? '—' }}</dd>
+                                <dd class="text-gray-900">{{ $ticket->first_closed_at ? \App\Support\TenantTime::format($ticket->first_closed_at, 'M j, Y g:i A') : '—' }}</dd>
                             </div>
                             @if($ticket->reopened_count > 0)
                                 <div class="flex items-center justify-between">
                                     <dt class="text-gray-500">{{ __('Last reopened') }}</dt>
-                                    <dd class="text-gray-900">{{ $ticket->last_reopened_at?->format('M j, Y g:i A') ?? '—' }}</dd>
+                                    <dd class="text-gray-900">{{ $ticket->last_reopened_at ? \App\Support\TenantTime::format($ticket->last_reopened_at, 'M j, Y g:i A') : '—' }}</dd>
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <dt class="text-gray-500">{{ __('Current cycle') }}</dt>
@@ -486,7 +486,7 @@
                             @if($ticket->status === 'closed' && $ticket->closed_at && $ticket->first_closed_at && $ticket->closed_at->ne($ticket->first_closed_at))
                                 <div class="flex items-center justify-between">
                                     <dt class="text-gray-500">{{ __('Last closed') }}</dt>
-                                    <dd class="text-gray-900">{{ $ticket->closed_at->format('M j, Y g:i A') }}</dd>
+                                    <dd class="text-gray-900">@localdt($ticket->closed_at, 'M j, Y g:i A')</dd>
                                 </div>
                             @endif
                         </dl>
@@ -793,7 +793,7 @@
                                             <svg class="inline h-3 w-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
                                             <span class="font-medium text-gray-700">{{ $esc->to_tier }}</span>
                                             <span class="text-gray-400">by {{ $esc->escalatedByUser?->name ?? __('System') }}</span>
-                                            <span class="text-gray-400">&middot; {{ $esc->created_at->format('m/d/Y g:i A') }}</span>
+                                            <span class="text-gray-400">&middot; @localdt($esc->created_at, 'm/d/Y g:i A')</span>
                                             @if($esc->reason)
                                                 <p class="mt-0.5 text-gray-400 italic">{{ $esc->reason }}</p>
                                             @endif
@@ -812,18 +812,18 @@
                         <dl class="mt-4 space-y-4">
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">{{ __('Date Created') }}</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ $ticket->created_at->format('m/d/Y, g:i:s A') }}</dd>
+                                <dd class="mt-1 text-sm text-gray-900">@localdt($ticket->created_at, 'm/d/Y, g:i:s A')</dd>
                             </div>
                             @if($ticket->in_progress_at)
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">{{ __('Started') }}</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ $ticket->in_progress_at->format('m/d/Y, g:i:s A') }}</dd>
+                                <dd class="mt-1 text-sm text-gray-900">@localdt($ticket->in_progress_at, 'm/d/Y, g:i:s A')</dd>
                             </div>
                             @endif
                             @if($ticket->closed_at)
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">{{ __('Closed') }}</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ $ticket->closed_at->format('m/d/Y, g:i:s A') }}</dd>
+                                <dd class="mt-1 text-sm text-gray-900">@localdt($ticket->closed_at, 'm/d/Y, g:i:s A')</dd>
                             </div>
                             @endif
                             <div>
@@ -869,7 +869,7 @@
                                         <p class="mt-1 text-sm text-red-600 ml-7">{{ $ticket->spam_reason }}</p>
                                     @endif
                                     @if($ticket->marked_spam_at)
-                                        <p class="mt-1 text-xs text-red-500 ml-7">{{ $ticket->marked_spam_at->format('m/d/Y, g:i A') }}</p>
+                                        <p class="mt-1 text-xs text-red-500 ml-7">@localdt($ticket->marked_spam_at, 'm/d/Y, g:i A')</p>
                                     @endif
                                 </div>
                                 <form method="POST" action="{{ route('tickets.unmark-spam', $ticket) }}">
@@ -1278,7 +1278,7 @@
                                             @endif
                                         </div>
                                         <div class="mt-0.5 text-xs text-gray-500">
-                                            {{ $entry->user?->name ?? __('System') }} &middot; {{ $entry->created_at->format('m/d/Y, g:i A') }}
+                                            {{ $entry->user?->name ?? __('System') }} &middot; @localdt($entry->created_at, 'm/d/Y, g:i A')
                                         </div>
                                     </div>
                                 </div>
