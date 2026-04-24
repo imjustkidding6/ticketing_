@@ -604,6 +604,7 @@
                     {{ $slot }}
                 </main>
             </div>
+
         </div>
         @stack('scripts')
         @auth
@@ -680,6 +681,64 @@
                 };
             }
         </script>
+        @endauth
+
+        @auth
+        @if(session('current_tenant_id'))
+        @php $feedbackUrl = route('feedback.store'); @endphp
+        {{-- Floating Feedback Button --}}
+        <div x-data="{ feedbackOpen: false }" class="fixed z-50" style="bottom: 1.5rem; right: 1.5rem;">
+
+            <div x-show="feedbackOpen"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 translate-y-2"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 translate-y-0"
+                 x-transition:leave-end="opacity-0 translate-y-2"
+                 x-cloak
+                 class="mb-3 w-80 rounded-xl bg-white shadow-xl ring-1 ring-gray-200 overflow-hidden">
+
+                <div class="flex items-center justify-between px-4 py-3 bg-indigo-600">
+                    <span class="text-sm font-semibold text-white">Send Feedback</span>
+                    <button @click="feedbackOpen = false" class="text-indigo-200 hover:text-white transition-colors">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <form method="POST" action="{{ $feedbackUrl }}" class="p-4 space-y-3">
+                    @csrf
+                    <select name="type" required
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        <option value="bug">Bug Report</option>
+                        <option value="suggestion">Suggestion</option>
+                        <option value="compliment">Compliment</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <input type="text" name="subject" maxlength="255"
+                           placeholder="Subject (optional)"
+                           class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    <textarea name="body" rows="4" required maxlength="3000"
+                              placeholder="Describe your feedback..."
+                              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm resize-none"></textarea>
+                    <button type="submit"
+                            class="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
+                        Submit
+                    </button>
+                </form>
+            </div>
+
+            <button @click="feedbackOpen = !feedbackOpen"
+                    class="flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-indigo-500 transition-colors">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                </svg>
+                Feedback
+            </button>
+        </div>
+        @endif
         @endauth
     </body>
 </html>
