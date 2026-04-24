@@ -20,6 +20,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ServiceReportController;
 use App\Http\Controllers\SlaPolicyController;
 use App\Http\Controllers\TicketCommentController;
+use App\Http\Controllers\TenantFeedbackController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\TicketTaskController;
 use Illuminate\Support\Facades\Route;
@@ -236,4 +237,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
         Route::resource('articles', KbArticleController::class);
         Route::get('search', [KbArticleController::class, 'search'])->name('articles.search');
     });
+
+    // Tenant Feedback
+    Route::get('feedback', [TenantFeedbackController::class, 'create'])->name('feedback.create');
+    Route::post('feedback', [TenantFeedbackController::class, 'store'])->name('feedback.store');
 });

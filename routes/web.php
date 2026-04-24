@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\LicenseController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\SettingsController as AdminSettingsController;
 use App\Http\Controllers\Admin\SystemAnnouncementController;
+use App\Http\Controllers\Admin\TenantFeedbackController as AdminTenantFeedbackController;
 use App\Http\Controllers\Admin\TenantController as AdminTenantController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\HealthCheckController;
@@ -81,6 +82,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // System-wide Admin Settings
     Route::get('settings', [AdminSettingsController::class, 'index'])->name('settings.index');
     Route::put('settings', [AdminSettingsController::class, 'update'])->name('settings.update');
+
+    // Tenant Feedback
+    Route::get('feedback', [AdminTenantFeedbackController::class, 'index'])->name('feedback.index');
+    Route::get('feedback/{feedback}', [AdminTenantFeedbackController::class, 'show'])->name('feedback.show');
+    Route::patch('feedback/{feedback}', [AdminTenantFeedbackController::class, 'update'])->name('feedback.update');
+    Route::delete('feedback/{feedback}', [AdminTenantFeedbackController::class, 'destroy'])->name('feedback.destroy');
 });
 
 require __DIR__.'/auth.php';
