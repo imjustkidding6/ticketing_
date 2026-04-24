@@ -36,7 +36,7 @@ class NotificationController extends Controller
                         'ticket_number' => null,
                         'url' => null,
                         'read_at' => $n->read_at,
-                        'created_ago' => $n->created_at->diffForHumans(),
+                        'created_ago' => $n->created_at->setTimezone(\App\Support\TenantTime::timezone())->diffForHumans(),
                         'published_at_local' => \App\Support\TenantTime::format($publishedAt, 'M d, Y g:i A'),
                     ];
                 }
@@ -69,7 +69,7 @@ class NotificationController extends Controller
                     'ticket_number' => $number,
                     'url' => $url,
                     'read_at' => $n->read_at,
-                    'created_ago' => $n->created_at->diffForHumans(),
+                    'created_ago' => $n->created_at->setTimezone(\App\Support\TenantTime::timezone())->diffForHumans(),
                 ];
             });
 
