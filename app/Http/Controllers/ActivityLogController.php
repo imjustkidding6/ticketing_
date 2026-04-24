@@ -2,42 +2,26 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\PlanFeature;
-use App\Models\TicketHistory;
-use App\Services\PlanService;
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ActivityLogController extends Controller
 {
-    public function __construct(private PlanService $planService) {}
-
-    /**
-     * Display activity logs for the current tenant.
-     */
     public function index(Request $request): View
     {
         $this->checkPermission('view activity logs');
 
-        // Build the list of action types the tenant's plan does NOT cover,
-        // so those rows + filter options stay hidden.
-        $hiddenActions = [];
-        if (! $this->planService->currentTenantHasFeature(PlanFeature::TicketReopening)) {
-            $hiddenActions[] = 'reopened';
-        }
-        if (! $this->planService->currentTenantHasFeature(PlanFeature::TicketMerging)) {
-            $hiddenActions[] = 'merged';
-            $hiddenActions[] = 'unmerged';
-        }
-
-        $query = TicketHistory::query()
-            ->with(['ticket', 'user'])
-            ->whereHas('ticket')
-            ->when(! empty($hiddenActions), fn ($q) => $q->whereNotIn('action', $hiddenActions))
+        $query = ActivityLog::query()
+            ->with('user')
             ->latest();
 
-        if ($request->filled('action') && ! in_array($request->input('action'), $hiddenActions, true)) {
+        if ($request->filled('action')) {
             $query->where('action', $request->input('action'));
+        }
+
+        if ($request->filled('subject_type')) {
+            $query->where('subject_type', $request->input('subject_type'));
         }
 
         if ($request->filled('user_id')) {
@@ -54,11 +38,15 @@ class ActivityLogController extends Controller
 
         $logs = $query->paginate(50)->withQueryString();
 
-        $actionTypes = TicketHistory::query()
-            ->whereHas('ticket')
-            ->when(! empty($hiddenActions), fn ($q) => $q->whereNotIn('action', $hiddenActions))
+        $actionTypes = ActivityLog::query()
             ->distinct()
             ->pluck('action')
+            ->sort()
+            ->values();
+
+        $subjectTypes = ActivityLog::query()
+            ->distinct()
+            ->pluck('subject_type')
             ->sort()
             ->values();
 
@@ -67,6 +55,6 @@ class ActivityLogController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return view('activity-logs.index', compact('logs', 'actionTypes', 'users'));
+        return view('activity-logs.index', compact('logs', 'actionTypes', 'subjectTypes', 'users'));
     }
 }

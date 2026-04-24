@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Department;
 use App\Models\User;
+use App\Services\ActivityLogger;
 use App\Services\AgentPerformanceService;
 use App\Services\TenantRoleService;
 use Illuminate\Http\RedirectResponse;
@@ -34,8 +35,8 @@ class MemberController extends Controller
         $users = $tenant->users()
             ->with(['roles', 'departments'])
             ->withCount([
-                'createdTickets' => fn ($q) => $q->where('tickets.is_merged', false),
-                'tickets as assigned_tickets_count' => fn ($q) => $q->where('tickets.is_merged', false),
+                'createdTickets' => fn ($q) => $q->where('tickets.is_merged', false)->where('tickets.is_spam', false),
+                'tickets as assigned_tickets_count' => fn ($q) => $q->where('tickets.is_merged', false)->where('tickets.is_spam', false),
             ])
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -105,7 +106,7 @@ class MemberController extends Controller
             'role.in' => 'Please select a valid role.',
         ]);
 
-        DB::transaction(function () use ($validated, $tenant) {
+        $createdUser = DB::transaction(function () use ($validated, $tenant) {
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
@@ -131,7 +132,13 @@ class MemberController extends Controller
 
             // Assign Spatie role
             $this->roleService->syncRole($user, $validated['role'], $tenant);
+
+            return $user;
         });
+
+        // Force tenant_id on the log entry (User isn't auto-scoped).
+        $createdUser->tenant_id = $tenant->id;
+        ActivityLogger::log($createdUser, 'created', "Member '{$createdUser->name}' added with role '{$validated['role']}'.");
 
         return redirect()->route('members.index')
             ->with('success', "{$validated['name']} has been added successfully.");
@@ -150,13 +157,14 @@ class MemberController extends Controller
         $member->load(['roles', 'departments']);
 
         $stats = [
-            'created' => $member->createdTickets()->notMerged()->count(),
-            'assigned' => $member->tickets()->notMerged()->count(),
-            'closed' => $member->tickets()->notMerged()->where('status', 'closed')->count(),
+            'created' => $member->createdTickets()->notMerged()->notSpam()->count(),
+            'assigned' => $member->tickets()->notMerged()->notSpam()->count(),
+            'closed' => $member->tickets()->notMerged()->notSpam()->where('status', 'closed')->count(),
         ];
 
         $recentCreated = $member->createdTickets()
             ->notMerged()
+            ->notSpam()
             ->with('client')
             ->latest()
             ->limit(5)
@@ -164,6 +172,7 @@ class MemberController extends Controller
 
         $assignedTickets = $member->tickets()
             ->notMerged()
+            ->notSpam()
             ->with(['client', 'category', 'creator'])
             ->latest()
             ->limit(10)
@@ -229,6 +238,10 @@ class MemberController extends Controller
             'department_ids.*' => ['exists:departments,id'],
         ]);
 
+        $oldRole = $member->roles->first()?->name;
+        $oldName = $member->name;
+        $oldEmail = $member->email;
+
         DB::transaction(function () use ($validated, $member, $tenant) {
             $member->update([
                 'name' => $validated['name'],
@@ -264,6 +277,13 @@ class MemberController extends Controller
             $this->roleService->syncRole($member, $validated['role'], $tenant);
         });
 
+        $member->tenant_id = $tenant->id;
+        ActivityLogger::log($member, 'updated', "Member '{$member->name}' updated.", [
+            'name' => ['old' => $oldName, 'new' => $member->name],
+            'email' => ['old' => $oldEmail, 'new' => $member->email],
+            'role' => ['old' => $oldRole, 'new' => $validated['role']],
+        ]);
+
         return redirect()->route('members.index')
             ->with('success', "{$member->name} has been updated successfully.");
     }
@@ -287,11 +307,15 @@ class MemberController extends Controller
             return back()->with('error', 'The owner cannot be removed.');
         }
 
+        $memberName = $member->name;
+        $member->tenant_id = $tenant->id;
+        ActivityLogger::log($member, 'deleted', "Member '{$memberName}' removed from tenant.");
+
         $tenant->removeUser($member);
         $member->delete();
 
         return redirect()->route('members.index')
-            ->with('success', "{$member->name} has been deleted.");
+            ->with('success', "{$memberName} has been deleted.");
     }
 
     /**
@@ -311,10 +335,14 @@ class MemberController extends Controller
             return back()->with('error', 'The owner cannot be deactivated.');
         }
 
+        $member->tenant_id = $tenant->id;
+
         if ($member->trashed()) {
             $member->restore();
+            ActivityLogger::log($member, 'restored', "Member '{$member->name}' reactivated.");
             $message = "{$member->name} has been activated.";
         } else {
+            ActivityLogger::log($member, 'deactivated', "Member '{$member->name}' deactivated.");
             $member->delete();
             $message = "{$member->name} has been deactivated.";
         }

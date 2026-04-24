@@ -29,10 +29,11 @@ class TenantController extends Controller
         $plans = Plan::active()->get();
 
         $ticketStats = [
-            'total' => Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count(),
-            'open' => Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->open()->count(),
-            'closed' => Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->closed()->count(),
+            'total' => Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_spam', false)->count(),
+            'open' => Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_spam', false)->open()->count(),
+            'closed' => Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_spam', false)->closed()->count(),
             'this_month' => Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)
+                ->where('is_spam', false)
                 ->where('created_at', '>=', now()->startOfMonth())
                 ->count(),
         ];

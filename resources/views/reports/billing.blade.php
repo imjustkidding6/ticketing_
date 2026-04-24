@@ -119,7 +119,7 @@
                                             <span class="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">{{ __('Unbilled') }}</span>
                                         @endif
                                     </td>
-                                    <td class="whitespace-nowrap px-4 py-3 text-xs text-gray-500">{{ $ticket->billed_at?->format('m/d/Y') ?? '-' }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-xs text-gray-500">{{ $ticket->billed_at ? \App\Support\TenantTime::format($ticket->billed_at, 'm/d/Y') : '-' }}</td>
                                     <td class="px-4 py-3 text-xs text-gray-500 truncate max-w-[150px]">{{ $ticket->billable_description ?? '-' }}</td>
                                 </tr>
                             @empty

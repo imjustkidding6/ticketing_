@@ -65,7 +65,7 @@
                                     {{ $ticket->assignee?->name ?? __('Unassigned') }}
                                 </td>
                                 <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                                    {{ $ticket->created_at->format('M d, Y') }}
+                                    @localdt($ticket->created_at, 'M d, Y')
                                 </td>
                                 <td class="whitespace-nowrap px-6 py-4 text-right text-sm">
                                     <a href="{{ route('tickets.show', $ticket) }}" class="text-indigo-600 hover:text-indigo-900">{{ __('View') }}</a>

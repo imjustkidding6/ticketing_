@@ -85,7 +85,7 @@
     <div class="date-report-section">
         <div class="date-cell">
             <strong>DATE:</strong>
-            <div class="field-box">{{ $data['report_date'] ?? $report->generated_at?->format('F j, Y') }}</div>
+            <div class="field-box">{{ $data['report_date'] ?? \App\Support\TenantTime::format($report->generated_at, 'F j, Y') }}</div>
         </div>
         <div class="date-gap"></div>
         <div class="report-cell">

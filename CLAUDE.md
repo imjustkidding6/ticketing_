@@ -25,9 +25,15 @@ npx playwright test --reporter=list                              # Run E2E brows
 # Code formatting
 vendor/bin/sail bin pint --dirty --format agent  # Format changed files
 
-# Docker (alternative)
+# Docker (alternative, bypasses Sail and calls docker-compose directly)
 make up / make down / make test / make migrate / make fresh
 ```
+
+Prefer Sail commands. The `Makefile` targets point at the same containers but call `docker-compose` directly and do not go through Sail's entrypoint.
+
+### Laravel Boost (MCP)
+
+The Laravel Boost MCP server is configured for this project. When you need to introspect the running app, prefer its tools over shelling out: `database-schema` / `database-query` for DB inspection, `tinker` for evaluating PHP in the app context, `list-routes` / `list-artisan-commands` for route/command discovery, `read-log-entries` for recent logs, and `search-docs` for version-matched Laravel/Spatie/Pint docs.
 
 ## Architecture
 
@@ -35,9 +41,10 @@ Multi-tenant SaaS ticketing system. Laravel 12, Tailwind CSS v4, Alpine.js, Blad
 
 ### Routing Structure
 
-Routes are registered in `bootstrap/app.php`:
+Routes are registered in `bootstrap/app.php`. The `then:` closure in `withRouting()` mounts `routes/tenant.php` under a dynamic `{slug}` prefix with regex `[a-z0-9][a-z0-9\-]*[a-z0-9]`:
 - `routes/web.php` — Auth, admin panel, home, profile, tenant switching
-- `routes/tenant.php` — All tenant-scoped routes under `/{slug}/` prefix with regex `[a-z0-9][a-z0-9\-]*[a-z0-9]`
+- `routes/tenant.php` — All tenant-scoped routes (dashboard, tickets, clients, settings, reports, public portal)
+- `routes/portal.php` — **Dead code.** The old `/portal/{slug}/...` structure is not loaded anywhere; portal routes now live inside `routes/tenant.php` under `/{slug}/`. Do not edit `portal.php` expecting it to take effect. Verify in `bootstrap/app.php` if in doubt.
 
 Tenant routes resolve the tenant from the URL slug via `EnsureTenantSession` middleware, which sets `session('current_tenant_id')` and syncs the Spatie Permission team context.
 
@@ -97,17 +104,32 @@ Controllers enforce permissions via `$this->checkPermission('permission name')` 
 | `admin` | `AdminMiddleware` | Requires `is_admin` flag on user |
 | `portal` | `EnsureClientPortalAccess` | Validates authenticated client belongs to tenant |
 
-### Key Services
+`SetTenantUrlDefaults` is appended to the `web` group (not aliased). It injects the current tenant slug as a default URL parameter so `route(...)` calls inside tenant pages don't need `slug` passed explicitly.
+
+### Key Services (`app/Services/`)
 
 | Service | Purpose |
 |---------|---------|
-| `PlanService` | Feature access checks with caching |
+| `PlanService` | Feature access checks with 300s cache |
 | `TicketService` | Ticket CRUD, notifications, `addHistory()` for audit logging |
-| `EscalationService` | Tier-based ticket escalation with validation |
+| `TicketWorkflowService` | State transitions and workflow rules for tickets |
 | `TicketMergeService` | Merge/unmerge ticket operations |
+| `EscalationService` | Tier-based ticket escalation with validation |
+| `SlaService` | SLA policy evaluation and breach tracking |
+| `AgentPerformanceService` | Agent metrics / performance aggregation |
+| `ReportService` | Report data aggregation and CSV exports |
+| `ServiceReportService` | Service-report generation (distinct from ReportService) |
 | `TenantRoleService` | Default role/permission setup, role sync |
 | `TenantMailService` | Per-tenant SMTP configuration |
-| `ReportService` | Report data aggregation and CSV exports |
+| `TenantUrlHelper` | Helper for building tenant-prefixed URLs outside request context |
+
+Ancillary namespaces:
+- `app/Notifications/` — Per-event notifications (`TicketCreated`, `TicketAssigned`, `TicketStatusChanged`, `SlaBreachWarning`, client variants, `SystemAnnouncement`). Dispatched by services rather than controllers; respect the `email_notifications` feature where relevant.
+- `app/Support/` — Framework-agnostic helpers (e.g., `TenantTime`). Not services; no side effects.
+
+### Queue & Cache
+
+Dev default (`.env.example`): `QUEUE_CONNECTION=database`, `CACHE_STORE=database`, `SESSION_DRIVER=database`. Redis and SQS are opt-in and typically used in production. `composer run dev` starts a queue worker, so queued notifications will be processed locally. If you switch `CACHE_STORE` mid-session, clear the plan-feature cache (`PlanService::clearCache`) since it relies on whatever store is active.
 
 ### Testing
 
@@ -129,7 +151,7 @@ private function setupTenantContext(Tenant $tenant): User {
     return $user;
 }
 ```
-- **17 factories** available in `database/factories/` for all major models.
+- Factories in `database/factories/` cover all major models (Tenant, User, Plan, License, Ticket, Client, Department, Product, etc.).
 
 ### Public Portal
 
