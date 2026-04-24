@@ -21,6 +21,7 @@ class AgentPerformanceService
 
         $assignedTickets = Ticket::where('assigned_to', $agent->id)
             ->notMerged()
+            ->notSpam()
             ->whereBetween('created_at', [$start, $end])
             ->get();
 
@@ -38,14 +39,17 @@ class AgentPerformanceService
         // Reopen analysis for this agent (lifetime, not range — reopen could happen months after close)
         $everClosedByAgent = Ticket::where('assigned_to', $agent->id)
             ->notMerged()
+            ->notSpam()
             ->whereNotNull('first_closed_at')
             ->count();
         $reopenedAfterAgentClosure = Ticket::where('assigned_to', $agent->id)
             ->notMerged()
+            ->notSpam()
             ->where('reopened_count', '>', 0)
             ->count();
         $totalReopens = (int) (Ticket::where('assigned_to', $agent->id)
             ->notMerged()
+            ->notSpam()
             ->sum('reopened_count') ?? 0);
         $avgReopensPerReopenedTicket = $reopenedAfterAgentClosure > 0
             ? round($totalReopens / $reopenedAfterAgentClosure, 2)
@@ -98,7 +102,7 @@ class AgentPerformanceService
         $start = Carbon::parse($from)->startOfDay();
         $end = Carbon::parse($to)->endOfDay();
 
-        $tickets = Ticket::notMerged()->whereBetween('created_at', [$start, $end])->get();
+        $tickets = Ticket::notMerged()->notSpam()->whereBetween('created_at', [$start, $end])->get();
         $closedTickets = $tickets->where('status', 'closed');
 
         return [

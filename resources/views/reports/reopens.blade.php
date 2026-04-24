@@ -100,8 +100,8 @@
                                     <td class="px-4 py-2 text-center">
                                         <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">× {{ $t->reopened_count }}</span>
                                     </td>
-                                    <td class="px-4 py-2 text-xs text-gray-600">{{ $t->first_closed_at?->format('M j, Y') ?? '—' }}</td>
-                                    <td class="px-4 py-2 text-xs text-gray-600">{{ $t->last_reopened_at?->format('M j, Y') ?? '—' }}</td>
+                                    <td class="px-4 py-2 text-xs text-gray-600">{{ $t->first_closed_at ? \App\Support\TenantTime::format($t->first_closed_at, 'M j, Y') : '—' }}</td>
+                                    <td class="px-4 py-2 text-xs text-gray-600">{{ $t->last_reopened_at ? \App\Support\TenantTime::format($t->last_reopened_at, 'M j, Y') : '—' }}</td>
                                     <td class="px-4 py-2 text-xs text-gray-700 max-w-[220px] truncate">{{ $t->last_reopen_reason ?? '—' }}</td>
                                     <td class="px-4 py-2"><x-badge :type="$t->status">{{ ucfirst(str_replace('_', ' ', $t->status)) }}</x-badge></td>
                                 </tr>

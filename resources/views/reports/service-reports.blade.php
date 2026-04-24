@@ -25,7 +25,7 @@
                                     <a href="{{ route('tickets.show', $report->ticket) }}" class="text-indigo-600 hover:text-indigo-900">{{ $report->ticket->ticket_number }}</a>
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-500">{{ $report->client->name }}</td>
-                                <td class="px-6 py-4 text-sm text-gray-500">{{ $report->generated_at?->format('M d, Y g:i A') }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-500">@localdt($report->generated_at, 'M d, Y g:i A')</td>
                                 <td class="px-6 py-4">
                                     @php
                                         $statusColors = [

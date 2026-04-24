@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Department;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Support\TenantTime;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -188,9 +189,9 @@ class ReportService
             'priority' => $t->priority,
             'status' => $t->status,
             'assigned_to' => $t->assignee?->name ?? '-',
-            'created_at' => $t->created_at->format('m/d/Y g:i A'),
-            'in_progress_at' => $t->in_progress_at?->format('m/d/Y g:i A') ?? '-',
-            'closed_at' => $t->closed_at?->format('m/d/Y g:i A') ?? '-',
+            'created_at' => TenantTime::format($t->created_at, 'm/d/Y g:i A'),
+            'in_progress_at' => $t->in_progress_at ? TenantTime::format($t->in_progress_at, 'm/d/Y g:i A') : '-',
+            'closed_at' => $t->closed_at ? TenantTime::format($t->closed_at, 'm/d/Y g:i A') : '-',
             'resolution_hours' => $t->getEffectiveResolutionTimeHours(),
             'work_hours' => $t->getWorkResolutionTimeHours(),
             'resolution_formatted' => Ticket::formatHours($t->getEffectiveResolutionTimeHours()),
@@ -323,7 +324,8 @@ class ReportService
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
             $q->whereBetween('tickets.created_at', [$from, $to])
-                ->where('tickets.is_merged', false);
+                ->where('tickets.is_merged', false)
+                ->where('tickets.is_spam', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('tickets.priority', $filters['priority']);
@@ -354,6 +356,7 @@ class ReportService
             ->map(function ($agent) use ($from, $to, $filters) {
                 $closedQuery = Ticket::where('assigned_to', $agent->id)
                     ->notMerged()
+                    ->notSpam()
                     ->where('status', 'closed')
                     ->whereNotNull('closed_at')
                     ->whereBetween('closed_at', [$from, $to]);
@@ -372,10 +375,12 @@ class ReportService
                 // Reopen rate: of tickets this agent has ever-closed, how many were later reopened?
                 $everClosedByAgent = Ticket::where('assigned_to', $agent->id)
                     ->notMerged()
+                    ->notSpam()
                     ->whereNotNull('first_closed_at')
                     ->count();
                 $reopenedAfterAgentClosure = Ticket::where('assigned_to', $agent->id)
                     ->notMerged()
+                    ->notSpam()
                     ->where('reopened_count', '>', 0)
                     ->count();
 
@@ -506,7 +511,8 @@ class ReportService
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
             $q->whereBetween('tickets.created_at', [$from, $to])
-                ->where('tickets.is_merged', false);
+                ->where('tickets.is_merged', false)
+                ->where('tickets.is_spam', false);
 
             if (! empty($filters['priority'])) {
                 $q->where('tickets.priority', $filters['priority']);

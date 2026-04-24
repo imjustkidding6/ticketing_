@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use App\Models\Traits\BelongsToTenant;
+use App\Models\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class SlaPolicy extends Model
 {
-    use BelongsToTenant, HasFactory;
+    use BelongsToTenant, HasFactory, LogsActivity;
 
     /**
      * @var list<string>

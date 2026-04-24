@@ -5,6 +5,8 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DistributorController;
 use App\Http\Controllers\Admin\LicenseController;
 use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Admin\SettingsController as AdminSettingsController;
+use App\Http\Controllers\Admin\SystemAnnouncementController;
 use App\Http\Controllers\Admin\TenantController as AdminTenantController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\HealthCheckController;
@@ -69,6 +71,16 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // Admin User Management
     Route::resource('users', AdminUserController::class)->except(['show', 'destroy']);
     Route::post('users/{user}/toggle-status', [AdminUserController::class, 'toggleStatus'])->name('users.toggle-status')->withTrashed();
+
+    // System Announcements (broadcast to every user in every tenant)
+    Route::get('announcements', [SystemAnnouncementController::class, 'index'])->name('announcements.index');
+    Route::get('announcements/create', [SystemAnnouncementController::class, 'create'])->name('announcements.create');
+    Route::post('announcements', [SystemAnnouncementController::class, 'store'])->name('announcements.store');
+    Route::delete('announcements/{announcement}', [SystemAnnouncementController::class, 'destroy'])->name('announcements.destroy');
+
+    // System-wide Admin Settings
+    Route::get('settings', [AdminSettingsController::class, 'index'])->name('settings.index');
+    Route::put('settings', [AdminSettingsController::class, 'update'])->name('settings.update');
 });
 
 require __DIR__.'/auth.php';

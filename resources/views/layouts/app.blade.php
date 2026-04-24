@@ -501,7 +501,6 @@
 
                         <!-- Notification Bell -->
                         @auth
-                        @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::EmailNotifications))
                         <div x-data="notificationBell()" class="relative">
                             <button @click="toggle()" class="relative rounded-full p-2 text-gray-400 hover:text-gray-600 focus:outline-none">
                                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -521,7 +520,12 @@
                                         <p class="px-6 py-10 text-center text-sm text-gray-500">{{ __('No notifications.') }}</p>
                                     </template>
                                     <template x-for="n in notifications" :key="n.id">
-                                        <div @click="openNotification(n)" class="cursor-pointer border-b border-gray-100 px-6 py-4 hover:bg-gray-50" :class="{ 'bg-blue-50': !n.read_at }">
+                                        <div @click="openNotification(n)" class="cursor-pointer border-b border-gray-100 px-6 py-4 hover:bg-gray-50"
+                                             :class="{
+                                                'bg-blue-50': !n.read_at && n.action !== 'system_announcement',
+                                                'bg-indigo-50/60 border-l-4 border-l-indigo-500': n.action === 'system_announcement' && !n.read_at,
+                                                'border-l-4 border-l-indigo-200': n.action === 'system_announcement' && n.read_at,
+                                             }">
                                             <div class="flex items-start gap-4">
                                                 <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
                                                     :class="{
@@ -530,19 +534,43 @@
                                                         'bg-blue-100 text-blue-600': n.action === 'status_changed',
                                                         'bg-amber-100 text-amber-600': n.action === 'sla_breach_warning',
                                                         'bg-purple-100 text-purple-600': n.action === 'escalated',
-                                                        'bg-gray-100 text-gray-500': !['assigned','created','status_changed','sla_breach_warning','escalated'].includes(n.action),
+                                                        'bg-blue-100 text-blue-700': n.action === 'system_announcement' && n.severity === 'info',
+                                                        'bg-emerald-100 text-emerald-700': n.action === 'system_announcement' && n.severity === 'update',
+                                                        'bg-amber-100 text-amber-700': n.action === 'system_announcement' && n.severity === 'maintenance',
+                                                        'bg-red-100 text-red-700': n.action === 'system_announcement' && n.severity === 'warning',
+                                                        'bg-gray-100 text-gray-500': !['assigned','created','status_changed','sla_breach_warning','escalated','system_announcement'].includes(n.action),
                                                     }">
-                                                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                                                    </svg>
+                                                    <template x-if="n.action === 'system_announcement'">
+                                                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46" />
+                                                        </svg>
+                                                    </template>
+                                                    <template x-if="n.action !== 'system_announcement'">
+                                                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                                                        </svg>
+                                                    </template>
                                                 </div>
                                                 <div class="min-w-0 flex-1">
                                                     <div class="flex items-start justify-between gap-3">
-                                                        <p class="text-sm font-medium text-gray-900 leading-snug" x-text="n.title"></p>
+                                                        <div class="min-w-0">
+                                                            <template x-if="n.action === 'system_announcement'">
+                                                                <span class="inline-flex items-center rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700 mr-1.5">System</span>
+                                                            </template>
+                                                            <p class="inline text-sm font-medium text-gray-900 leading-snug" x-text="n.title"></p>
+                                                        </div>
                                                         <span x-show="!n.read_at" class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500"></span>
                                                     </div>
-                                                    <p x-show="n.subject" class="mt-1 truncate text-sm text-gray-600" x-text="n.subject"></p>
-                                                    <p class="mt-1.5 text-xs text-gray-400" x-text="n.created_ago"></p>
+                                                    <p x-show="n.subject"
+                                                       class="mt-1 text-sm text-gray-600"
+                                                       :class="n.action === 'system_announcement' ? 'whitespace-pre-line' : 'truncate'"
+                                                       x-text="n.subject"></p>
+                                                    <p class="mt-1.5 text-xs text-gray-400">
+                                                        <span x-text="n.created_ago"></span>
+                                                        <template x-if="n.action === 'system_announcement' && n.published_at_local">
+                                                            <span class="ml-1 text-gray-300">&middot; <span x-text="n.published_at_local"></span></span>
+                                                        </template>
+                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
@@ -550,7 +578,6 @@
                                 </div>
                             </div>
                         </div>
-                        @endif
                         @endauth
                         </div>
                     </div>

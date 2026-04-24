@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ServiceReport;
 use App\Models\Ticket;
+use App\Support\TenantTime;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
@@ -25,7 +26,7 @@ class ServiceReportService
             : null;
 
         $reportData = [
-            'report_date' => now()->format('F j, Y'),
+            'report_date' => TenantTime::format(now(), 'F j, Y'),
             'client_info' => [
                 'company_name' => $ticket->client?->name ?? 'N/A',
                 'contact_person' => $ticket->client?->contact_person ?? $ticket->client?->name ?? 'N/A',
@@ -45,14 +46,14 @@ class ServiceReportService
                 'priority' => $ticket->priority,
                 'category' => $ticket->category?->name ?? '',
                 'department' => $ticket->department?->name ?? '',
-                'created_at' => $ticket->created_at->format('M j, Y g:i A'),
-                'closed_at' => $ticket->closed_at?->format('M j, Y g:i A'),
+                'created_at' => TenantTime::format($ticket->created_at, 'M j, Y g:i A'),
+                'closed_at' => TenantTime::format($ticket->closed_at, 'M j, Y g:i A'),
             ],
             'tasks' => $ticket->tasks->values()->map(fn ($t, $i) => [
                 'task_number' => $i + 1,
                 'description' => $t->description,
                 'status' => ucfirst(str_replace('_', ' ', $t->status)),
-                'completed_at' => $t->completed_at?->format('M j, Y') ?? '',
+                'completed_at' => TenantTime::format($t->completed_at, 'M j, Y'),
             ])->toArray(),
             'additional_comments' => $ticket->closing_remarks ?? '',
             'resolution_time' => $ticket->closed_at
