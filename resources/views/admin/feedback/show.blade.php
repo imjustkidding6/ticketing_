@@ -36,7 +36,7 @@
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $typeColor }}">
                                 {{ ucfirst($feedback->type) }}
                             </span>
-                            <span class="text-xs text-gray-400">{{ $feedback->created_at->format('M d, Y h:i A') }}</span>
+                            <span class="text-xs text-gray-400">{{ \App\Support\TenantTime::format($feedback->created_at, 'M d, Y g:i A') }}</span>
                         </div>
                     </div>
                 </div>
