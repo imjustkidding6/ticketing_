@@ -175,4 +175,14 @@ Agent tiering (Enterprise only): 3 tiers (tier_1, tier_2, tier_3). Escalation en
 - Assigned agent must have `support_tier` >= target tier
 - Owner bypasses tier restrictions
 - Agent dropdown in UI filters by tier using JS
+
+### Tenant Registration Flow
+
+`RegisteredUserController::store()` runs everything inside a single DB transaction: creates the tenant (with a user-chosen slug), activates the license, creates the owner user, calls `DepartmentSeeder::seedForTenant($tenant)` and `TenantRoleService::setupDefaultRoles($tenant)`, then redirects directly to the new tenant's dashboard. When modifying onboarding, keep all of this inside the transaction.
+
+**Slug reserved words** — tenant slugs are validated against a blocklist in registration: `admin`, `www`, `mail`, `api`, `portal`, `app`, `support`, `help`, `status`, `login`, `register`, `profile`, `up`, `logout`. Add new reserved route prefixes here if they conflict with the `{slug}` wildcard.
+
+### Controller Concerns
+
+`app/Http/Controllers/Concerns/HasSortableQuery.php` — reusable trait for controllers that support column sorting. Use it instead of duplicating sort logic.
 <!-- Laravel Boost guidelines are auto-injected at runtime by the Laravel Boost MCP server. Do not duplicate them here. -->
