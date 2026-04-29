@@ -15,6 +15,12 @@ class PasswordController extends Controller
      */
     public function update(Request $request): RedirectResponse
     {
+        if (! $request->user()->password) {
+            return back()->withErrors([
+                'updatePassword' => 'Your account uses Google Sign-In. You cannot change a password.',
+            ]);
+        }
+
         $validated = $request->validateWithBag('updatePassword', [
             'current_password' => ['required', 'current_password'],
             'password' => ['required', Password::defaults(), 'confirmed'],

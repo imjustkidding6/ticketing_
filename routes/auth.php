@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
+use App\Http\Controllers\Auth\GoogleSocialiteController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
@@ -33,6 +34,18 @@ Route::middleware('guest')->group(function () {
 
     Route::post('reset-password', [NewPasswordController::class, 'store'])
         ->name('password.store');
+
+    Route::get('auth/google', [GoogleSocialiteController::class, 'redirect'])
+        ->name('auth.google');
+
+    Route::get('auth/google/callback', [GoogleSocialiteController::class, 'callback'])
+        ->name('auth.google.callback');
+
+    Route::get('auth/google/register', [GoogleSocialiteController::class, 'showRegisterForm'])
+        ->name('auth.google.register.form');
+
+    Route::post('auth/google/register', [GoogleSocialiteController::class, 'storeRegistration'])
+        ->name('auth.google.register.store');
 });
 
 Route::middleware('auth')->group(function () {
