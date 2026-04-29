@@ -182,6 +182,19 @@ Agent tiering (Enterprise only): 3 tiers (tier_1, tier_2, tier_3). Escalation en
 
 **Slug reserved words** — tenant slugs are validated against a blocklist in registration: `admin`, `www`, `mail`, `api`, `portal`, `app`, `support`, `help`, `status`, `login`, `register`, `profile`, `up`, `logout`. Add new reserved route prefixes here if they conflict with the `{slug}` wildcard.
 
+### Google Sign-In (Socialite)
+
+Uses `laravel/socialite`. Flow handled by `GoogleSocialiteController`:
+
+1. `/auth/google/redirect` — redirects to Google OAuth (stores `google_intent` in session)
+2. `/auth/google/callback` — handles callback:
+   - Existing `google_id` match → log in directly
+   - Existing email match → link `google_id` to account, log in
+   - New user → store `google_profile` in session, redirect to `auth.google.register.form`
+3. `/auth/google/register` (GET/POST) — new Google users complete tenant registration (license key, company name, slug). Mirrors `RegisteredUserController` transaction pattern.
+
+Google-registered users have `password = null` and `email_verified_at` pre-set. The `PasswordController` guards against setting a blank password on these accounts. Required `.env` keys: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`.
+
 ### Controller Concerns
 
 `app/Http/Controllers/Concerns/HasSortableQuery.php` — reusable trait for controllers that support column sorting. Use it instead of duplicating sort logic.

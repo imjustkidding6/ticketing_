@@ -561,21 +561,32 @@
                     <div class="rounded-xl bg-white p-6 shadow-sm">
                         <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Status') }}</h4>
                         @php
+                            $currentTenant = \App\Models\Tenant::find(session('current_tenant_id'));
+                            $isOwner = $currentTenant && auth()->user()?->isOwnerOf($currentTenant);
                             $canReopen = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketReopening)
-                                && auth()->user()?->can('reopen tickets');
+                                && ($isOwner || auth()->user()?->can('reopen tickets'));
                             $statusLocked = $ticket->status === 'closed' && ! $canReopen;
                         @endphp
                         <div class="mt-4">
-                            @if($statusLocked)
+                            @if($ticket->status === 'closed')
+                                {{-- Closed status badge --}}
                                 <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
                                     <span class="inline-flex items-center gap-2">
                                         <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
                                         </svg>
-                                        {{ __('Closed — status locked') }}
+                                        {{ __('Closed') }}
                                     </span>
                                 </div>
-                                <p class="mt-2 text-xs text-gray-500">{{ __('Reopening closed tickets requires the Enterprise plan.') }}</p>
+                                @if($ticket->closing_remarks)
+                                    <div class="mt-2 rounded-md bg-gray-50 border border-gray-200 px-3 py-2">
+                                        <p class="text-xs font-medium text-gray-500">{{ __('Final Remarks') }}</p>
+                                        <p class="mt-1 text-sm text-gray-700">{{ $ticket->closing_remarks }}</p>
+                                    </div>
+                                @endif
+                                @if($statusLocked)
+                                    <p class="mt-2 text-xs text-gray-500">{{ __('Reopening closed tickets requires the Enterprise plan.') }}</p>
+                                @endif
                             @else
                                 <form method="POST" action="{{ route('tickets.change-status', $ticket) }}" x-data="{ status: '{{ $ticket->status }}' }">
                                     @csrf
