@@ -86,7 +86,9 @@ class User extends Authenticatable
      */
     public function isOnScheduleAt(?\Carbon\Carbon $at = null): bool
     {
-        $at = $at ?? now();
+        // Convert to the tenant's local timezone so day-of-week and time-of-day
+        // line up with how the agent entered their schedule.
+        $local = ($at ?? now())->copy()->setTimezone(\App\Support\TenantTime::timezone());
 
         // No schedule rows at all → schedule not configured, don't block.
         if (! $this->schedules()->exists()) {
@@ -94,7 +96,7 @@ class User extends Authenticatable
         }
 
         $row = $this->schedules()
-            ->where('day_of_week', $at->dayOfWeek)
+            ->where('day_of_week', $local->dayOfWeek)
             ->first();
 
         // Nothing scheduled for today → treat as unavailable.
@@ -106,7 +108,7 @@ class User extends Authenticatable
             return false;
         }
 
-        $current = $at->format('H:i:s');
+        $current = $local->format('H:i:s');
 
         return $current >= $row->start_time && $current <= $row->end_time;
     }
