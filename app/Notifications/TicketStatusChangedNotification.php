@@ -53,6 +53,7 @@ class TicketStatusChangedNotification extends Notification
             'ticket_id' => $this->ticket->id,
             'ticket_number' => $this->ticket->ticket_number,
             'subject' => $this->ticket->subject,
+            'department_id' => $this->ticket->department_id,
             'action' => 'status_changed',
             'old_status' => $this->oldStatus,
             'new_status' => $this->newStatus,

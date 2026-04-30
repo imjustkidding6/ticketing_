@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Auth;
 
 class NotificationController extends Controller
@@ -14,7 +16,7 @@ class NotificationController extends Controller
     {
         $tenant = \App\Models\Tenant::find(session('current_tenant_id'));
 
-        $notifications = Auth::user()->notifications()
+        $notifications = $this->scopedNotifications()
             ->latest()
             ->take(20)
             ->get()
@@ -91,7 +93,9 @@ class NotificationController extends Controller
      */
     public function markAllRead(): JsonResponse
     {
-        Auth::user()->unreadNotifications->markAsRead();
+        $this->scopedNotifications()
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
 
         return response()->json(['success' => true]);
     }
@@ -102,7 +106,51 @@ class NotificationController extends Controller
     public function unreadCount(): JsonResponse
     {
         return response()->json([
-            'count' => Auth::user()->unreadNotifications()->count(),
+            'count' => $this->scopedNotifications()
+                ->whereNull('read_at')
+                ->count(),
         ]);
+    }
+
+    /**
+     * Build the base notification query, filtered to the user's current departments.
+     *
+     * Owners and admins see all notifications. Everyone else only sees notifications
+     * tagged with a department they currently belong to (and untagged ones, like
+     * system announcements). Notifications carry the originating ticket's
+     * department_id in their data payload — see TicketAssignedNotification etc.
+     *
+     * @return Builder<\Illuminate\Notifications\DatabaseNotification>
+     */
+    private function scopedNotifications(): Builder
+    {
+        $user  = Auth::user();
+        $query = DatabaseNotification::query()
+            ->where('notifiable_type', $user->getMorphClass())
+            ->where('notifiable_id', $user->id);
+
+        $tenant = $user->currentTenant();
+        if (! $tenant) {
+            return $query;
+        }
+
+        $role = $user->roleInTenant($tenant);
+        if (in_array($role, ['owner', 'admin'])) {
+            return $query;
+        }
+
+        $departmentIds = $user->departments()->pluck('departments.id')->all();
+
+        return $query->where(function (Builder $q) use ($departmentIds) {
+            // Notifications with no department tag (system announcements, license expiry, etc.)
+            $q->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(data, '$.department_id')) IS NULL");
+
+            if (! empty($departmentIds)) {
+                $q->orWhereIn(
+                    \DB::raw("JSON_UNQUOTE(JSON_EXTRACT(data, '$.department_id'))"),
+                    array_map('strval', $departmentIds)
+                );
+            }
+        });
     }
 }
