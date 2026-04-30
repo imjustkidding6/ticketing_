@@ -18,7 +18,7 @@
 
                     @if($license->status !== 'pending')
                         @if($license->isFullyExpired() || $license->status === 'revoked' || $license->isInGracePeriod())
-                            <button type="button" @click="showReactivate = true" class="inline-flex items-center px-3 py-1 border border-emerald-300 bg-emerald-50 rounded-md text-sm font-medium text-emerald-700 hover:bg-emerald-100">
+                            <button type="button" @click="showReactivate = true" style="background-color:#4f46e5;color:#ffffff;" class="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold shadow-sm hover:opacity-90">
                                 Reactivate
                             </button>
                         @endif
@@ -65,7 +65,7 @@
 
                                 <div class="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-6 py-3">
                                     <button type="button" @click="showReactivate = false" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
-                                    <button type="submit" class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500">Reactivate License</button>
+                                    <button type="submit" style="background-color:#4f46e5;color:#ffffff;" class="rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm hover:opacity-90">Reactivate License</button>
                                 </div>
                             </form>
                         </div>
