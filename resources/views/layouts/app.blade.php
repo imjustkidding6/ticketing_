@@ -599,6 +599,24 @@
                     </div>
                 @endif
 
+                {{-- License expiration banner --}}
+                @if($sidebarTenant?->license)
+                    @php $lic = $sidebarTenant->license; @endphp
+                    @if($lic->isInGracePeriod())
+                        <div class="px-4 mt-4">
+                            <div class="rounded-md border-l-4 border-orange-400 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+                                <strong>Subscription expired.</strong> You are in a grace period — service will be suspended in {{ $lic->daysUntilFullExpiry() }} day{{ $lic->daysUntilFullExpiry() === 1 ? '' : 's' }}. Please contact your administrator to renew.
+                            </div>
+                        </div>
+                    @elseif($lic->status === \App\Models\License::STATUS_ACTIVE && $lic->daysUntilExpiry() <= 7 && ! $lic->isExpired())
+                        <div class="px-4 mt-4">
+                            <div class="rounded-md border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                <strong>Subscription expiring soon.</strong> Your subscription expires on {{ $lic->expires_at->format('M j, Y') }} ({{ $lic->daysUntilExpiry() }} day{{ $lic->daysUntilExpiry() === 1 ? '' : 's' }} remaining). Please contact your administrator to renew.
+                            </div>
+                        </div>
+                    @endif
+                @endif
+
                 <!-- Page Content -->
                 <main class="flex-1">
                     {{ $slot }}

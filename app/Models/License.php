@@ -38,6 +38,11 @@ class License extends Model
         'activated_at',
         'expires_at',
         'grace_days',
+        'revoked_at',
+        'reactivated_at',
+        'expiry_warning_sent_at',
+        'grace_warning_sent_at',
+        'expired_notification_sent_at',
     ];
 
     /**
@@ -51,6 +56,11 @@ class License extends Model
             'activated_at' => 'datetime',
             'expires_at' => 'datetime',
             'grace_days' => 'integer',
+            'revoked_at' => 'datetime',
+            'reactivated_at' => 'datetime',
+            'expiry_warning_sent_at' => 'datetime',
+            'grace_warning_sent_at' => 'datetime',
+            'expired_notification_sent_at' => 'datetime',
         ];
     }
 
@@ -117,7 +127,29 @@ class License extends Model
      */
     public function revoke(): bool
     {
-        $this->update(['status' => self::STATUS_REVOKED]);
+        $this->update([
+            'status' => self::STATUS_REVOKED,
+            'revoked_at' => now(),
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Reactivate an expired or revoked license with a new expiration date.
+     * Resets the notification flags so future expiration warnings will fire.
+     */
+    public function reactivate(Carbon $newExpiresAt): bool
+    {
+        $this->update([
+            'status' => self::STATUS_ACTIVE,
+            'expires_at' => $newExpiresAt,
+            'reactivated_at' => now(),
+            'revoked_at' => null,
+            'expiry_warning_sent_at' => null,
+            'grace_warning_sent_at' => null,
+            'expired_notification_sent_at' => null,
+        ]);
 
         return true;
     }
