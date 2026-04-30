@@ -12,26 +12,46 @@
         <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6">
             @php
                 $days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                $tenantTz = \App\Support\TenantTime::timezone();
+                $localNow = now()->copy()->setTimezone($tenantTz);
+                $todayIndex = (int) $localNow->dayOfWeek;
             @endphp
 
+            <div class="mb-4 flex items-center justify-between rounded-md bg-indigo-50 border border-indigo-200 px-4 py-2 text-xs">
+                <div class="text-indigo-900">
+                    <span class="font-semibold">{{ __('Timezone') }}:</span> {{ $tenantTz }}
+                    @if($tenantTz === 'UTC')
+                        <span class="ml-1 text-amber-700">({{ __('default — set in Settings → General') }})</span>
+                    @endif
+                </div>
+                <div class="text-indigo-900">
+                    <span class="font-semibold">{{ __('Now') }}:</span> {{ $localNow->format('D, g:i A') }}
+                </div>
+            </div>
+
             @forelse($agents as $agent)
+                @php $onShift = $agent->isOnScheduleAt(); @endphp
                 <div class="mb-6 overflow-hidden rounded-xl bg-white shadow-sm">
-                    <div class="border-b border-gray-200 bg-gray-50 px-6 py-3">
+                    <div class="border-b border-gray-200 bg-gray-50 px-6 py-3 flex items-center justify-between">
                         <h3 class="text-sm font-semibold text-gray-900">{{ $agent->name }}</h3>
+                        <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium {{ $onShift ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
+                            <span class="h-1.5 w-1.5 rounded-full {{ $onShift ? 'bg-green-500' : 'bg-gray-400' }}"></span>
+                            {{ $onShift ? __('On shift') : __('Off shift') }}
+                        </span>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead>
                                 <tr>
-                                    @foreach($days as $day)
-                                        <th class="px-4 py-2 text-center text-xs font-medium uppercase tracking-wider text-gray-500">{{ $day }}</th>
+                                    @foreach($days as $index => $day)
+                                        <th class="px-4 py-2 text-center text-xs font-medium uppercase tracking-wider {{ $index === $todayIndex ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500' }}">{{ $day }}</th>
                                     @endforeach
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
                                     @foreach($days as $index => $day)
-                                        <td class="px-4 py-3 text-center align-top">
+                                        <td class="px-4 py-3 text-center align-top {{ $index === $todayIndex ? 'bg-indigo-50/40' : '' }}">
                                             @php
                                                 $daySchedules = $agent->schedules->where('day_of_week', $index);
                                             @endphp

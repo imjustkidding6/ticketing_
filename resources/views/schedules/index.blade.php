@@ -25,6 +25,12 @@
                 </form>
             @endif
 
+            @php
+                $tenantTz = \App\Support\TenantTime::timezone();
+                $localNow = now()->copy()->setTimezone($tenantTz);
+                $todayIndex = (int) $localNow->dayOfWeek;
+            @endphp
+
             <form method="POST" action="{{ route('schedules.save') }}" class="rounded-xl bg-white p-6 shadow-sm">
                 @csrf
                 @if($target->id !== auth()->id())
@@ -32,6 +38,20 @@
                 @endif
 
                 <p class="mb-4 text-sm text-gray-600">{{ __('Set when this agent is available each day. Toggle the checkbox to mark a day as unavailable.') }}</p>
+
+                <div class="mb-4 flex items-center justify-between rounded-md bg-indigo-50 border border-indigo-200 px-4 py-2 text-xs">
+                    <div class="text-indigo-900">
+                        <span class="font-semibold">{{ __('Timezone') }}:</span>
+                        {{ $tenantTz }}
+                        @if($tenantTz === 'UTC')
+                            <span class="ml-1 text-amber-700">({{ __('default — set in Settings → General') }})</span>
+                        @endif
+                    </div>
+                    <div class="text-indigo-900">
+                        <span class="font-semibold">{{ __('Now') }}:</span>
+                        {{ $localNow->format('D, g:i A') }}
+                    </div>
+                </div>
 
                 <div class="overflow-hidden rounded-md border border-gray-200">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -45,9 +65,14 @@
                         </thead>
                         <tbody class="divide-y divide-gray-100 text-sm">
                             @foreach($days as $dayIndex => $dayName)
-                                @php $row = $week[$dayIndex]; @endphp
-                                <tr class="{{ $row['available'] ? '' : 'bg-gray-50' }}">
-                                    <td class="px-4 py-3 font-medium text-gray-900">{{ $dayName }}</td>
+                                @php $row = $week[$dayIndex]; $isToday = $dayIndex === $todayIndex; @endphp
+                                <tr class="{{ $isToday ? 'bg-indigo-50/50' : ($row['available'] ? '' : 'bg-gray-50') }}">
+                                    <td class="px-4 py-3 font-medium text-gray-900">
+                                        {{ $dayName }}
+                                        @if($isToday)
+                                            <span class="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">{{ __('Today') }}</span>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-3 text-center">
                                         <input type="checkbox" name="week[{{ $dayIndex }}][available]" value="1"
                                             {{ $row['available'] ? 'checked' : '' }}
