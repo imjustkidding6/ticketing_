@@ -7,14 +7,69 @@
         <div class="px-6 py-4 border-b border-gray-200">
             <div class="flex justify-between items-center">
                 <h3 class="text-lg font-medium text-gray-900">License Information</h3>
-                <div class="space-x-2">
+                <div class="space-x-2" x-data="{ showReactivate: false }">
                     <a href="{{ route('admin.licenses.edit', $license) }}" class="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">Edit</a>
-                    @if($license->status !== 'revoked')
+                    @if($license->status !== 'revoked' && !$license->isFullyExpired())
                         <form action="{{ route('admin.licenses.revoke', $license) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure?')">
                             @csrf
                             <button type="submit" class="inline-flex items-center px-3 py-1 border border-red-300 rounded-md text-sm text-red-700 hover:bg-red-50">Revoke</button>
                         </form>
                     @endif
+
+                    @if($license->status !== 'pending')
+                        @if($license->isFullyExpired() || $license->status === 'revoked' || $license->isInGracePeriod())
+                            <button type="button" @click="showReactivate = true" class="inline-flex items-center px-3 py-1 border border-emerald-300 bg-emerald-50 rounded-md text-sm font-medium text-emerald-700 hover:bg-emerald-100">
+                                Reactivate
+                            </button>
+                        @endif
+                    @endif
+
+                    {{-- Reactivate modal --}}
+                    <div x-show="showReactivate" x-cloak
+                         x-transition.opacity
+                         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                         style="background-color: rgba(17,24,39,0.5);"
+                         @keydown.escape.window="showReactivate = false"
+                         @click.self="showReactivate = false">
+                        <div class="w-full max-w-md rounded-xl bg-white shadow-xl" @click.stop>
+                            <form method="POST" action="{{ route('admin.licenses.reactivate', $license) }}">
+                                @csrf
+                                <div class="p-6">
+                                    <h3 class="text-base font-semibold text-gray-900">Reactivate License</h3>
+                                    <p class="mt-1 text-sm text-gray-500">Set a new expiration date. The tenant's access will be restored immediately, and the action will be recorded in the activity log.</p>
+
+                                    <div class="mt-5 space-y-4">
+                                        <div>
+                                            <label for="expires_at" class="block text-xs font-medium text-gray-700">New Expiration Date <span class="text-red-500">*</span></label>
+                                            <input type="date" name="expires_at" id="expires_at" required
+                                                value="{{ now()->addYear()->format('Y-m-d') }}"
+                                                min="{{ now()->addDay()->format('Y-m-d') }}"
+                                                class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        </div>
+
+                                        <div>
+                                            <label for="grace_days_react" class="block text-xs font-medium text-gray-700">Grace Period (days)</label>
+                                            <input type="number" name="grace_days" id="grace_days_react" min="0" max="90"
+                                                value="{{ $license->grace_days }}"
+                                                class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        </div>
+
+                                        <div>
+                                            <label for="note" class="block text-xs font-medium text-gray-700">Note (optional)</label>
+                                            <textarea name="note" id="note" rows="2" maxlength="500"
+                                                placeholder="e.g. Annual renewal — invoice #1234"
+                                                class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-6 py-3">
+                                    <button type="button" @click="showReactivate = false" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                                    <button type="submit" class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500">Reactivate License</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -90,6 +145,20 @@
                     <dt class="text-sm font-medium text-gray-500">Grace Period</dt>
                     <dd class="mt-1 text-sm text-gray-900">{{ $license->grace_days }} days</dd>
                 </div>
+
+                @if($license->reactivated_at)
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Last Reactivated</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ $license->reactivated_at->format('M d, Y H:i') }}</dd>
+                    </div>
+                @endif
+
+                @if($license->revoked_at)
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Revoked At</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ $license->revoked_at->format('M d, Y H:i') }}</dd>
+                    </div>
+                @endif
             </dl>
         </div>
 
@@ -108,6 +177,38 @@
             </div>
         @endif
     </div>
+
+    @php
+        $licenseLogs = \App\Models\ActivityLog::query()
+            ->withoutGlobalScopes()
+            ->where('subject_type', $license->getMorphClass())
+            ->where('subject_id', $license->id)
+            ->latest()
+            ->limit(20)
+            ->get();
+    @endphp
+
+    @if($licenseLogs->isNotEmpty())
+        <div class="bg-white shadow rounded-lg mt-6 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Activity Log</h3>
+            </div>
+            <ul class="divide-y divide-gray-100">
+                @foreach($licenseLogs as $log)
+                    <li class="px-6 py-3">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm text-gray-900">{{ $log->description ?? $log->action }}</p>
+                                <p class="mt-0.5 text-xs text-gray-400">
+                                    {{ $log->action }} · {{ $log->created_at->format('M d, Y H:i') }}
+                                </p>
+                            </div>
+                        </div>
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
     <div class="mt-4">
         <a href="{{ route('admin.licenses.index') }}" class="text-indigo-600 hover:text-indigo-900">&larr; Back to Licenses</a>

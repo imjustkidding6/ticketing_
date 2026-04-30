@@ -41,6 +41,11 @@ class EnsureTenantSession
                     ->with('error', 'You do not have access to this organization.');
             }
 
+            // Block access if the license is fully expired (past grace period)
+            if (! $tenant->isLicenseValid()) {
+                return redirect()->route('license.expired', ['slug' => $tenant->slug]);
+            }
+
             session(['current_tenant_id' => $tenant->id]);
             app(PermissionRegistrar::class)->setPermissionsTeamId($tenant->id);
 
@@ -60,6 +65,10 @@ class EnsureTenantSession
                 $user->clearCurrentTenant();
 
                 return redirect()->route('tenant.select');
+            }
+
+            if (! $tenant->isLicenseValid()) {
+                return redirect()->route('license.expired', ['slug' => $tenant->slug]);
             }
 
             app(PermissionRegistrar::class)->setPermissionsTeamId($tenant->id);

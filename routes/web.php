@@ -36,6 +36,17 @@ Route::get('/no-tenant', function () {
     return view('tenant.no-tenant');
 })->middleware(['auth'])->name('dashboard.no-tenant');
 
+Route::get('/{slug}/license-expired', function (string $slug) {
+    $tenant = \App\Models\Tenant::where('slug', $slug)->firstOrFail();
+    abort_unless(auth()->user()?->belongsToTenant($tenant), 403);
+    return view('tenant.license-expired', [
+        'tenant'  => $tenant,
+        'license' => $tenant->license,
+    ]);
+})->where('slug', '[a-z0-9][a-z0-9\-]*[a-z0-9]')
+  ->middleware(['auth'])
+  ->name('license.expired');
+
 Route::middleware('auth')->group(function () {
     Route::get('/tenant/select', [TenantController::class, 'select'])->name('tenant.select');
     Route::post('/tenant/switch', [TenantController::class, 'switch'])->name('tenant.switch');
@@ -59,6 +70,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::resource('plans', PlanController::class)->only(['index', 'edit', 'update']);
     Route::resource('licenses', LicenseController::class)->except(['destroy']);
     Route::post('licenses/{license}/revoke', [LicenseController::class, 'revoke'])->name('licenses.revoke');
+    Route::post('licenses/{license}/reactivate', [LicenseController::class, 'reactivate'])->name('licenses.reactivate');
 
     Route::get('tenants', [AdminTenantController::class, 'index'])->name('tenants.index');
     Route::get('tenants/{tenant}', [AdminTenantController::class, 'show'])->name('tenants.show');

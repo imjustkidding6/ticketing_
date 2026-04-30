@@ -87,7 +87,62 @@ class LicenseController extends Controller
     {
         $license->revoke();
 
+        if ($license->tenant_id) {
+            \App\Services\ActivityLogger::log(
+                $license,
+                'license_revoked',
+                "License {$license->license_key} revoked."
+            );
+        }
+
         return redirect()->route('admin.licenses.index')
             ->with('success', 'License revoked successfully.');
+    }
+
+    public function reactivate(Request $request, License $license): RedirectResponse
+    {
+        abort_if(
+            $license->status === License::STATUS_PENDING,
+            422,
+            'Pending licenses must be activated by a tenant — they cannot be reactivated.'
+        );
+
+        $validated = $request->validate([
+            'expires_at' => ['required', 'date', 'after:today'],
+            'grace_days' => ['nullable', 'integer', 'min:0', 'max:90'],
+            'note'       => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $previousExpiry = $license->expires_at?->toDateString();
+        $previousStatus = $license->status;
+
+        $license->reactivate(\Carbon\Carbon::parse($validated['expires_at']));
+
+        if (! empty($validated['grace_days'])) {
+            $license->update(['grace_days' => $validated['grace_days']]);
+        }
+
+        if ($license->tenant_id) {
+            \App\Services\ActivityLogger::log(
+                $license,
+                'license_reactivated',
+                sprintf(
+                    'License %s reactivated (was %s, expired %s). New expiry: %s.%s',
+                    $license->license_key,
+                    $previousStatus,
+                    $previousExpiry ?? 'unknown',
+                    $license->expires_at->toDateString(),
+                    ! empty($validated['note']) ? ' Note: ' . $validated['note'] : ''
+                ),
+                [
+                    'previous_status'      => $previousStatus,
+                    'previous_expires_at'  => $previousExpiry,
+                    'new_expires_at'       => $license->expires_at->toDateString(),
+                ]
+            );
+        }
+
+        return redirect()->route('admin.licenses.show', $license)
+            ->with('success', 'License reactivated. Expires '.$license->expires_at->format('F j, Y').'.');
     }
 }
