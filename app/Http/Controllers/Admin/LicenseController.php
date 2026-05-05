@@ -99,6 +99,21 @@ class LicenseController extends Controller
             ->with('success', 'License revoked successfully.');
     }
 
+    public function destroy(License $license): RedirectResponse
+    {
+        abort_if(
+            $license->status !== License::STATUS_PENDING || $license->tenant_id !== null,
+            422,
+            'Only pending licenses that have not been activated can be deleted.'
+        );
+
+        $key = $license->license_key;
+        $license->delete();
+
+        return redirect()->route('admin.licenses.index')
+            ->with('success', "License {$key} deleted.");
+    }
+
     public function reactivate(Request $request, License $license): RedirectResponse
     {
         abort_if(

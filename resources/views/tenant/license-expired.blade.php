@@ -14,7 +14,7 @@
         <dl class="mt-6 grid grid-cols-2 gap-3 rounded-lg bg-gray-50 px-4 py-3 text-sm">
             <div>
                 <dt class="text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Expired On') }}</dt>
-                <dd class="mt-1 text-gray-900">{{ $license->expires_at->format('F j, Y') }}</dd>
+                <dd class="mt-1 text-gray-900">@localdt($license->expires_at, 'F j, Y')</dd>
             </div>
             <div>
                 <dt class="text-xs font-medium uppercase tracking-wider text-gray-500">{{ __('Status') }}</dt>
