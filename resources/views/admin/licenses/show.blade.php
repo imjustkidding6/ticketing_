@@ -16,6 +16,14 @@
                         </form>
                     @endif
 
+                    @if($license->status === 'pending' && $license->tenant_id === null)
+                        <form action="{{ route('admin.licenses.destroy', $license) }}" method="POST" class="inline" onsubmit="return confirm('Permanently delete this unactivated license? This cannot be undone.')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="inline-flex items-center px-3 py-1 border border-red-600 bg-red-600 rounded-md text-sm text-white hover:bg-red-700">Delete</button>
+                        </form>
+                    @endif
+
                     @if($license->status !== 'pending')
                         @if($license->isFullyExpired() || $license->status === 'revoked' || $license->isInGracePeriod())
                             <button type="button" @click="showReactivate = true" style="background-color:#4f46e5;color:#ffffff;" class="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold shadow-sm hover:opacity-90">
@@ -121,20 +129,20 @@
 
                 <div>
                     <dt class="text-sm font-medium text-gray-500">Issued At</dt>
-                    <dd class="mt-1 text-sm text-gray-900">{{ $license->issued_at->format('M d, Y H:i') }}</dd>
+                    <dd class="mt-1 text-sm text-gray-900">@localdt($license->issued_at, 'M d, Y H:i')</dd>
                 </div>
 
                 <div>
                     <dt class="text-sm font-medium text-gray-500">Activated At</dt>
                     <dd class="mt-1 text-sm text-gray-900">
-                        {{ $license->activated_at ? $license->activated_at->format('M d, Y H:i') : 'Not activated' }}
+                        {{ $license->activated_at ? \App\Support\TenantTime::format($license->activated_at, 'M d, Y H:i') : 'Not activated' }}
                     </dd>
                 </div>
 
                 <div>
                     <dt class="text-sm font-medium text-gray-500">Expires At</dt>
                     <dd class="mt-1 text-sm text-gray-900">
-                        {{ $license->expires_at->format('M d, Y') }}
+                        @localdt($license->expires_at, 'M d, Y')
                         @if(!$license->isExpired())
                             <span class="text-gray-500">({{ $license->daysUntilExpiry() }} days remaining)</span>
                         @endif
@@ -149,14 +157,14 @@
                 @if($license->reactivated_at)
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Last Reactivated</dt>
-                        <dd class="mt-1 text-sm text-gray-900">{{ $license->reactivated_at->format('M d, Y H:i') }}</dd>
+                        <dd class="mt-1 text-sm text-gray-900">@localdt($license->reactivated_at, 'M d, Y H:i')</dd>
                     </div>
                 @endif
 
                 @if($license->revoked_at)
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Revoked At</dt>
-                        <dd class="mt-1 text-sm text-gray-900">{{ $license->revoked_at->format('M d, Y H:i') }}</dd>
+                        <dd class="mt-1 text-sm text-gray-900">@localdt($license->revoked_at, 'M d, Y H:i')</dd>
                     </div>
                 @endif
             </dl>

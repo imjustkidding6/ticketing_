@@ -60,7 +60,7 @@
                             @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {{ $license->expires_at->format('M d, Y') }}
+                            @localdt($license->expires_at, 'M d, Y')
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                             <a href="{{ route('admin.licenses.show', $license) }}" class="text-indigo-600 hover:text-indigo-900">View</a>
@@ -69,6 +69,13 @@
                                 <form action="{{ route('admin.licenses.revoke', $license) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to revoke this license?')">
                                     @csrf
                                     <button type="submit" class="text-red-600 hover:text-red-900">Revoke</button>
+                                </form>
+                            @endif
+                            @if($license->status === 'pending' && $license->tenant_id === null)
+                                <form action="{{ route('admin.licenses.destroy', $license) }}" method="POST" class="inline" onsubmit="return confirm('Permanently delete this unactivated license? This cannot be undone.')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="text-red-600 hover:text-red-900 font-semibold">Delete</button>
                                 </form>
                             @endif
                         </td>
