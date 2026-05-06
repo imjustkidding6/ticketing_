@@ -160,6 +160,7 @@ class GoogleSocialiteController extends Controller
     {
         $request->session()->regenerate();
         Auth::login($user);
+        $user->purgeOtherSessions();
 
         if ($user->isAdmin()) {
             return redirect()->route('admin.dashboard');
