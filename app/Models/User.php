@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
@@ -143,5 +144,20 @@ class User extends Authenticatable
     public function createdTickets(): HasMany
     {
         return $this->hasMany(Ticket::class, 'created_by');
+    }
+
+    /**
+     * Enforce one-session-per-user: drop every database session row for this
+     * user other than the current request's session id. Call after the new
+     * session id has been issued (i.e. after $request->session()->regenerate()).
+     */
+    public function purgeOtherSessions(?string $keepSessionId = null): int
+    {
+        $keepSessionId ??= session()->getId();
+
+        return DB::table(config('session.table', 'sessions'))
+            ->where('user_id', $this->id)
+            ->where('id', '!=', $keepSessionId)
+            ->delete();
     }
 }

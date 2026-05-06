@@ -31,6 +31,8 @@ class AuthenticatedSessionController extends Controller
 
         $user = $request->user();
 
+        $user->purgeOtherSessions();
+
         if ($user->isAdmin()) {
             return redirect()->route('admin.dashboard');
         }
