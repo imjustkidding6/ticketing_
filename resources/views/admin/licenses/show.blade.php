@@ -140,11 +140,20 @@
                 </div>
 
                 <div>
+                    <dt class="text-sm font-medium text-gray-500">Validity Period</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ $license->duration_days }} days</dd>
+                </div>
+
+                <div>
                     <dt class="text-sm font-medium text-gray-500">Expires At</dt>
                     <dd class="mt-1 text-sm text-gray-900">
-                        @localdt($license->expires_at, 'M d, Y')
-                        @if(!$license->isExpired())
-                            <span class="text-gray-500">({{ $license->daysUntilExpiry() }} days remaining)</span>
+                        @if($license->expires_at)
+                            @localdt($license->expires_at, 'M d, Y')
+                            @if(!$license->isExpired())
+                                <span class="text-gray-500">({{ $license->daysUntilExpiry() }} days remaining)</span>
+                            @endif
+                        @else
+                            <span class="text-gray-400">Starts on activation</span>
                         @endif
                     </dd>
                 </div>

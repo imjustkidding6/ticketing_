@@ -127,6 +127,24 @@ Ancillary namespaces:
 - `app/Notifications/` — Per-event notifications (`TicketCreated`, `TicketAssigned`, `TicketStatusChanged`, `SlaBreachWarning`, client variants, `SystemAnnouncement`). Dispatched by services rather than controllers; respect the `email_notifications` feature where relevant.
 - `app/Support/` — Framework-agnostic helpers (e.g., `TenantTime`). Not services; no side effects.
 
+### Activity Logging
+
+Models opt into audit logging via the `LogsActivity` trait (`app/Models/Traits/LogsActivity.php`). It auto-captures `created`, `updated`, `deleted`, `restored`, `force_deleted` events and persists field-level diffs to the `activity_logs` table. Models define `$activityLogIgnore` to suppress noisy fields (e.g., Ticket ignores `tracking_token`, `sla_breach_notified_at`). Timestamps, `password`, and `remember_token` are always ignored. Gated by the `audit_logs` plan feature (Business+).
+
+### Single Active Session
+
+`User::purgeOtherSessions()` is called on every successful login (password and Google OAuth) after `session()->regenerate()`. It deletes all rows from the `sessions` table for the user except the current session ID. Latest login wins — previous sessions are immediately invalidated. Depends on `SESSION_DRIVER=database`.
+
+### Scheduled Commands
+
+Defined in `routes/console.php`:
+- **`SendSlaBreachWarnings`** — every 15 minutes. Checks tickets with overdue response/resolution times and notifies assigned agents. Only fires if tenant has `email_notifications` feature enabled.
+- **`CheckLicenseExpirations`** — daily at 02:00 UTC. Multi-stage notification lifecycle: 4–7 days = approaching, 0–3 days = imminent, then grace period tracking, then final status flip to `EXPIRED`. Uses warning flags on the license to avoid duplicate sends.
+
+### Ticket Hold Time & SLA
+
+Tickets track hold time via `startHold()`, `endHold()`, and `getTotalHoldTimeMinutes()`. Hold time is excluded from SLA calculations: `getEffectiveResolutionTimeHours()` and `getEffectiveResponseTimeHours()` subtract hold duration. This is critical for accurate SLA compliance reporting.
+
 ### Queue & Cache
 
 Dev default (`.env.example`): `QUEUE_CONNECTION=database`, `CACHE_STORE=database`, `SESSION_DRIVER=database`. Redis and SQS are opt-in and typically used in production. `composer run dev` starts a queue worker, so queued notifications will be processed locally. If you switch `CACHE_STORE` mid-session, clear the plan-feature cache (`PlanService::clearCache`) since it relies on whatever store is active.
@@ -152,6 +170,7 @@ private function setupTenantContext(Tenant $tenant): User {
 }
 ```
 - Factories in `database/factories/` cover all major models (Tenant, User, Plan, License, Ticket, Client, Department, Product, etc.).
+- **Default seeded credentials:** `admin@example.com` / `password` (admin), `test@example.com` / `password` (tenant user).
 
 ### Public Portal
 
@@ -198,4 +217,10 @@ Google-registered users have `password = null` and `email_verified_at` pre-set. 
 ### Controller Concerns
 
 `app/Http/Controllers/Concerns/HasSortableQuery.php` — reusable trait for controllers that support column sorting. Use it instead of duplicating sort logic.
+
+### CI/CD
+
+GitHub Actions (`.github/workflows/`):
+- **test.yml** — runs on all pushes and PRs. Spins up MySQL + Redis services, runs `php artisan test --compact` and Pint lint check.
+- **deploy.yml** — runs test job first, then on `main` only: builds Docker image → pushes to ECR → runs migrations as an ECS one-off task → updates `ticketing-web` and `ticketing-worker` ECS services → waits for stability. Web and queue worker are separate ECS services.
 <!-- Laravel Boost guidelines are auto-injected at runtime by the Laravel Boost MCP server. Do not duplicate them here. -->

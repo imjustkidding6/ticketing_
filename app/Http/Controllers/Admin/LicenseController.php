@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Distributor;
 use App\Models\License;
 use App\Models\Plan;
+use App\Services\ActivityLogger;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -35,7 +37,7 @@ class LicenseController extends Controller
             'distributor_id' => ['required', 'exists:distributors,id'],
             'plan_id' => ['required', 'exists:plans,id'],
             'seats' => ['required', 'integer', 'min:1'],
-            'expires_at' => ['required', 'date', 'after:today'],
+            'duration_days' => ['required', 'integer', 'min:1', 'max:3650'],
             'grace_days' => ['required', 'integer', 'min:0', 'max:90'],
         ]);
 
@@ -46,7 +48,7 @@ class LicenseController extends Controller
             'seats' => $validated['seats'],
             'status' => License::STATUS_PENDING,
             'issued_at' => now(),
-            'expires_at' => $validated['expires_at'],
+            'duration_days' => $validated['duration_days'],
             'grace_days' => $validated['grace_days'],
         ]);
 
@@ -70,12 +72,19 @@ class LicenseController extends Controller
 
     public function update(Request $request, License $license): RedirectResponse
     {
-        $validated = $request->validate([
+        $rules = [
             'plan_id' => ['required', 'exists:plans,id'],
             'seats' => ['required', 'integer', 'min:1'],
-            'expires_at' => ['required', 'date'],
             'grace_days' => ['required', 'integer', 'min:0', 'max:90'],
-        ]);
+        ];
+
+        if ($license->activated_at) {
+            $rules['expires_at'] = ['required', 'date'];
+        } else {
+            $rules['duration_days'] = ['required', 'integer', 'min:1', 'max:3650'];
+        }
+
+        $validated = $request->validate($rules);
 
         $license->update($validated);
 
@@ -88,7 +97,7 @@ class LicenseController extends Controller
         $license->revoke();
 
         if ($license->tenant_id) {
-            \App\Services\ActivityLogger::log(
+            ActivityLogger::log(
                 $license,
                 'license_revoked',
                 "License {$license->license_key} revoked."
@@ -125,20 +134,20 @@ class LicenseController extends Controller
         $validated = $request->validate([
             'expires_at' => ['required', 'date', 'after:today'],
             'grace_days' => ['nullable', 'integer', 'min:0', 'max:90'],
-            'note'       => ['nullable', 'string', 'max:500'],
+            'note' => ['nullable', 'string', 'max:500'],
         ]);
 
         $previousExpiry = $license->expires_at?->toDateString();
         $previousStatus = $license->status;
 
-        $license->reactivate(\Carbon\Carbon::parse($validated['expires_at']));
+        $license->reactivate(Carbon::parse($validated['expires_at']));
 
         if (! empty($validated['grace_days'])) {
             $license->update(['grace_days' => $validated['grace_days']]);
         }
 
         if ($license->tenant_id) {
-            \App\Services\ActivityLogger::log(
+            ActivityLogger::log(
                 $license,
                 'license_reactivated',
                 sprintf(
@@ -147,12 +156,12 @@ class LicenseController extends Controller
                     $previousStatus,
                     $previousExpiry ?? 'unknown',
                     $license->expires_at->toDateString(),
-                    ! empty($validated['note']) ? ' Note: ' . $validated['note'] : ''
+                    ! empty($validated['note']) ? ' Note: '.$validated['note'] : ''
                 ),
                 [
-                    'previous_status'      => $previousStatus,
-                    'previous_expires_at'  => $previousExpiry,
-                    'new_expires_at'       => $license->expires_at->toDateString(),
+                    'previous_status' => $previousStatus,
+                    'previous_expires_at' => $previousExpiry,
+                    'new_expires_at' => $license->expires_at->toDateString(),
                 ]
             );
         }
