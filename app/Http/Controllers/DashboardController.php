@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketHistory;
 use App\Models\TicketTask;
+use App\Services\OnboardingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -13,12 +15,27 @@ use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
+    public function __construct(private OnboardingService $onboardingService) {}
+
     /**
      * Display the personalized tenant dashboard.
      */
     public function index(): View
     {
-        return view('dashboard', $this->getDashboardData());
+        $data = $this->getDashboardData();
+
+        $tenant = Auth::user()->currentTenant();
+        if ($tenant) {
+            $this->onboardingService->autoDetect($tenant);
+            $data['onboarding'] = [
+                'steps' => $this->onboardingService->getSteps($tenant),
+                'progress' => $this->onboardingService->progress($tenant),
+                'dismissed' => $this->onboardingService->isDismissed($tenant),
+                'complete' => $this->onboardingService->isComplete($tenant),
+            ];
+        }
+
+        return view('dashboard', $data);
     }
 
     /**
@@ -37,7 +54,7 @@ class DashboardController extends Controller
         $user = Auth::user();
         $userId = $user->id;
         $tenantId = session('current_tenant_id');
-        $tenant = $tenantId ? \App\Models\Tenant::find($tenantId) : null;
+        $tenant = $tenantId ? Tenant::find($tenantId) : null;
         $role = $tenant ? $user->roleInTenant($tenant) : null;
         $isAdminOrOwner = in_array($role, ['owner', 'admin']);
 

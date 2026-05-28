@@ -6,6 +6,139 @@
     <div class="py-6">
         <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6">
 
+            {{-- ── Onboarding Checklist ── --}}
+            @if(isset($onboarding) && !$onboarding['dismissed'] && !$onboarding['complete'])
+                <div class="mb-6" x-data="onboardingChecklist()" x-cloak>
+                    <div class="rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-white p-6 shadow-sm">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">{{ __('Get Started with TechDesk') }}</h3>
+                                <p class="mt-1 text-sm text-gray-500">{{ __('Complete these steps to set up your workspace.') }}</p>
+                            </div>
+                            <button @click="dismiss()" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+
+                        <div class="mt-4">
+                            <div class="flex items-center gap-3">
+                                <div class="h-2 flex-1 rounded-full bg-gray-200">
+                                    <div class="h-2 rounded-full bg-indigo-600 transition-all duration-500" :style="'width: ' + progressPercent + '%'"></div>
+                                </div>
+                                <span class="text-sm font-medium text-gray-600" x-text="progress.completed + '/' + progress.total + ' complete'"></span>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            @foreach($onboarding['steps'] as $step)
+                                <button
+                                    type="button"
+                                    @if(!$step['completed'])
+                                        @click="openModal('{{ $step['key'] }}')"
+                                        class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-left transition hover:border-indigo-300 hover:shadow-sm"
+                                    @else
+                                        disabled
+                                        class="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-left"
+                                    @endif
+                                >
+                                    @if($step['completed'])
+                                        <svg class="h-5 w-5 shrink-0 text-green-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    @else
+                                        <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-gray-300"></div>
+                                    @endif
+                                    <span class="text-sm font-medium {{ $step['completed'] ? 'text-green-700' : 'text-gray-700' }}">{{ __($step['label']) }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+
+                        <div class="mt-4 text-right">
+                            <a href="{{ route('tutorials.index') }}" class="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-500">
+                                {{ __('View All Tutorials') }}
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
+                            </a>
+                        </div>
+                    </div>
+
+                    {{-- Guided Step Modal --}}
+                    <div x-show="modalOpen" x-cloak
+                         x-transition.opacity
+                         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                         style="background-color: rgba(17,24,39,0.5);"
+                         @keydown.escape.window="modalOpen = false"
+                         @click.self="modalOpen = false">
+                        <div x-show="modalOpen"
+                             x-transition:enter="ease-out duration-200"
+                             x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+                             x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                             class="w-full max-w-md rounded-xl bg-white shadow-xl" @click.stop>
+                            <div class="p-6">
+                                <h3 class="text-base font-semibold text-gray-900" x-text="currentStep?.label"></h3>
+                                <p class="mt-2 text-sm text-gray-600" x-text="currentStep?.description"></p>
+                            </div>
+                            <div class="flex items-center justify-end gap-2 rounded-b-xl border-t border-gray-100 bg-gray-50 px-6 py-3">
+                                <button type="button" @click="markDone()" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">{{ __('Mark as Done') }}</button>
+                                <a :href="currentStep?.url" class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" x-text="'Go to ' + (currentStep?.label ?? '')"></a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                function onboardingChecklist() {
+                    return {
+                        progress: @json($onboarding['progress']),
+                        steps: @json($onboarding['steps']),
+                        modalOpen: false,
+                        currentStep: null,
+                        get progressPercent() {
+                            return this.progress.total > 0 ? Math.round((this.progress.completed / this.progress.total) * 100) : 0;
+                        },
+                        openModal(key) {
+                            this.currentStep = this.steps.find(s => s.key === key);
+                            if (this.currentStep) {
+                                this.currentStep.url = '{{ url("/" . (Auth::user()->currentTenant()?->slug ?? "")) }}/' + this.getRoute(this.currentStep.route);
+                                this.modalOpen = true;
+                            }
+                        },
+                        getRoute(routeName) {
+                            var routes = {
+                                'settings.general': 'settings/general',
+                                'departments.index': 'departments',
+                                'categories.index': 'categories',
+                                'members.create': 'members/create',
+                                'tickets.create': 'tickets/create',
+                                'reports.overview': 'reports'
+                            };
+                            return routes[routeName] || routeName;
+                        },
+                        async markDone() {
+                            if (!this.currentStep) return;
+                            var key = this.currentStep.key;
+                            await fetch('{{ route("onboarding.complete-step") }}', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                                body: JSON.stringify({ step: key })
+                            });
+                            var step = this.steps.find(s => s.key === key);
+                            if (step) step.completed = true;
+                            this.progress.completed = this.steps.filter(s => s.completed).length;
+                            this.modalOpen = false;
+                            if (this.progress.completed >= this.progress.total) {
+                                this.$el.closest('.mb-6').remove();
+                            }
+                        },
+                        async dismiss() {
+                            await fetch('{{ route("onboarding.dismiss") }}', {
+                                method: 'POST',
+                                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+                            });
+                            this.$el.closest('.mb-6').remove();
+                        }
+                    };
+                }
+                </script>
+            @endif
+
             {{-- ── My Ticket Stats ── --}}
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div class="rounded-xl bg-white p-6 shadow-sm">

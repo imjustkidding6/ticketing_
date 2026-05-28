@@ -12,17 +12,24 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EscalationController;
 use App\Http\Controllers\KbArticleController;
 use App\Http\Controllers\KbCategoryController;
+use App\Http\Controllers\KbPortalController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ServiceReportController;
 use App\Http\Controllers\SlaPolicyController;
-use App\Http\Controllers\TicketCommentController;
 use App\Http\Controllers\TenantFeedbackController;
+use App\Http\Controllers\TicketCommentController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\TicketTaskController;
+use App\Http\Controllers\TutorialController;
+use App\Models\Product;
+use App\Models\Tenant;
+use App\Models\TicketCategory;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -45,15 +52,15 @@ Route::get('track-ticket/{token}', [ClientPortalController::class, 'publicTrackB
 Route::post('track-ticket/{token}/reply', [ClientPortalController::class, 'publicReply'])->name('tenant.track-ticket.reply');
 
 // Knowledge Base portal (public, feature-gated at controller level)
-Route::get('kb', [App\Http\Controllers\KbPortalController::class, 'index'])->name('portal.knowledge-base.index');
-Route::get('kb/search', [App\Http\Controllers\KbPortalController::class, 'search'])->name('portal.knowledge-base.search');
-Route::get('kb/{categorySlug}', [App\Http\Controllers\KbPortalController::class, 'category'])->name('portal.knowledge-base.category');
-Route::get('kb/{categorySlug}/{articleSlug}', [App\Http\Controllers\KbPortalController::class, 'article'])->name('portal.knowledge-base.article');
+Route::get('kb', [KbPortalController::class, 'index'])->name('portal.knowledge-base.index');
+Route::get('kb/search', [KbPortalController::class, 'search'])->name('portal.knowledge-base.search');
+Route::get('kb/{categorySlug}', [KbPortalController::class, 'category'])->name('portal.knowledge-base.category');
+Route::get('kb/{categorySlug}/{articleSlug}', [KbPortalController::class, 'article'])->name('portal.knowledge-base.article');
 
 // Public API for cascading selects (no auth required, scoped by slug)
-Route::get('api/public/categories', function (\Illuminate\Http\Request $request, string $slug) {
-    $tenant = \App\Models\Tenant::where('slug', $slug)->where('is_active', true)->firstOrFail();
-    $query = \App\Models\TicketCategory::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_active', true)->orderBy('sort_order');
+Route::get('api/public/categories', function (Request $request, string $slug) {
+    $tenant = Tenant::where('slug', $slug)->where('is_active', true)->firstOrFail();
+    $query = TicketCategory::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_active', true)->orderBy('sort_order');
     if ($request->filled('department_id')) {
         $query->where('department_id', $request->department_id);
     }
@@ -61,13 +68,13 @@ Route::get('api/public/categories', function (\Illuminate\Http\Request $request,
     return $query->get(['id', 'name']);
 })->name('api.public.categories');
 
-Route::get('api/public/products', function (\Illuminate\Http\Request $request, string $slug) {
-    $tenant = \App\Models\Tenant::where('slug', $slug)->where('is_active', true)->firstOrFail();
-    $query = \App\Models\Product::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_active', true)->orderBy('sort_order');
+Route::get('api/public/products', function (Request $request, string $slug) {
+    $tenant = Tenant::where('slug', $slug)->where('is_active', true)->firstOrFail();
+    $query = Product::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_active', true)->orderBy('sort_order');
     if ($request->filled('category_id')) {
         $query->where('category_id', $request->category_id);
     } elseif ($request->filled('department_id')) {
-        $categoryIds = \App\Models\TicketCategory::withoutGlobalScopes()
+        $categoryIds = TicketCategory::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('department_id', $request->department_id)
             ->pluck('id');
@@ -94,8 +101,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::resource('members', MemberController::class);
 
     // Ticket lookup APIs (for cascading selects)
-    Route::get('api/categories', function (\Illuminate\Http\Request $request) {
-        $query = \App\Models\TicketCategory::active()->ordered();
+    Route::get('api/categories', function (Request $request) {
+        $query = TicketCategory::active()->ordered();
         if ($request->filled('department_id')) {
             $query->where('department_id', $request->department_id);
         }
@@ -103,12 +110,12 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
         return $query->get(['id', 'name']);
     })->name('api.categories');
 
-    Route::get('api/products', function (\Illuminate\Http\Request $request) {
-        $query = \App\Models\Product::active()->ordered();
+    Route::get('api/products', function (Request $request) {
+        $query = Product::active()->ordered();
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);
         } elseif ($request->filled('department_id')) {
-            $categoryIds = \App\Models\TicketCategory::active()
+            $categoryIds = TicketCategory::active()
                 ->where('department_id', $request->department_id)
                 ->pluck('id');
             $query->whereIn('category_id', $categoryIds);
@@ -237,6 +244,15 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
         Route::resource('articles', KbArticleController::class);
         Route::get('search', [KbArticleController::class, 'search'])->name('articles.search');
     });
+
+    // Onboarding
+    Route::post('onboarding/complete-step', [OnboardingController::class, 'completeStep'])->name('onboarding.complete-step');
+    Route::post('onboarding/dismiss', [OnboardingController::class, 'dismiss'])->name('onboarding.dismiss');
+    Route::post('onboarding/reset', [OnboardingController::class, 'reset'])->name('onboarding.reset');
+
+    // Tutorials
+    Route::get('tutorials', [TutorialController::class, 'index'])->name('tutorials.index');
+    Route::get('tutorials/{tutorial}', [TutorialController::class, 'show'])->name('tutorials.show');
 
     // Tenant Feedback
     Route::get('feedback', [TenantFeedbackController::class, 'create'])->name('feedback.create');
