@@ -181,7 +181,7 @@ class AiAssistantTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_in_app_assistant_has_per_user_memory(): void
+    public function test_in_app_assistant_keeps_per_user_conversation(): void
     {
         $tenant = $this->enterpriseTenant();
         $this->enableAi($tenant);
@@ -192,37 +192,42 @@ class AiAssistantTest extends TestCase
             $this->assistantText('Earlier you greeted me.'),
         ]);
 
-        $this->postJson($this->tenantUrl('/assistant/message'), ['message' => 'hi'])
-            ->assertOk()->assertJsonStructure(['reply']);
-        $this->postJson($this->tenantUrl('/assistant/message'), ['message' => 'what did I say first?'])
+        // First message (no id) creates a conversation and returns its id.
+        $first = $this->postJson($this->tenantUrl('/assistant/message'), ['message' => 'hi'])
+            ->assertOk()->assertJsonStructure(['reply', 'conversation_id']);
+        $cid = $first->json('conversation_id');
+
+        // A follow-up with that id reuses the same conversation (per-user memory).
+        $this->postJson($this->tenantUrl('/assistant/message'), ['message' => 'what did I say first?', 'conversation_id' => $cid])
             ->assertOk();
 
-        // Memory is keyed to the user account: a single agent-channel conversation, reused.
-        $this->assertDatabaseHas('chat_conversations', [
-            'tenant_id' => $tenant->id, 'user_id' => $user->id, 'channel' => 'agent',
-        ]);
         $this->assertSame(1, ChatConversation::withoutGlobalScopes()
             ->where('user_id', $user->id)->where('channel', 'agent')->count());
-        $this->assertDatabaseHas('chat_messages', ['role' => 'user', 'content' => 'hi']);
+        $convo = ChatConversation::withoutGlobalScopes()->where('user_id', $user->id)->first();
+        $this->assertSame($cid, $convo->id);
+        $this->assertSame(2, $convo->messages()->where('role', 'user')->count());
 
-        // History endpoint returns this user's conversation.
-        $this->getJson($this->tenantUrl('/assistant/history'))
-            ->assertOk()->assertJsonStructure(['messages' => [['role', 'text']]]);
+        // Widget endpoints: the user's own conversation list and a conversation's messages.
+        $this->getJson($this->tenantUrl('/assistant/conversations'))
+            ->assertOk()->assertJsonStructure(['conversations' => [['id', 'title']]]);
+        $this->getJson($this->tenantUrl('/assistant/conversation/'.$cid))
+            ->assertOk()->assertJsonStructure(['conversation_id', 'messages' => [['role', 'text']]]);
     }
 
-    public function test_in_app_assistant_new_chat_archives_conversation(): void
+    public function test_in_app_assistant_new_chat_creates_new_conversation(): void
     {
         $tenant = $this->enterpriseTenant();
         $this->enableAi($tenant);
         $user = $this->setupTenantContext($tenant);
 
-        $this->fakeOpenAi([$this->assistantText('Hi')]);
-        $this->postJson($this->tenantUrl('/assistant/message'), ['message' => 'hi'])->assertOk();
+        $this->fakeOpenAi([$this->assistantText('a'), $this->assistantText('b')]);
 
-        $this->postJson($this->tenantUrl('/assistant/new'))->assertOk();
+        $c1 = $this->postJson($this->tenantUrl('/assistant/message'), ['message' => 'first'])->assertOk()->json('conversation_id');
+        $c2 = $this->postJson($this->tenantUrl('/assistant/message'), ['message' => 'second'])->assertOk()->json('conversation_id');
 
-        $this->assertSame(0, ChatConversation::withoutGlobalScopes()
-            ->where('user_id', $user->id)->where('channel', 'agent')->where('status', 'active')->count());
+        $this->assertNotSame($c1, $c2);
+        $this->assertSame(2, ChatConversation::withoutGlobalScopes()
+            ->where('user_id', $user->id)->where('channel', 'agent')->count());
     }
 
     private function setupTenantContext(Tenant $tenant): User

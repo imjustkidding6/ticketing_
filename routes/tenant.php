@@ -158,8 +158,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
 
     // In-app AI assistant (per-user memory) — feature-gated
     Route::post('assistant/message', [AiAssistantController::class, 'message'])->name('assistant.message')->middleware('feature:ai_chatbot');
-    Route::get('assistant/history', [AiAssistantController::class, 'history'])->name('assistant.history')->middleware('feature:ai_chatbot');
-    Route::post('assistant/new', [AiAssistantController::class, 'newChat'])->name('assistant.new')->middleware('feature:ai_chatbot');
+    Route::get('assistant/conversations', [AiAssistantController::class, 'myConversations'])->name('assistant.conversations')->middleware('feature:ai_chatbot');
+    Route::get('assistant/conversation/{conversation}', [AiAssistantController::class, 'myConversationMessages'])->name('assistant.conversation')->middleware('feature:ai_chatbot');
 
     // Ticket Comments (Enterprise via feature gate)
     Route::post('tickets/{ticket}/comments', [TicketCommentController::class, 'store'])->name('tickets.comments.store')->middleware('feature:client_comments');

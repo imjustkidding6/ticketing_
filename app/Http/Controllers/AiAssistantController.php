@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\AiAssistantService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
@@ -52,56 +53,71 @@ class AiAssistantController extends Controller
         return response()->json(['text' => $text]);
     }
 
-    // ─────────── In-app assistant (per-user memory) ───────────
+    // ─────────── In-app assistant (per-user, multi-conversation) ───────────
 
     public function message(Request $request): JsonResponse
     {
         $tenant = Tenant::findOrFail(session('current_tenant_id'));
         abort_unless((bool) AppSetting::get('ai_enabled', false), 404);
 
-        $validated = $request->validate(['message' => ['required', 'string', 'max:2000']]);
-        $conversation = $this->userConversation($tenant, $request->user());
+        $validated = $request->validate([
+            'message' => ['required', 'string', 'max:2000'],
+            'conversation_id' => ['nullable', 'integer'],
+        ]);
+
+        $conversation = $this->resolveUserConversation($tenant, $request->user(), $validated['conversation_id'] ?? null);
 
         try {
             $reply = $this->assistant->replyToAppMessage($tenant, $conversation, $request->user(), $validated['message']);
         } catch (OpenAiException $e) {
             report($e);
 
-            return response()->json(['reply' => "Sorry, I'm having trouble right now. Please try again."]);
+            return response()->json(['reply' => "Sorry, I'm having trouble right now. Please try again.", 'conversation_id' => $conversation->id]);
         }
 
-        return response()->json(['reply' => $reply]);
+        return response()->json(['reply' => $reply, 'conversation_id' => $conversation->id]);
     }
 
-    public function history(Request $request): JsonResponse
-    {
-        $tenant = Tenant::findOrFail(session('current_tenant_id'));
-        $conversation = $this->userConversation($tenant, $request->user(), false);
-
-        $messages = $conversation
-            ? $conversation->messages()
-                ->whereIn('role', [ChatMessage::ROLE_USER, ChatMessage::ROLE_ASSISTANT])
-                ->whereNotNull('content')
-                ->get()
-                ->map(fn (ChatMessage $m) => ['role' => $m->role, 'text' => (string) $m->content])
-                ->values()
-            : collect();
-
-        return response()->json(['messages' => $messages]);
-    }
-
-    public function newChat(Request $request): JsonResponse
+    /**
+     * The logged-in user's own past conversations (for the widget history list).
+     */
+    public function myConversations(Request $request): JsonResponse
     {
         $tenant = Tenant::findOrFail(session('current_tenant_id'));
 
-        ChatConversation::withoutGlobalScopes()
+        $list = ChatConversation::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('user_id', $request->user()->id)
             ->where('channel', ChatConversation::CHANNEL_AGENT)
-            ->where('status', 'active')
-            ->update(['status' => 'archived']);
+            ->whereHas('messages', fn ($q) => $q->where('role', ChatMessage::ROLE_USER))
+            ->latest('id')
+            ->limit(30)
+            ->get()
+            ->map(fn (ChatConversation $c) => ['id' => $c->id, 'title' => $this->conversationTitle($c)]);
 
-        return response()->json(['ok' => true]);
+        return response()->json(['conversations' => $list]);
+    }
+
+    /**
+     * Messages of one of the user's own conversations.
+     */
+    public function myConversationMessages(Request $request, ChatConversation $conversation): JsonResponse
+    {
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+        abort_if(
+            $conversation->tenant_id !== $tenant->id
+            || $conversation->user_id !== $request->user()->id
+            || $conversation->channel !== ChatConversation::CHANNEL_AGENT,
+            404
+        );
+
+        $messages = $conversation->messages()
+            ->whereIn('role', [ChatMessage::ROLE_USER, ChatMessage::ROLE_ASSISTANT])
+            ->whereNotNull('content')
+            ->get()
+            ->map(fn (ChatMessage $m) => ['role' => $m->role, 'text' => (string) $m->content]);
+
+        return response()->json(['conversation_id' => $conversation->id, 'messages' => $messages]);
     }
 
     // ─────────── Saved chat history (admin viewer) ───────────
@@ -132,20 +148,22 @@ class AiAssistantController extends Controller
     }
 
     /**
-     * The user's current in-app conversation (per-user, per-tenant memory).
+     * Resolve the conversation to append to: an existing one owned by the user,
+     * or a brand-new conversation when no (valid) id is given (i.e. "New chat").
      */
-    private function userConversation(Tenant $tenant, User $user, bool $create = true): ?ChatConversation
+    private function resolveUserConversation(Tenant $tenant, User $user, ?int $id): ChatConversation
     {
-        $conversation = ChatConversation::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->where('user_id', $user->id)
-            ->where('channel', ChatConversation::CHANNEL_AGENT)
-            ->where('status', 'active')
-            ->latest('id')
-            ->first();
+        if ($id) {
+            $existing = ChatConversation::withoutGlobalScopes()
+                ->where('tenant_id', $tenant->id)
+                ->where('user_id', $user->id)
+                ->where('channel', ChatConversation::CHANNEL_AGENT)
+                ->where('id', $id)
+                ->first();
 
-        if ($conversation || ! $create) {
-            return $conversation;
+            if ($existing) {
+                return $existing;
+            }
         }
 
         return ChatConversation::withoutGlobalScopes()->create([
@@ -154,5 +172,16 @@ class AiAssistantController extends Controller
             'channel' => ChatConversation::CHANNEL_AGENT,
             'status' => 'active',
         ]);
+    }
+
+    private function conversationTitle(ChatConversation $conversation): string
+    {
+        $first = $conversation->messages()
+            ->where('role', ChatMessage::ROLE_USER)
+            ->whereNotNull('content')
+            ->orderBy('id')
+            ->value('content');
+
+        return $first ? Str::limit(trim($first), 40) : 'New conversation';
     }
 }
