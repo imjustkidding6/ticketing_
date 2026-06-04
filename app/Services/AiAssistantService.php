@@ -172,6 +172,53 @@ class AiAssistantService
         return $this->oneShot($system, $user, 400);
     }
 
+    /**
+     * Clean up and structure a rough ticket draft so the saved ticket — and the
+     * dataset later used for self-learning (embeddings) — is consistent and tidy.
+     * Returns a polished subject, a well-formatted description, and suggested
+     * resolution tasks. Never invents facts the notes don't support.
+     *
+     * @return array{subject: string, description: string, tasks: array<int, string>}
+     */
+    public function structureTicketDraft(Tenant $tenant, string $subject, string $description): array
+    {
+        $system = 'You are a support-ticket editor for '.$tenant->displayName().'. '
+            .'An agent has typed rough notes for a NEW ticket. Rewrite them into a clean, professional, well-structured ticket. '
+            .'Do NOT invent facts, names, numbers, or causes that are not stated or clearly implied by the notes. '
+            ."Return STRICT JSON with exactly these keys:\n"
+            .'"subject": a concise, specific one-line title (max ~80 chars, no trailing period).'."\n"
+            .'"description": a clear, well-formatted description. When the notes support it, organize it under short bold-style labelled sections such as "Issue", "Steps to Reproduce", "Expected", "Actual", and "Environment". Keep it factual, fix grammar and spelling, and remove filler. Do not pad it out.'."\n"
+            .'"tasks": an array of 2 to 6 short, actionable resolution steps an agent should follow to investigate and fix this issue. Each task is a plain imperative phrase (e.g. "Reproduce the error on a test account"), no numbering, no trailing period.'."\n"
+            .'If the notes are too vague for a field, keep the original wording rather than fabricating. Respond with JSON only.';
+
+        $user = "ROUGH NOTES\nSubject: ".trim($subject)."\n\nDescription:\n".trim($description);
+
+        $response = $this->openAi->chat(
+            [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]],
+            [],
+            ['max_tokens' => 800, 'temperature' => 0.2, 'response_format' => ['type' => 'json_object']],
+        );
+
+        $data = json_decode((string) ($response['choices'][0]['message']['content'] ?? ''), true);
+        if (! is_array($data)) {
+            return ['subject' => $subject, 'description' => $description, 'tasks' => []];
+        }
+
+        $tasks = [];
+        foreach ((array) ($data['tasks'] ?? []) as $task) {
+            $task = trim((string) (is_array($task) ? ($task['title'] ?? $task['task'] ?? '') : $task));
+            if ($task !== '') {
+                $tasks[] = Str::limit($task, 250, '');
+            }
+        }
+
+        return [
+            'subject' => trim((string) ($data['subject'] ?? '')) ?: $subject,
+            'description' => trim((string) ($data['description'] ?? '')) ?: $description,
+            'tasks' => array_slice($tasks, 0, 8),
+        ];
+    }
+
     private function oneShot(string $system, string $user, int $maxTokens): string
     {
         $response = $this->openAi->chat(

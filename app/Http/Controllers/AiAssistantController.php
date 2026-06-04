@@ -54,6 +54,38 @@ class AiAssistantController extends Controller
         return response()->json(['text' => $text]);
     }
 
+    /**
+     * Clean up & structure a rough ticket draft (subject, description, tasks)
+     * on the create-ticket form, so the stored data — and the self-learning
+     * dataset built from it — stays consistent.
+     */
+    public function structureDraft(Request $request): JsonResponse
+    {
+        $this->checkPermission('create tickets');
+        abort_unless((bool) AppSetting::get('ai_enabled', false), 404);
+
+        $validated = $request->validate([
+            'subject' => ['nullable', 'string', 'max:2000'],
+            'description' => ['required', 'string', 'max:8000'],
+        ]);
+
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+
+        try {
+            $result = $this->assistant->structureTicketDraft(
+                $tenant,
+                (string) ($validated['subject'] ?? ''),
+                $validated['description'],
+            );
+        } catch (OpenAiException $e) {
+            report($e);
+
+            return response()->json(['error' => 'The AI assistant is unavailable right now.'], 503);
+        }
+
+        return response()->json($result);
+    }
+
     // ─────────── In-app assistant (per-user, multi-conversation) ───────────
 
     public function message(Request $request): JsonResponse

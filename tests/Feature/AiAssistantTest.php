@@ -190,6 +190,45 @@ class AiAssistantTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_structure_draft_cleans_inputs_and_suggests_tasks(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $this->setupTenantContext($tenant);
+
+        $this->fakeOpenAi([[
+            'choices' => [['message' => ['role' => 'assistant', 'content' => json_encode([
+                'subject' => 'VPN disconnects every few minutes on Windows 11',
+                'description' => "**Issue**\nThe VPN drops repeatedly, blocking the user's work.",
+                'tasks' => [
+                    'Reproduce the disconnect on a test account',
+                    'Check the VPN server logs for drops',
+                    'Update the VPN client to the latest version',
+                ],
+            ])]]],
+            'usage' => ['total_tokens' => 30],
+        ]]);
+
+        $response = $this->postJson($this->tenantUrl('/tickets-ai/structure'), [
+            'subject' => 'vpn keeps dropping',
+            'description' => 'users vpn keeps disconnecting every few min on win11 cant work',
+        ]);
+
+        $response->assertOk()->assertJsonStructure(['subject', 'description', 'tasks']);
+        $this->assertStringContainsString('VPN disconnects', $response->json('subject'));
+        $this->assertCount(3, $response->json('tasks'));
+    }
+
+    public function test_structure_draft_is_not_found_when_ai_disabled(): void
+    {
+        $tenant = $this->enterpriseTenant(); // feature present, but ai_enabled never set
+        $this->setupTenantContext($tenant);
+
+        $this->postJson($this->tenantUrl('/tickets-ai/structure'), [
+            'description' => 'something broke',
+        ])->assertNotFound();
+    }
+
     public function test_in_app_assistant_keeps_per_user_conversation(): void
     {
         $tenant = $this->enterpriseTenant();

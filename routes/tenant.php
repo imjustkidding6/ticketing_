@@ -155,6 +155,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     // AI agent copilot (draft reply / summarize) — feature-gated
     Route::post('tickets/{ticket}/ai/draft-reply', [AiAssistantController::class, 'draftReply'])->name('tickets.ai.draft-reply')->middleware('feature:ai_chatbot');
     Route::post('tickets/{ticket}/ai/summarize', [AiAssistantController::class, 'summarize'])->name('tickets.ai.summarize')->middleware('feature:ai_chatbot');
+    // AI clean-up of a rough ticket draft on the create form (subject/description/tasks)
+    Route::post('tickets-ai/structure', [AiAssistantController::class, 'structureDraft'])->name('tickets.ai.structure')->middleware('feature:ai_chatbot');
 
     // In-app AI assistant (per-user memory) — feature-gated
     Route::post('assistant/message', [AiAssistantController::class, 'message'])->name('assistant.message')->middleware('feature:ai_chatbot');
