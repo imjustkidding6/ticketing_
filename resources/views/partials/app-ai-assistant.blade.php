@@ -57,6 +57,22 @@
                             <img :src="m.image" alt="attachment" class="mb-1 max-h-48 max-w-full rounded-lg object-contain">
                         </template>
                         <div x-show="m.text" class="whitespace-pre-line break-words" x-text="m.text"></div>
+                        <template x-if="m.chart">
+                            <div class="mt-2 w-56 max-w-full">
+                                <p x-show="m.chart.title" class="mb-1 text-xs font-semibold text-gray-700" x-text="m.chart.title"></p>
+                                <div class="space-y-1">
+                                    <template x-for="(d, j) in m.chart.data" :key="j">
+                                        <div class="flex items-center gap-2 text-xs">
+                                            <span class="w-16 shrink-0 truncate text-gray-600" x-text="d.label"></span>
+                                            <div class="h-3 flex-1 rounded bg-gray-100">
+                                                <div class="h-3 rounded bg-indigo-500" :style="'width:' + barPct(m.chart, d) + '%'"></div>
+                                            </div>
+                                            <span class="w-7 shrink-0 text-right tabular-nums text-gray-700" x-text="d.value"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </template>
@@ -172,7 +188,7 @@
                     const res = await fetch(this.conversationUrl.replace('CONV_ID', id), { headers: { 'Accept': 'application/json' } });
                     const data = await res.json();
                     this.currentId = data.conversation_id;
-                    this.messages = data.messages || [];
+                    this.messages = this.hydrate(data.messages);
                 } catch (e) {
                     this.startNew();
                     return;
@@ -215,7 +231,7 @@
                     }
                     const data = await res.json();
                     if (data.conversation_id) this.currentId = data.conversation_id;
-                    this.messages.push({ role: 'assistant', text: data.reply || @js(__('Sorry, something went wrong.')) });
+                    this.pushAssistant(data.reply || @js(__('Sorry, something went wrong.')));
                     if (wasNew) this.loadConversations();
                 } catch (e) {
                     this.messages.push({ role: 'assistant', text: @js(__('Sorry, I could not reach the assistant. Please try again.')) });
@@ -226,6 +242,29 @@
             },
 
             scrollToEnd() { const el = this.$refs.scroll; if (el) el.scrollTop = el.scrollHeight; },
+
+            // Extract a ```chart ...``` block (if any) from assistant text and parse it.
+            parseChart(text) {
+                const match = (text || '').match(/```chart\s*([\s\S]*?)```/i);
+                if (!match) return { text: text || '', chart: null };
+                let chart = null;
+                try { const c = JSON.parse(match[1].trim()); if (c && Array.isArray(c.data)) chart = c; } catch (e) { /* ignore */ }
+                return { text: (text.replace(match[0], '').trim()), chart };
+            },
+            pushAssistant(text) {
+                const p = this.parseChart(text || '');
+                this.messages.push({ role: 'assistant', text: p.text, chart: p.chart });
+            },
+            hydrate(messages) {
+                return (messages || []).map((m) => {
+                    if (m.role === 'assistant') { const p = this.parseChart(m.text || ''); return { role: 'assistant', text: p.text, chart: p.chart }; }
+                    return { role: m.role, text: m.text };
+                });
+            },
+            barPct(chart, d) {
+                const max = Math.max(...chart.data.map((x) => Number(x.value) || 0), 1);
+                return Math.round(((Number(d.value) || 0) / max) * 100);
+            },
 
             startResize(e) {
                 this.resizing = true;

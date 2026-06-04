@@ -575,6 +575,9 @@ class AiAssistantService
             ."- For general questions (comparisons, concepts, definitions, industry knowledge — e.g. how this differs from another tool), answer directly and confidently from your own knowledge. Do NOT tell the user something is 'not in the knowledge base' — the knowledge base only holds the company's own help articles, not general knowledge.\n"
             ."- For any question about tickets (mine, by status or priority, for a client, searching, or recent), call query_tickets with just the filters you need.\n"
             ."- For ticket counts or workload (\"how many open tickets\", \"my closed this week\"), call ticket_stats. For questions about clients, call query_clients.\n"
+            ."- When the user asks for a chart, graph, or any visualization, first gather the numbers (e.g. via ticket_stats or query_tickets), then append a chart to your reply as a fenced block exactly like:\n"
+            ."```chart\n{\"type\":\"bar\",\"title\":\"Tickets by status\",\"data\":[{\"label\":\"Open\",\"value\":4},{\"label\":\"Closed\",\"value\":10}]}\n```\n"
+            ."Write a one-line summary before the block, and only include a chart block when a visualization is asked for.\n"
             ."- Use create_ticket to open a ticket on a client's behalf; confirm the client's name, email, subject, and description first.\n"
             .($this->webSearchConfigured() ? "- For general questions that are NOT about this system or the company's products, use search_web and cite the source link.\n" : '')
             ."- Be concise and helpful, and never invent policies, prices, or facts.\n\n"
