@@ -5,8 +5,14 @@
          x-transition:enter="transition ease-out duration-150"
          x-transition:enter-start="opacity-0 translate-y-2"
          x-transition:enter-end="opacity-100 translate-y-0"
-         class="mb-3 flex h-[32rem] max-h-[75vh] w-[22rem] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
-        <div class="flex items-center justify-between bg-indigo-600 px-4 py-3 text-white">
+         :style="'width:' + width + 'px'"
+         :class="resizing ? 'select-none' : ''"
+         class="relative mb-3 flex h-[32rem] max-h-[75vh] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
+        {{-- Drag handle (left edge) to resize width --}}
+        <div @pointerdown="startResize($event)" class="group absolute inset-y-0 left-0 z-20 flex w-2 cursor-ew-resize items-center justify-center" title="{{ __('Drag to resize') }}">
+            <div class="h-10 w-1 rounded-full bg-white/30 group-hover:bg-white/70"></div>
+        </div>
+        <div class="flex items-center justify-between bg-indigo-600 px-4 py-3 pl-5 text-white">
             <div class="flex items-center gap-2">
                 <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
                 <span class="text-sm font-semibold" x-text="view === 'list' ? @js(__('Your conversations')) : @js(__('AI Assistant'))"></span>
@@ -88,6 +94,8 @@
             input: '',
             loading: false,
             booted: false,
+            width: parseInt(localStorage.getItem('ai_chat_width')) || 352,
+            resizing: false,
             messageUrl: '{{ route('assistant.message') }}',
             listUrl: '{{ route('assistant.conversations') }}',
             conversationUrl: '{{ route('assistant.conversation', ['conversation' => 'CONV_ID']) }}',
@@ -180,6 +188,26 @@
             },
 
             scrollToEnd() { const el = this.$refs.scroll; if (el) el.scrollTop = el.scrollHeight; },
+
+            startResize(e) {
+                this.resizing = true;
+                const startX = e.clientX;
+                const startWidth = this.width;
+                const maxWidth = () => Math.min(760, window.innerWidth - 48);
+                const onMove = (ev) => {
+                    // Anchored bottom-right: dragging the left edge leftward widens the panel.
+                    this.width = Math.max(320, Math.min(startWidth + (startX - ev.clientX), maxWidth()));
+                };
+                const onUp = () => {
+                    this.resizing = false;
+                    localStorage.setItem('ai_chat_width', this.width);
+                    window.removeEventListener('pointermove', onMove);
+                    window.removeEventListener('pointerup', onUp);
+                };
+                window.addEventListener('pointermove', onMove);
+                window.addEventListener('pointerup', onUp);
+                e.preventDefault();
+            },
         };
     }
 </script>
