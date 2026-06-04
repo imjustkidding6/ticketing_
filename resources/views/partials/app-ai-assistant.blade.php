@@ -12,10 +12,16 @@
         <div @pointerdown="startResize($event)" class="group absolute inset-y-0 left-0 z-20 flex w-2 cursor-ew-resize items-center justify-center" title="{{ __('Drag to resize') }}">
             <div class="h-10 w-1 rounded-full bg-white/30 group-hover:bg-white/70"></div>
         </div>
-        <div class="flex items-center justify-between bg-indigo-600 px-4 py-3 pl-5 text-white">
-            <div class="flex items-center gap-2">
-                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
-                <span class="text-sm font-semibold" x-text="view === 'list' ? @js(__('Your conversations')) : @js(__('AI Assistant'))"></span>
+        <div class="flex items-center justify-between bg-gradient-to-r from-indigo-600 via-indigo-600 to-violet-600 px-4 py-3 pl-5 text-white">
+            <div class="flex items-center gap-2.5">
+                <span class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/25">
+                    <svg class="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
+                    <span class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-indigo-600"></span>
+                </span>
+                <div class="leading-tight">
+                    <p class="text-sm font-semibold" x-text="view === 'list' ? @js(__('Your conversations')) : @js(__('Nexus AI'))"></p>
+                    <p x-show="view !== 'list'" class="text-[11px] text-white/70">{{ __('Your AI teammate · online') }}</p>
+                </div>
             </div>
             <div class="flex items-center gap-0.5">
                 <button type="button" @click="openHistory()" class="rounded p-1 text-white/80 hover:text-white" :class="view === 'list' ? 'bg-white/20' : ''" aria-label="{{ __('History') }}" title="{{ __('History') }}">
@@ -50,7 +56,12 @@
         {{-- Chat view --}}
         <div x-show="view === 'chat'" x-ref="scroll" class="flex-1 space-y-3 overflow-y-auto bg-gray-50 px-4 py-4">
             <template x-for="(m, i) in messages" :key="i">
-                <div :class="m.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                <div :class="m.role === 'user' ? 'flex justify-end' : 'flex items-end justify-start gap-2'">
+                    <template x-if="m.role !== 'user'">
+                        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
+                        </span>
+                    </template>
                     <div :class="m.role === 'user' ? 'rounded-2xl rounded-br-sm bg-indigo-600 px-3 py-2 text-sm text-white' : 'rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-gray-800 ring-1 ring-gray-200'"
                          class="max-w-[85%]">
                         <template x-if="m.image">
@@ -110,11 +121,28 @@
                     </div>
                 </div>
             </template>
-            <div x-show="loading" class="flex justify-start">
+            <div x-show="loading" class="flex items-end justify-start gap-2">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
+                </span>
                 <div class="flex gap-1 rounded-2xl rounded-bl-sm bg-white px-3 py-2.5 ring-1 ring-gray-200">
                     <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400" style="animation-delay: 0ms"></span>
                     <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400" style="animation-delay: 150ms"></span>
                     <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400" style="animation-delay: 300ms"></span>
+                </div>
+            </div>
+
+            {{-- Quick-start chips, shown only on a fresh chat (just the greeting) --}}
+            <div x-show="!loading && messages.length <= 1" x-cloak class="space-y-2 pl-9">
+                <p class="text-[11px] font-medium uppercase tracking-wide text-gray-400">{{ __('Try asking') }}</p>
+                <div class="flex flex-wrap gap-1.5">
+                    <template x-for="(s, i) in suggestions" :key="i">
+                        <button type="button" @click="suggest(s.prompt)"
+                                class="group flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700">
+                            <span x-text="s.icon"></span>
+                            <span x-text="s.label"></span>
+                        </button>
+                    </template>
                 </div>
             </div>
         </div>
@@ -137,18 +165,21 @@
                           placeholder="{{ __('Ask the assistant... (Shift+Enter for a new line)') }}"
                           class="max-h-24 flex-1 resize-none rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
                 <button type="submit" :disabled="loading || (!input.trim() && !file)"
-                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40" aria-label="{{ __('Send') }}">
+                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm transition hover:from-indigo-500 hover:to-violet-500 disabled:opacity-40" aria-label="{{ __('Send') }}">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
                 </button>
             </div>
+            <p class="mt-1.5 text-center text-[10px] text-gray-400">{{ __('Nexus AI can make mistakes — double-check important details.') }}</p>
         </form>
     </div>
 
     <button type="button" @click="toggle()"
-            class="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition hover:scale-105 hover:bg-indigo-500"
+            class="group relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30 transition hover:scale-105 hover:shadow-indigo-500/50"
             aria-label="{{ __('Open AI assistant') }}">
-        <svg x-show="!open" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
-        <svg x-show="open" x-cloak class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <span x-show="!open" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-20"></span>
+        <svg x-show="!open" class="relative h-7 w-7 transition group-hover:rotate-12" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
+        <svg x-show="open" x-cloak class="relative h-7 w-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <span x-show="!open" class="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-white"></span>
     </button>
 </div>
 
@@ -164,6 +195,12 @@
             file: null,
             loading: false,
             booted: false,
+            suggestions: [
+                { icon: '🎫', label: @js(__('My open tickets')), prompt: @js(__('What tickets are assigned to me that are still open?')) },
+                { icon: '📊', label: @js(__('Tickets by status')), prompt: @js(__('Give me a pie chart of tickets by status.')) },
+                { icon: '🧭', label: @js(__('Set up an SLA')), prompt: @js(__('How do I set up an SLA policy in this system?')) },
+                { icon: '✨', label: @js(__('What can you do?')), prompt: @js(__('What can you help me with?')) },
+            ],
             width: parseInt(localStorage.getItem('ai_chat_width')) || 352,
             resizing: false,
             messageUrl: '{{ route('assistant.message') }}',
@@ -190,7 +227,13 @@
             },
 
             greet() {
-                this.messages.push({ role: 'assistant', text: @js(__('Hi :name! I can find answers in your knowledge base, check a ticket\'s status, or open a ticket. What do you need?', ['name' => Auth::user()->name])) });
+                this.messages.push({ role: 'assistant', text: @js(__('Hi :name! 👋 I\'m Nexus AI, your AI teammate. I can dig through your tickets, draw charts, draft replies, and learn from how your team has solved problems before. What can I help you with?', ['name' => Auth::user()->name])) });
+            },
+
+            suggest(prompt) {
+                if (this.loading) return;
+                this.input = prompt;
+                this.send();
             },
 
             startNew() {
