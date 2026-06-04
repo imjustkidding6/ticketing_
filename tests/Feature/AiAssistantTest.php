@@ -17,6 +17,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -267,6 +268,28 @@ class AiAssistantTest extends TestCase
         $clients = ChatMessage::where('tool_name', 'query_clients')->latest('id')->first();
         $this->assertNotNull($clients);
         $this->assertStringContainsString('acme@example.com', (string) $clients->content);
+    }
+
+    public function test_in_app_assistant_parses_uploaded_text_file(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $this->setupTenantContext($tenant);
+
+        $this->fakeOpenAi([$this->assistantText('The file lists three fruits.')]);
+
+        $file = UploadedFile::fake()->createWithContent('notes.txt', 'SECRET_MARKER apples bananas cherries');
+
+        $this->post($this->tenantUrl('/assistant/message'), [
+            'message' => 'What is in this file?',
+            'file' => $file,
+        ])->assertOk();
+
+        // The extracted file content reached the persisted user message (so the model saw it).
+        $userMessage = ChatMessage::where('role', 'user')->latest('id')->first();
+        $this->assertNotNull($userMessage);
+        $this->assertStringContainsString('SECRET_MARKER', (string) $userMessage->content);
+        $this->assertStringContainsString('notes.txt', (string) $userMessage->content);
     }
 
     public function test_in_app_assistant_new_chat_creates_new_conversation(): void

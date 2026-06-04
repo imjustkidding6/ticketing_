@@ -64,14 +64,28 @@
             </div>
         </div>
 
-        <form x-show="view === 'chat'" @submit.prevent="send()" class="flex items-end gap-2 border-t border-gray-200 bg-white px-3 py-2.5">
-            <textarea x-model="input" @keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); send(); }" rows="1" :disabled="loading"
-                      placeholder="{{ __('Ask the assistant... (Shift+Enter for a new line)') }}"
-                      class="max-h-24 flex-1 resize-none rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
-            <button type="submit" :disabled="loading || !input.trim()"
-                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40" aria-label="{{ __('Send') }}">
-                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
-            </button>
+        <form x-show="view === 'chat'" @submit.prevent="send()" class="border-t border-gray-200 bg-white px-3 py-2.5">
+            <input type="file" x-ref="file" class="hidden" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.csv,.json" @change="file = $event.target.files[0] || null">
+            <div x-show="file" x-cloak class="mb-2 flex items-center gap-2 rounded-md bg-indigo-50 px-2 py-1 text-xs text-indigo-700">
+                <svg class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" /></svg>
+                <span class="truncate" x-text="file?.name"></span>
+                <button type="button" @click="file = null; $refs.file.value = ''" class="ml-auto shrink-0 text-indigo-400 hover:text-indigo-700" aria-label="{{ __('Remove file') }}">
+                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            <div class="flex items-end gap-2">
+                <button type="button" @click="$refs.file.click()" :disabled="loading"
+                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-40" aria-label="{{ __('Attach file') }}" title="{{ __('Attach a file or image') }}">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" /></svg>
+                </button>
+                <textarea x-model="input" @keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); send(); }" rows="1" :disabled="loading"
+                          placeholder="{{ __('Ask the assistant... (Shift+Enter for a new line)') }}"
+                          class="max-h-24 flex-1 resize-none rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                <button type="submit" :disabled="loading || (!input.trim() && !file)"
+                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40" aria-label="{{ __('Send') }}">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
+                </button>
+            </div>
         </form>
     </div>
 
@@ -92,6 +106,7 @@
             conversations: [],
             currentId: null,
             input: '',
+            file: null,
             loading: false,
             booted: false,
             width: parseInt(localStorage.getItem('ai_chat_width')) || 352,
@@ -163,18 +178,34 @@
 
             async send() {
                 const text = this.input.trim();
-                if (!text || this.loading) return;
+                const file = this.file;
+                if ((!text && !file) || this.loading) return;
                 const wasNew = !this.currentId;
-                this.messages.push({ role: 'user', text });
+                this.messages.push({ role: 'user', text: text + (file ? '\n📎 ' + file.name : '') });
                 this.input = '';
+                this.file = null;
+                if (this.$refs.file) this.$refs.file.value = '';
                 this.loading = true;
                 this.$nextTick(() => this.scrollToEnd());
                 try {
-                    const res = await fetch(this.messageUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' },
-                        body: JSON.stringify({ message: text, conversation_id: this.currentId }),
-                    });
+                    let res;
+                    if (file) {
+                        const fd = new FormData();
+                        fd.append('message', text || 'Please read this file and tell me what it contains.');
+                        if (this.currentId) fd.append('conversation_id', this.currentId);
+                        fd.append('file', file);
+                        res = await fetch(this.messageUrl, {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' },
+                            body: fd,
+                        });
+                    } else {
+                        res = await fetch(this.messageUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' },
+                            body: JSON.stringify({ message: text, conversation_id: this.currentId }),
+                        });
+                    }
                     const data = await res.json();
                     if (data.conversation_id) this.currentId = data.conversation_id;
                     this.messages.push({ role: 'assistant', text: data.reply || @js(__('Sorry, something went wrong.')) });

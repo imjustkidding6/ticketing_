@@ -45,9 +45,9 @@ class AiAssistantService
     /**
      * Handle one message from a logged-in team member (in-app assistant, per-user memory).
      */
-    public function replyToAppMessage(Tenant $tenant, ChatConversation $conversation, User $user, string $userMessage): string
+    public function replyToAppMessage(Tenant $tenant, ChatConversation $conversation, User $user, string $userMessage, ?string $imageDataUrl = null): string
     {
-        return $this->converse($tenant, $conversation, $userMessage, $this->appSystemPrompt($tenant, $user), $this->appTools());
+        return $this->converse($tenant, $conversation, $userMessage, $this->appSystemPrompt($tenant, $user), $this->appTools(), $imageDataUrl);
     }
 
     /**
@@ -55,7 +55,7 @@ class AiAssistantService
      *
      * @param  array<int, array<string, mixed>>  $tools
      */
-    private function converse(Tenant $tenant, ChatConversation $conversation, string $userMessage, string $systemPrompt, array $tools): string
+    private function converse(Tenant $tenant, ChatConversation $conversation, string $userMessage, string $systemPrompt, array $tools, ?string $imageDataUrl = null): string
     {
         ChatMessage::create([
             'chat_conversation_id' => $conversation->id,
@@ -67,6 +67,14 @@ class AiAssistantService
             [['role' => 'system', 'content' => $systemPrompt]],
             $this->history($conversation),
         );
+
+        // Attach an uploaded image to the current (last) user message for vision.
+        if ($imageDataUrl !== null && $messages !== []) {
+            $messages[array_key_last($messages)] = ['role' => 'user', 'content' => [
+                ['type' => 'text', 'text' => $userMessage],
+                ['type' => 'image_url', 'image_url' => ['url' => $imageDataUrl]],
+            ]];
+        }
 
         for ($i = 0; $i < self::MAX_TOOL_ITERATIONS; $i++) {
             $response = $this->openAi->chat($messages, $tools);

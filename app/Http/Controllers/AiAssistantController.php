@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\AiAssistantService;
+use App\Support\FileParser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -63,12 +64,25 @@ class AiAssistantController extends Controller
         $validated = $request->validate([
             'message' => ['required', 'string', 'max:2000'],
             'conversation_id' => ['nullable', 'integer'],
+            'file' => ['nullable', 'file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp,pdf,txt,csv,json'],
         ]);
 
         $conversation = $this->resolveUserConversation($tenant, $request->user(), $validated['conversation_id'] ?? null);
 
+        $message = $validated['message'];
+        $imageDataUrl = null;
+        if ($request->hasFile('file')) {
+            $parsed = FileParser::parse($request->file('file'));
+            if ($parsed['type'] === 'image') {
+                $imageDataUrl = $parsed['data_url'];
+                $message .= "\n\n[Attached image: {$parsed['name']}]";
+            } else {
+                $message .= "\n\n[Attached file: {$parsed['name']}]\n".$parsed['content'];
+            }
+        }
+
         try {
-            $reply = $this->assistant->replyToAppMessage($tenant, $conversation, $request->user(), $validated['message']);
+            $reply = $this->assistant->replyToAppMessage($tenant, $conversation, $request->user(), $message, $imageDataUrl);
         } catch (OpenAiException $e) {
             report($e);
 
