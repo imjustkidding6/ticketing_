@@ -84,4 +84,32 @@ class OpenAiService
 
         return $response->json() ?? [];
     }
+
+    /**
+     * Embed text into a vector (for learning from resolved tickets via semantic search).
+     *
+     * @return array<int, float>
+     *
+     * @throws OpenAiException
+     */
+    public function embed(string $text): array
+    {
+        if (! $this->isConfigured()) {
+            throw new OpenAiException('OpenAI API key is not configured.');
+        }
+
+        $response = Http::withToken((string) config('services.openai.api_key'))
+            ->timeout(45)
+            ->retry(2, 200, throw: false)
+            ->post(rtrim((string) config('services.openai.base_url', 'https://api.openai.com/v1'), '/').'/embeddings', [
+                'model' => config('services.openai.embed_model', 'text-embedding-3-small'),
+                'input' => mb_substr($text, 0, 8000),
+            ]);
+
+        if ($response->failed()) {
+            throw new OpenAiException('OpenAI embedding failed ('.$response->status().'): '.$response->body());
+        }
+
+        return $response->json('data.0.embedding') ?? [];
+    }
 }

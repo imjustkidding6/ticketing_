@@ -215,6 +215,7 @@ class AiAssistantService
             'query_tickets' => $this->queryTickets($conversation, $args),
             'query_clients' => $this->queryClients($conversation, $args),
             'ticket_stats' => $this->ticketStats($conversation, $args),
+            'search_resolved_tickets' => $this->searchResolvedTickets($conversation, (string) ($args['query'] ?? '')),
             default => ['error' => 'unknown_tool'],
         };
     }
@@ -486,6 +487,92 @@ class AiAssistantService
         return ['total' => array_sum($byStatus), 'by_status' => $byStatus];
     }
 
+    /**
+     * Self-learning: semantically find how similar PAST problems were resolved,
+     * using embeddings of the workspace's closed tickets. The more tickets the
+     * team resolves (and the scheduled embed command processes), the smarter this gets.
+     *
+     * @return array<string, mixed>
+     */
+    private function searchResolvedTickets(ChatConversation $conversation, string $query): array
+    {
+        $query = trim($query);
+        if (strlen($query) < 3) {
+            return ['tickets' => []];
+        }
+
+        try {
+            $queryVector = $this->openAi->embed($query);
+        } catch (\Throwable $e) {
+            return ['tickets' => [], 'error' => 'unavailable'];
+        }
+
+        if ($queryVector === []) {
+            return ['tickets' => []];
+        }
+
+        $candidates = Ticket::withoutGlobalScopes()
+            ->where('tenant_id', $conversation->tenant_id)
+            ->where('status', 'closed')
+            ->whereNotNull('solution_embedded_at')
+            ->with(['comments' => fn ($q) => $q->where('is_public', true)->orderBy('id')])
+            ->latest('closed_at')
+            ->limit(500)
+            ->get();
+
+        $scored = [];
+        foreach ($candidates as $ticket) {
+            $vector = json_decode((string) $ticket->solution_embedding, true);
+            if (! is_array($vector) || $vector === []) {
+                continue;
+            }
+            $scored[] = ['score' => $this->cosineSimilarity($queryVector, $vector), 'ticket' => $ticket];
+        }
+
+        usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
+
+        $tickets = array_map(fn ($s) => [
+            'ticket_number' => $s['ticket']->ticket_number,
+            'problem' => mb_substr(trim($s['ticket']->subject.' — '.$s['ticket']->description), 0, 300),
+            'resolution' => $this->ticketResolution($s['ticket']),
+            'similarity' => round($s['score'], 3),
+        ], array_slice($scored, 0, 5));
+
+        return ['count' => count($tickets), 'tickets' => $tickets];
+    }
+
+    /**
+     * @param  array<int, float>  $a
+     * @param  array<int, float>  $b
+     */
+    private function cosineSimilarity(array $a, array $b): float
+    {
+        $dot = 0.0;
+        $normA = 0.0;
+        $normB = 0.0;
+        $n = min(count($a), count($b));
+        for ($i = 0; $i < $n; $i++) {
+            $x = (float) $a[$i];
+            $y = (float) $b[$i];
+            $dot += $x * $y;
+            $normA += $x * $x;
+            $normB += $y * $y;
+        }
+
+        return ($normA > 0 && $normB > 0) ? $dot / (sqrt($normA) * sqrt($normB)) : 0.0;
+    }
+
+    private function ticketResolution(Ticket $ticket): string
+    {
+        $resolution = trim((string) $ticket->closing_remarks);
+        if ($resolution === '') {
+            $agentReply = $ticket->comments->first(fn ($c) => $c->user_id !== null);
+            $resolution = (string) ($agentReply?->content ?? '');
+        }
+
+        return mb_substr($resolution !== '' ? $resolution : '(no resolution notes recorded)', 0, 500);
+    }
+
     private function resolveDepartment(Tenant $tenant, mixed $departmentId): ?Department
     {
         $base = Department::withoutGlobalScopes()->where('tenant_id', $tenant->id)->active();
@@ -565,11 +652,12 @@ class AiAssistantService
         $deptList = $this->departmentList($tenant);
         $custom = $this->tenantCustomPrompt($tenant);
 
-        $prompt = "You are an AI assistant for the {$tenant->displayName()} support team. "
-            ."You are chatting with {$user->name}, a logged-in team member, to help them work efficiently.\n\n"
+        $prompt = "You are the AI assistant for the {$tenant->displayName()} support team, chatting with {$user->name} (a logged-in team member). "
+            ."Your primary purpose is to help support agents resolve tickets quickly and well. Keep the conversation focused on support, tickets, and resolving customer problems.\n\n"
             .$this->currentDateLine($tenant)."\n\n"
             ."Guidelines:\n"
             ."- This is an ongoing conversation. Remember details the user shared earlier and refer back to them.\n"
+            ."- When an agent describes a problem to solve, FIRST call search_resolved_tickets to see how the team resolved similar issues before, and base your suggestion on those proven resolutions. This is how you learn from the team's history.\n"
             ."- For questions about how to USE this app (how do I…, where is…, e.g. how to create a ticket or change a setting), call search_system_guide and answer with the steps and the exact menu location.\n"
             ."- For questions about the company's own products/services or help content, call search_knowledge_base and cite the article title (and link).\n"
             ."- For general questions (comparisons, concepts, definitions, industry knowledge — e.g. how this differs from another tool), answer directly and confidently from your own knowledge. Do NOT tell the user something is 'not in the knowledge base' — the knowledge base only holds the company's own help articles, not general knowledge.\n"
@@ -684,6 +772,20 @@ class AiAssistantService
                             'created_after' => ['type' => 'string', 'description' => 'ISO date'],
                             'created_before' => ['type' => 'string', 'description' => 'ISO date'],
                         ],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'search_resolved_tickets',
+                    'description' => 'Find how similar PAST problems were resolved, learned from this workspace\'s closed tickets via semantic search. Call this first whenever an agent describes a problem they need to solve.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'query' => ['type' => 'string', 'description' => 'The problem, error, or symptom to find past resolutions for'],
+                        ],
+                        'required' => ['query'],
                     ],
                 ],
             ],

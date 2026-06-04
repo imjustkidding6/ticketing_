@@ -83,6 +83,12 @@ class AiAssistantTest extends TestCase
         return ['choices' => [['message' => ['role' => 'assistant', 'content' => $text]]], 'usage' => ['total_tokens' => 20]];
     }
 
+    /** @param  array<int, float>  $vector */
+    private function embedResponse(array $vector): array
+    {
+        return ['data' => [['embedding' => $vector]]];
+    }
+
     public function test_portal_bot_answers_using_knowledge_base(): void
     {
         $tenant = $this->enterpriseTenant();
@@ -290,6 +296,37 @@ class AiAssistantTest extends TestCase
         $this->assertNotNull($userMessage);
         $this->assertStringContainsString('SECRET_MARKER', (string) $userMessage->content);
         $this->assertStringContainsString('notes.txt', (string) $userMessage->content);
+    }
+
+    public function test_in_app_assistant_learns_from_resolved_tickets(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $this->setupTenantContext($tenant);
+
+        $resolved = Ticket::factory()->create([
+            'tenant_id' => $tenant->id, 'status' => 'closed',
+            'subject' => 'Printer offline', 'description' => 'Printer will not connect',
+        ]);
+        $resolved->forceFill([
+            'closing_remarks' => 'Restarted the print spooler and reinstalled the driver.',
+            'solution_embedding' => json_encode([1.0, 0.0, 0.0]),
+            'solution_embedded_at' => now(),
+        ])->saveQuietly();
+
+        $this->fakeOpenAi([
+            $this->toolCall('search_resolved_tickets', ['query' => 'printer not connecting']),
+            $this->embedResponse([1.0, 0.0, 0.0]), // query embedding matches the resolved ticket
+            $this->assistantText('A similar issue was resolved by restarting the print spooler.'),
+        ]);
+
+        $this->postJson($this->tenantUrl('/assistant/message'), ['message' => 'a printer will not connect, how do I fix it?'])
+            ->assertOk();
+
+        $tool = ChatMessage::where('tool_name', 'search_resolved_tickets')->latest('id')->first();
+        $this->assertNotNull($tool);
+        $this->assertStringContainsString($resolved->ticket_number, (string) $tool->content);
+        $this->assertStringContainsString('print spooler', (string) $tool->content);
     }
 
     public function test_in_app_assistant_new_chat_creates_new_conversation(): void
