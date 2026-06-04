@@ -47,9 +47,10 @@
                 </div>
 
                 <div>
-                    <label for="expires_at" class="block text-sm font-medium text-gray-700">Expires At</label>
-                    <input type="date" name="expires_at" id="expires_at" value="{{ old('expires_at', now()->addYear()->format('Y-m-d')) }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
-                    @error('expires_at')
+                    <label for="duration_days" class="block text-sm font-medium text-gray-700">Validity Period (Days)</label>
+                    <input type="number" name="duration_days" id="duration_days" min="1" max="3650" value="{{ old('duration_days', 365) }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
+                    <p class="mt-1 text-sm text-gray-500">Number of days the license is valid, starting from activation.</p>
+                    @error('duration_days')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                     @enderror
                 </div>

@@ -9,6 +9,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\TenantUrlHelper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class TenantRoutingTest extends TestCase
@@ -87,7 +88,7 @@ class TenantRoutingTest extends TestCase
     {
         $tenant = $this->createActiveTenant();
 
-        $this->get(route('portal.index', ['tenant' => $tenant->slug]))
+        $this->get(route('tenant.landing', ['slug' => $tenant->slug]))
             ->assertOk();
     }
 
@@ -188,7 +189,7 @@ class TenantRoutingTest extends TestCase
 
         $this->assertEquals(
             $tenant->id,
-            app(\Spatie\Permission\PermissionRegistrar::class)->getPermissionsTeamId()
+            app(PermissionRegistrar::class)->getPermissionsTeamId()
         );
     }
 }

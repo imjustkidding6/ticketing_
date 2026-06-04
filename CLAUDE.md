@@ -44,6 +44,7 @@ Multi-tenant SaaS ticketing system. Laravel 12, Tailwind CSS v4, Alpine.js, Blad
 Routes are registered in `bootstrap/app.php`. The `then:` closure in `withRouting()` mounts `routes/tenant.php` under a dynamic `{slug}` prefix with regex `[a-z0-9][a-z0-9\-]*[a-z0-9]`:
 - `routes/web.php` — Auth, admin panel, home, profile, tenant switching
 - `routes/tenant.php` — All tenant-scoped routes (dashboard, tickets, clients, settings, reports, public portal)
+- `routes/api.php` — Token-authenticated REST API under `/api/v1/` (see **REST API (v1)**). Loaded via the `api:` key in `withRouting()`; the tenant is resolved from the bearer token, not the URL slug.
 - `routes/portal.php` — **Dead code.** The old `/portal/{slug}/...` structure is not loaded anywhere; portal routes now live inside `routes/tenant.php` under `/{slug}/`. Do not edit `portal.php` expecting it to take effect. Verify in `bootstrap/app.php` if in doubt.
 
 Tenant routes resolve the tenant from the URL slug via `EnsureTenantSession` middleware, which sets `session('current_tenant_id')` and syncs the Spatie Permission team context.
@@ -103,6 +104,7 @@ Controllers enforce permissions via `$this->checkPermission('permission name')` 
 | `feature` | `CheckPlanFeature` | Validates tenant plan has required feature(s) |
 | `admin` | `AdminMiddleware` | Requires `is_admin` flag on user |
 | `portal` | `EnsureClientPortalAccess` | Validates authenticated client belongs to tenant |
+| `api-token` | `AuthenticateApiToken` | Resolves tenant from bearer token, sets session + Spatie team (no URL slug) |
 
 `SetTenantUrlDefaults` is appended to the `web` group (not aliased). It injects the current tenant slug as a default URL parameter so `route(...)` calls inside tenant pages don't need `slug` passed explicitly.
 
@@ -127,13 +129,39 @@ Ancillary namespaces:
 - `app/Notifications/` — Per-event notifications (`TicketCreated`, `TicketAssigned`, `TicketStatusChanged`, `SlaBreachWarning`, client variants, `SystemAnnouncement`). Dispatched by services rather than controllers; respect the `email_notifications` feature where relevant.
 - `app/Support/` — Framework-agnostic helpers (e.g., `TenantTime`). Not services; no side effects.
 
+### Activity Logging
+
+Models opt into audit logging via the `LogsActivity` trait (`app/Models/Traits/LogsActivity.php`). It auto-captures `created`, `updated`, `deleted`, `restored`, `force_deleted` events and persists field-level diffs to the `activity_logs` table. Models define `$activityLogIgnore` to suppress noisy fields (e.g., Ticket ignores `tracking_token`, `sla_breach_notified_at`). Timestamps, `password`, and `remember_token` are always ignored. Gated by the `audit_logs` plan feature (Business+).
+
+### Single Active Session
+
+`User::purgeOtherSessions()` is called on every successful login (password and Google OAuth) after `session()->regenerate()`. It deletes all rows from the `sessions` table for the user except the current session ID. Latest login wins — previous sessions are immediately invalidated. Depends on `SESSION_DRIVER=database`.
+
+### Scheduled Commands
+
+Defined in `routes/console.php`:
+- **`SendSlaBreachWarnings`** — every 15 minutes. Checks tickets with overdue response/resolution times and notifies assigned agents. Only fires if tenant has `email_notifications` feature enabled.
+- **`CheckLicenseExpirations`** — daily at 02:00 UTC. Multi-stage notification lifecycle: 4–7 days = approaching, 0–3 days = imminent, then grace period tracking, then final status flip to `EXPIRED`. Uses warning flags on the license to avoid duplicate sends.
+
+### Ticket Hold Time & SLA
+
+Tickets track hold time via `startHold()`, `endHold()`, and `getTotalHoldTimeMinutes()`. Hold time is excluded from SLA calculations: `getEffectiveResolutionTimeHours()` and `getEffectiveResponseTimeHours()` subtract hold duration. This is critical for accurate SLA compliance reporting. **Resolution-time figures in every report path must use `getEffectiveResolutionTimeHours()`** (not raw `created_at → closed_at`) so hold time is excluded — this includes `ReportService`, `SlaService::getComplianceReport`, `AgentPerformanceService`, `TicketWorkflowService`, and `ServiceReportService`. Response time is reported raw (`created_at → first_response_at`); do NOT subtract hold from it, because `getEffectiveResponseTimeHours()` subtracts *total* hold (including holds after the first response) and would under-report.
+
+**SLA-policy guard (important for tests):** `TicketService::guardSlaPolicy()` throws `InvalidArgumentException` when a ticket priority is set for a tenant that has the `sla_management` feature (Business+) and no matching SLA policy exists (`SlaPolicy::hasPolicyFor(tenantId, clientTier, priority)`). Owners do **not** bypass this guard. Any test that creates/changes ticket priority through `TicketService`/the controller on a Business+ tenant must first seed a policy — a catch-all (`priority` null, `client_tier` null, `is_active` true) matches everything:
+```php
+SlaPolicy::factory()->create(['tenant_id' => $tenant->id, 'priority' => null, 'client_tier' => null, 'is_active' => true]);
+```
+
+SLA policies are managed **per client-tier** (not per-id): routes `sla.index`, `sla.seed-defaults`, `sla.edit-tier`, `sla.update-tier` (`POST /sla/tier/{tier}`), `sla.destroy-tier` (`DELETE /sla/tier/{tier}`), where `{tier}` ∈ `basic|premium|enterprise`. There is no generic `POST /sla` or `PUT /sla/{id}`.
+
 ### Queue & Cache
 
 Dev default (`.env.example`): `QUEUE_CONNECTION=database`, `CACHE_STORE=database`, `SESSION_DRIVER=database`. Redis and SQS are opt-in and typically used in production. `composer run dev` starts a queue worker, so queued notifications will be processed locally. If you switch `CACHE_STORE` mid-session, clear the plan-feature cache (`PlanService::clearCache`) since it relies on whatever store is active.
 
 ### Testing
 
-- **PHPUnit:** Uses MySQL (not SQLite). Test database: `ticketing_test` on `127.0.0.1:3306`. Tests use `RefreshDatabase` trait.
+- **PHPUnit:** Uses MySQL (not SQLite), `RefreshDatabase` trait, test database `ticketing_test`. The dev box is **dockerized** (containers `ticketing-app`/`ticketing-mysql`/`ticketing-nginx`/`ticketing-redis`; Sail's `laravel.test` service is not used). MySQL is published on host port **3320**; tests run from the host against `127.0.0.1` also work via `phpunit.xml`. Run the suite either way: `php artisan test --compact` on the host, or inside the container with `docker exec ticketing-app php artisan test`.
+- **Testing-disk permission gotcha:** if you run tests *inside* the container (as root) and later on the host, branding/logo tests fail with `UnexpectedValueException: FilesystemIterator … Permission denied` because `storage/framework/testing/disks/public/tenant-logos` was created `root:root 0700`. Clear it through the container: `docker exec ticketing-app rm -rf storage/framework/testing/disks/public/tenant-logos`. (Passwordless `sudo` is not available on the host.)
 - **Playwright E2E:** Config in `playwright.config.ts`. Tests in `tests/e2e/`. Runs with `headless: false` and `slowMo: 500` for visibility.
 - **Test helpers** in `tests/TestCase.php`: `withTenant($tenant)` sets test context, `tenantUrl($path)` generates tenant-prefixed URLs.
 - **Common test pattern** (used across all feature tests):
@@ -141,7 +169,11 @@ Dev default (`.env.example`): `QUEUE_CONNECTION=database`, `CACHE_STORE=database
 private function createBusinessTenant(): Tenant {
     $plan = Plan::factory()->create(['slug' => 'business', 'features' => PlanFeature::forPlan('business')]);
     $license = License::factory()->active()->forPlan($plan)->create();
-    return Tenant::factory()->create(['license_id' => $license->id]);
+    $tenant = Tenant::factory()->create(['license_id' => $license->id]);
+    // Business+ tenants enforce the SLA-policy guard on ticket priority; seed a catch-all
+    // policy so TicketService ops don't throw (see "Ticket Hold Time & SLA").
+    SlaPolicy::factory()->create(['tenant_id' => $tenant->id, 'priority' => null, 'client_tier' => null, 'is_active' => true]);
+    return $tenant;
 }
 
 private function setupTenantContext(Tenant $tenant): User {
@@ -151,7 +183,8 @@ private function setupTenantContext(Tenant $tenant): User {
     return $user;
 }
 ```
-- Factories in `database/factories/` cover all major models (Tenant, User, Plan, License, Ticket, Client, Department, Product, etc.).
+- Factories in `database/factories/` cover all major models (Tenant, User, Plan, License, Ticket, Client, Department, Product, etc.). `Tenant::factory()->withLicense()` attaches an active license in one call — needed because dashboard access redirects to `license.expired` without a valid license.
+- **Default seeded credentials:** `admin@example.com` / `password` (admin), `test@example.com` / `password` (tenant user).
 
 ### Public Portal
 
@@ -167,6 +200,16 @@ Public-facing pages live under `/{slug}/` (not `/portal/`). The `/portal/` route
 | `/{slug}/kb/*` | `KbPortalController` | Enterprise (knowledge_base) |
 
 Starter tenants return 404 for all public portal URLs (enforced via `abortIfStarter()` in `ClientPortalController`).
+
+### REST API (v1)
+
+Token-authenticated REST API under `/api/v1/`, defined in `routes/api.php` (mounted via the `api:` key in `withRouting()`). Controllers live in `app/Http/Controllers/Api/V1/`.
+
+**Authentication** — the `api-token` middleware (`AuthenticateApiToken`) reads the `Authorization: Bearer <token>` header. Tokens are `tk_`-prefixed random strings; only their SHA-256 hash is stored in `api_tokens.token`. The middleware looks up the token by hash (`ApiToken::findByPlainToken`, which uses `withoutGlobalScopes()` since there's no session yet), rejects missing/invalid/expired tokens (401) and inactive tenants (403), then **establishes tenant context the same way URL-slug routes do**: sets `session('current_tenant_id')` and the Spatie `PermissionRegistrar` team id. After that, `BelongsToTenant` global scopes apply automatically — so controller queries like `Ticket::where(...)` are already tenant-scoped without manual `tenant_id` filtering. The resolved tenant/token are also stashed on `$request->attributes` (`api_tenant`, `api_token`).
+
+**Endpoints:** `GET/POST /tickets`, `GET /tickets/{ticketNumber}`, `POST /clients`, `GET /departments`, `GET /categories`. List/show responses go through `TicketController::presentTicket()` (a hand-rolled array shape, not an API Resource). Ticket creation reuses `TicketService::createTicket()` and `firstOrCreate`s the client by email.
+
+**Token management UI** — `AppSettingController::apiTokens/generateApiToken/revokeApiToken` (routes `settings.api-tokens*`, view `settings/api-tokens.blade.php`), gated by the `manage settings` permission. The plain token is shown **once** via a flashed `plain_token` after generation; it is never recoverable afterward. `ApiToken` is itself a `BelongsToTenant` model, so the management screens are tenant-scoped normally.
 
 ### Escalation System
 
@@ -198,4 +241,10 @@ Google-registered users have `password = null` and `email_verified_at` pre-set. 
 ### Controller Concerns
 
 `app/Http/Controllers/Concerns/HasSortableQuery.php` — reusable trait for controllers that support column sorting. Use it instead of duplicating sort logic.
+
+### CI/CD
+
+GitHub Actions (`.github/workflows/`):
+- **test.yml** — runs on all pushes and PRs. Spins up MySQL + Redis services, runs `php artisan test --compact` and Pint lint check.
+- **deploy.yml** — runs test job first, then on `main` only: builds Docker image → pushes to ECR → runs migrations as an ECS one-off task → updates `ticketing-web` and `ticketing-worker` ECS services → waits for stability. Web and queue worker are separate ECS services.
 <!-- Laravel Boost guidelines are auto-injected at runtime by the Laravel Boost MCP server. Do not duplicate them here. -->

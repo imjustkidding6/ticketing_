@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ApiToken;
 use App\Models\AppSetting;
 use App\Models\Tenant;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
@@ -167,7 +169,7 @@ class AppSettingController extends Controller
             $generalSettings = AppSetting::getByGroup('general');
             $companyName = $generalSettings['company_name'] ?? $tenant->name;
 
-            \Illuminate\Support\Facades\Mail::mailer('tenant_smtp')->send([], [], function ($message) use ($validated, $fromAddress, $fromName, $companyName) {
+            Mail::mailer('tenant_smtp')->send([], [], function ($message) use ($validated, $fromAddress, $fromName, $companyName) {
                 $message->to($validated['test_email'])
                     ->from($fromAddress, $fromName)
                     ->subject('Test Email from '.$companyName)
@@ -258,6 +260,74 @@ class AppSettingController extends Controller
     /**
      * Save branding settings.
      */
+    /**
+     * API settings are currently limited to specific tenants; treat as nonexistent otherwise.
+     */
+    private function ensureApiAccess(): void
+    {
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+
+        abort_unless($tenant->apiAccessEnabled(), 404);
+    }
+
+    /**
+     * Display API token management page.
+     */
+    public function apiTokens(): View
+    {
+        $this->ensureApiAccess();
+        $this->checkPermission('manage settings');
+
+        $tokens = ApiToken::orderByDesc('created_at')->get();
+
+        return view('settings.api-tokens', compact('tokens'));
+    }
+
+    /**
+     * Generate a new API token.
+     */
+    public function generateApiToken(Request $request): RedirectResponse
+    {
+        $this->ensureApiAccess();
+        $this->checkPermission('manage settings');
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
+        ]);
+
+        $generated = ApiToken::generateToken();
+
+        ApiToken::create([
+            'tenant_id' => session('current_tenant_id'),
+            'name' => $validated['name'],
+            'token' => $generated['hash'],
+            'expires_at' => ! empty($validated['expires_in_days'])
+                ? now()->addDays((int) $validated['expires_in_days'])
+                : null,
+        ]);
+
+        return redirect()->route('settings.api-tokens')
+            ->with('success', 'API token generated.')
+            ->with('plain_token', $generated['plain']);
+    }
+
+    /**
+     * Revoke an API token.
+     */
+    public function revokeApiToken(ApiToken $apiToken): RedirectResponse
+    {
+        $this->ensureApiAccess();
+        $this->checkPermission('manage settings');
+
+        abort_if($apiToken->tenant_id !== (int) session('current_tenant_id'), 404);
+
+        $apiToken->delete();
+
+        return redirect()->route('settings.api-tokens')
+            ->with('success', 'API token revoked.');
+    }
+
     public function saveBranding(Request $request): RedirectResponse
     {
         $validated = $request->validate([

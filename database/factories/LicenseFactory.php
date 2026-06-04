@@ -8,7 +8,7 @@ use App\Models\Plan;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\License>
+ * @extends Factory<License>
  */
 class LicenseFactory extends Factory
 {
@@ -28,7 +28,8 @@ class LicenseFactory extends Factory
             'status' => License::STATUS_PENDING,
             'issued_at' => now(),
             'activated_at' => null,
-            'expires_at' => now()->addYear(),
+            'expires_at' => null,
+            'duration_days' => 365,
             'grace_days' => License::DEFAULT_GRACE_DAYS,
         ];
     }
@@ -53,6 +54,7 @@ class LicenseFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'status' => License::STATUS_ACTIVE,
             'activated_at' => now(),
+            'expires_at' => now()->addDays($attributes['duration_days'] ?? 365),
         ]);
     }
 
@@ -65,6 +67,7 @@ class LicenseFactory extends Factory
             'status' => License::STATUS_ACTIVE,
             'activated_at' => now()->subYear()->subMonth(),
             'expires_at' => now()->subDays(License::DEFAULT_GRACE_DAYS + 1),
+            'duration_days' => 365,
         ]);
     }
 
@@ -77,6 +80,7 @@ class LicenseFactory extends Factory
             'status' => License::STATUS_ACTIVE,
             'activated_at' => now()->subYear(),
             'expires_at' => now()->subDays(3),
+            'duration_days' => 365,
             'grace_days' => License::DEFAULT_GRACE_DAYS,
         ]);
     }

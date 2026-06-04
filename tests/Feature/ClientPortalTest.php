@@ -11,7 +11,6 @@ use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ClientPortalTest extends TestCase
@@ -20,7 +19,10 @@ class ClientPortalTest extends TestCase
 
     private function createTenant(string $planSlug): Tenant
     {
-        $plan = Plan::factory()->create(['slug' => $planSlug . '_' . Str::random(4), 'features' => PlanFeature::forPlan($planSlug)]);
+        // Plan gating (abortIfStarter / feature checks) matches on the exact
+        // canonical plan slug ('start', 'business', 'enterprise'), so the slug
+        // must not be suffixed. RefreshDatabase keeps each test's plans unique.
+        $plan = Plan::factory()->create(['slug' => $planSlug, 'features' => PlanFeature::forPlan($planSlug)]);
         $license = License::factory()->active()->forPlan($plan)->create();
 
         return Tenant::factory()->create(['license_id' => $license->id]);

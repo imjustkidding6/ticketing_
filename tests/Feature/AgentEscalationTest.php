@@ -92,7 +92,8 @@ class AgentEscalationTest extends TestCase
         $tenant = $this->createEnterpriseTenant();
         $user = $this->setupTenantContext($tenant);
 
-        $agent = User::factory()->create();
+        // The assigned agent must have a support_tier >= the escalation target tier.
+        $agent = User::factory()->create(['support_tier' => 'tier_3']);
         $tenant->addUser($agent, 'member');
 
         $ticket = Ticket::factory()->create([

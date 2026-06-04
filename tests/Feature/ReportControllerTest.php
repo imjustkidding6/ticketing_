@@ -99,8 +99,10 @@ class ReportControllerTest extends TestCase
         $this->get($this->tenantUrl('/reports/export/volume'))->assertForbidden();
     }
 
-    public function test_agent_cannot_view_reports(): void
+    public function test_agent_can_view_reports(): void
     {
+        // The default `agent` role now includes the `view reports` permission
+        // (see TenantRoleService base permissions), so agents may view reports.
         $plan = Plan::factory()->create(['slug' => 'biz4', 'features' => PlanFeature::forPlan('business')]);
         $license = License::factory()->active()->forPlan($plan)->create();
         $tenant = Tenant::factory()->create(['license_id' => $license->id]);
@@ -114,6 +116,6 @@ class ReportControllerTest extends TestCase
 
         $this->actingAs($user)->withTenant($tenant)->withSession(['current_tenant_id' => $tenant->id]);
 
-        $this->get($this->tenantUrl('/reports'))->assertForbidden();
+        $this->get($this->tenantUrl('/reports'))->assertOk();
     }
 }

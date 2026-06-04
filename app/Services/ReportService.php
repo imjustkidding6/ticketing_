@@ -4,12 +4,15 @@ namespace App\Services;
 
 use App\Models\Client;
 use App\Models\Department;
+use App\Models\Product;
 use App\Models\Ticket;
+use App\Models\TicketCategory;
 use App\Models\User;
 use App\Support\TenantTime;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportService
 {
@@ -370,7 +373,7 @@ class ReportService
                 }
 
                 $closedTickets = $closedQuery->get();
-                $avgHours = $closedTickets->avg(fn ($t) => $t->created_at->diffInHours($t->closed_at));
+                $avgHours = $closedTickets->avg(fn ($t) => $t->getEffectiveResolutionTimeHours());
 
                 // Reopen rate: of tickets this agent has ever-closed, how many were later reopened?
                 $everClosedByAgent = Ticket::where('assigned_to', $agent->id)
@@ -432,7 +435,7 @@ class ReportService
             }
         };
 
-        return \App\Models\TicketCategory::query()
+        return TicketCategory::query()
             ->with('department')
             ->withCount([
                 'tickets as total_tickets' => fn ($q) => $ticketFilter($q),
@@ -535,7 +538,7 @@ class ReportService
             }
         };
 
-        return \App\Models\Product::query()
+        return Product::query()
             ->withCount([
                 'tickets as total_tickets' => fn ($q) => $ticketFilter($q),
                 'tickets as open_tickets' => fn ($q) => $ticketFilter($q->whereIn('tickets.status', ['open', 'assigned', 'in_progress', 'on_hold'])),
@@ -779,10 +782,10 @@ class ReportService
 
         $entityConfig = match ($entity) {
             'department' => ['column' => 'department_id', 'model' => Department::class, 'nameField' => 'name'],
-            'category' => ['column' => 'category_id', 'model' => \App\Models\TicketCategory::class, 'nameField' => 'name'],
+            'category' => ['column' => 'category_id', 'model' => TicketCategory::class, 'nameField' => 'name'],
             'client' => ['column' => 'client_id', 'model' => Client::class, 'nameField' => 'name'],
             'agent' => ['column' => 'assigned_to', 'model' => User::class, 'nameField' => 'name'],
-            'product' => ['column' => null, 'model' => \App\Models\Product::class, 'nameField' => 'name'],
+            'product' => ['column' => null, 'model' => Product::class, 'nameField' => 'name'],
             default => ['column' => 'department_id', 'model' => Department::class, 'nameField' => 'name'],
         };
 
@@ -791,11 +794,11 @@ class ReportService
             ->whereBetween('created_at', [$from, $to]);
 
         if ($entity === 'product') {
-            $topIds = \App\Models\Product::query()
+            $topIds = Product::query()
                 ->withCount(['tickets as tc' => fn ($q) => $q
                     ->whereBetween('tickets.created_at', [$from, $to])
                     ->where('tickets.is_merged', false)
-                    ->where('tickets.is_spam', false)
+                    ->where('tickets.is_spam', false),
                 ])
                 ->orderByDesc('tc')
                 ->limit($limit)
@@ -924,7 +927,7 @@ class ReportService
      * @param  array<int, array<string, mixed>>  $data
      * @param  list<string>  $headers
      */
-    public function exportToCsv(array $data, array $headers, string $filename): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function exportToCsv(array $data, array $headers, string $filename): StreamedResponse
     {
         return response()->streamDownload(function () use ($data, $headers) {
             $handle = fopen('php://output', 'w');

@@ -40,47 +40,97 @@ class SlaPolicyTest extends TestCase
         $this->get($this->tenantUrl('/sla'))->assertOk();
     }
 
-    public function test_create_sla_policy(): void
+    public function test_seed_default_sla_policies(): void
     {
         [$tenant] = $this->setupContext('business');
 
-        $this->post($this->tenantUrl('/sla'), [
-            'name' => 'Premium SLA',
-            'client_tier' => 'premium',
-            'priority' => 'high',
-            'response_time_hours' => 4,
-            'resolution_time_hours' => 24,
+        $this->post($this->tenantUrl('/sla/seed-defaults'))->assertRedirect();
+
+        // Seeding creates one policy per (tier, priority) pair: 3 tiers x 4 priorities.
+        $this->assertDatabaseCount('sla_policies', 12);
+
+        // Spot-check a couple of the standard defaults landed correctly.
+        $this->assertDatabaseHas('sla_policies', [
+            'tenant_id' => $tenant->id,
+            'client_tier' => 'enterprise',
+            'priority' => 'critical',
+            'response_time_hours' => 1,
+            'resolution_time_hours' => 2,
             'is_active' => true,
-        ])->assertRedirect();
-
-        $this->assertDatabaseHas('sla_policies', ['name' => 'Premium SLA', 'tenant_id' => $tenant->id]);
-    }
-
-    public function test_update_sla_policy(): void
-    {
-        [$tenant] = $this->setupContext('business');
-        $sla = SlaPolicy::factory()->create(['tenant_id' => $tenant->id]);
-
-        $this->put($this->tenantUrl("/sla/{$sla->id}"), [
-            'name' => 'Updated SLA',
+        ]);
+        $this->assertDatabaseHas('sla_policies', [
+            'tenant_id' => $tenant->id,
             'client_tier' => 'basic',
             'priority' => 'low',
-            'response_time_hours' => 8,
-            'resolution_time_hours' => 48,
-            'is_active' => true,
-        ])->assertRedirect();
-
-        $sla->refresh();
-        $this->assertEquals('Updated SLA', $sla->name);
+            'response_time_hours' => 48,
+            'resolution_time_hours' => 72,
+        ]);
     }
 
-    public function test_delete_sla_policy(): void
+    public function test_update_tier_sla_policies(): void
     {
         [$tenant] = $this->setupContext('business');
-        $sla = SlaPolicy::factory()->create(['tenant_id' => $tenant->id]);
 
-        $this->delete($this->tenantUrl("/sla/{$sla->id}"))->assertRedirect();
+        $this->post($this->tenantUrl('/sla/tier/premium'), [
+            'rows' => [
+                'low' => ['response' => 20, 'resolution' => 40, 'is_active' => '1'],
+                'medium' => ['response' => 10, 'resolution' => 20, 'is_active' => '1'],
+                'high' => ['response' => 5, 'resolution' => 10, 'is_active' => '1'],
+                'critical' => ['response' => 2, 'resolution' => 5, 'is_active' => '0'],
+            ],
+        ])->assertRedirect($this->tenantUrl('/sla'));
 
-        $this->assertDatabaseMissing('sla_policies', ['id' => $sla->id]);
+        // updateTier upserts all 4 priority rows for the tier.
+        $this->assertDatabaseCount('sla_policies', 4);
+
+        $this->assertDatabaseHas('sla_policies', [
+            'tenant_id' => $tenant->id,
+            'client_tier' => 'premium',
+            'priority' => 'high',
+            'response_time_hours' => 5,
+            'resolution_time_hours' => 10,
+            'name' => 'Premium - High',
+            'is_active' => true,
+        ]);
+
+        // is_active honors the submitted value (critical was unchecked).
+        $this->assertDatabaseHas('sla_policies', [
+            'tenant_id' => $tenant->id,
+            'client_tier' => 'premium',
+            'priority' => 'critical',
+            'is_active' => false,
+        ]);
+    }
+
+    public function test_destroy_tier_sla_policies(): void
+    {
+        [$tenant] = $this->setupContext('business');
+
+        $premiumPolicies = SlaPolicy::factory()->count(4)->sequence(
+            ['priority' => 'low'],
+            ['priority' => 'medium'],
+            ['priority' => 'high'],
+            ['priority' => 'critical'],
+        )->create(['tenant_id' => $tenant->id, 'client_tier' => 'premium']);
+
+        $basicPolicy = SlaPolicy::factory()->create([
+            'tenant_id' => $tenant->id,
+            'client_tier' => 'basic',
+            'priority' => 'low',
+        ]);
+
+        $this->delete($this->tenantUrl('/sla/tier/premium'))->assertRedirect($this->tenantUrl('/sla'));
+
+        // All premium-tier policies are gone.
+        $this->assertDatabaseMissing('sla_policies', [
+            'tenant_id' => $tenant->id,
+            'client_tier' => 'premium',
+        ]);
+        foreach ($premiumPolicies as $policy) {
+            $this->assertDatabaseMissing('sla_policies', ['id' => $policy->id]);
+        }
+
+        // Other tiers are untouched.
+        $this->assertDatabaseHas('sla_policies', ['id' => $basicPolicy->id]);
     }
 }

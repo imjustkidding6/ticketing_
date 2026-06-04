@@ -102,6 +102,7 @@ class AdminTenantTest extends TestCase
 
         $this->actingAs($admin)->post("/admin/tenants/{$tenant->id}/impersonate")
             ->assertRedirect()
-            ->assertSessionHas('impersonating_tenant_id', $tenant->id);
+            ->assertSessionHas('admin_impersonating', true)
+            ->assertSessionHas('current_tenant_id', $tenant->id);
     }
 }

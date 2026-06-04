@@ -54,7 +54,7 @@ class TicketTaskControllerTest extends TestCase
     public function test_update_task(): void
     {
         [$tenant, $user, $ticket] = $this->setupContext();
-        $task = TicketTask::factory()->create(['ticket_id' => $ticket->id]);
+        $task = TicketTask::factory()->create(['tenant_id' => $tenant->id, 'ticket_id' => $ticket->id]);
 
         $this->put($this->tenantUrl("/tickets/{$ticket->id}/tasks/{$task->id}"), [
             'description' => 'Updated task',
@@ -67,7 +67,7 @@ class TicketTaskControllerTest extends TestCase
     public function test_change_task_status(): void
     {
         [$tenant, $user, $ticket] = $this->setupContext();
-        $task = TicketTask::factory()->create(['ticket_id' => $ticket->id, 'status' => 'pending']);
+        $task = TicketTask::factory()->create(['tenant_id' => $tenant->id, 'ticket_id' => $ticket->id, 'status' => 'pending']);
 
         $this->post($this->tenantUrl("/tickets/{$ticket->id}/tasks/{$task->id}/status"), [
             'status' => 'completed',
@@ -80,7 +80,7 @@ class TicketTaskControllerTest extends TestCase
     public function test_delete_task(): void
     {
         [$tenant, $user, $ticket] = $this->setupContext();
-        $task = TicketTask::factory()->create(['ticket_id' => $ticket->id]);
+        $task = TicketTask::factory()->create(['tenant_id' => $tenant->id, 'ticket_id' => $ticket->id]);
 
         $this->delete($this->tenantUrl("/tickets/{$ticket->id}/tasks/{$task->id}"))->assertRedirect();
 
@@ -104,7 +104,7 @@ class TicketTaskControllerTest extends TestCase
     public function test_task_status_creates_activity_log(): void
     {
         [$tenant, $user, $ticket] = $this->setupContext();
-        $task = TicketTask::factory()->create(['ticket_id' => $ticket->id, 'status' => 'pending']);
+        $task = TicketTask::factory()->create(['tenant_id' => $tenant->id, 'ticket_id' => $ticket->id, 'status' => 'pending']);
 
         $this->post($this->tenantUrl("/tickets/{$ticket->id}/tasks/{$task->id}/status"), [
             'status' => 'in_progress',
@@ -119,7 +119,7 @@ class TicketTaskControllerTest extends TestCase
     public function test_task_history_endpoint(): void
     {
         [$tenant, $user, $ticket] = $this->setupContext();
-        $task = TicketTask::factory()->create(['ticket_id' => $ticket->id]);
+        $task = TicketTask::factory()->create(['tenant_id' => $tenant->id, 'ticket_id' => $ticket->id]);
 
         $this->get($this->tenantUrl("/tickets/{$ticket->id}/tasks/{$task->id}/history"))
             ->assertOk()

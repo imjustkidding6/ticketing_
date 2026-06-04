@@ -42,7 +42,7 @@ class AdminLicenseTest extends TestCase
             'distributor_id' => $distributor->id,
             'plan_id' => $plan->id,
             'seats' => 10,
-            'expires_at' => now()->addYear()->toDateString(),
+            'duration_days' => 365,
             'grace_days' => 30,
         ])->assertRedirect();
 
@@ -50,6 +50,7 @@ class AdminLicenseTest extends TestCase
             'distributor_id' => $distributor->id,
             'plan_id' => $plan->id,
             'seats' => 10,
+            'duration_days' => 365,
         ]);
     }
 
@@ -64,7 +65,7 @@ class AdminLicenseTest extends TestCase
         $this->assertEquals('revoked', $license->status);
     }
 
-    public function test_expiration_must_be_future(): void
+    public function test_duration_days_must_be_positive(): void
     {
         $admin = $this->adminUser();
         $distributor = Distributor::factory()->create();
@@ -74,9 +75,9 @@ class AdminLicenseTest extends TestCase
             'distributor_id' => $distributor->id,
             'plan_id' => $plan->id,
             'seats' => 10,
-            'expires_at' => now()->subDay()->toDateString(),
+            'duration_days' => 0,
             'grace_days' => 0,
-        ])->assertSessionHasErrors('expires_at');
+        ])->assertSessionHasErrors('duration_days');
     }
 
     public function test_grace_days_bounds(): void
@@ -89,7 +90,7 @@ class AdminLicenseTest extends TestCase
             'distributor_id' => $distributor->id,
             'plan_id' => $plan->id,
             'seats' => 10,
-            'expires_at' => now()->addYear()->toDateString(),
+            'duration_days' => 365,
             'grace_days' => 100,
         ])->assertSessionHasErrors('grace_days');
     }

@@ -179,7 +179,7 @@ class TicketWorkflowService
             ->get();
 
         $avgResolution = $tickets->filter(fn ($t) => $t->closed_at)
-            ->avg(fn ($t) => $t->created_at->diffInHours($t->closed_at));
+            ->avg(fn ($t) => $t->getEffectiveResolutionTimeHours());
 
         $avgResponse = $tickets->filter(fn ($t) => $t->first_response_at)
             ->avg(fn ($t) => $t->created_at->diffInMinutes($t->first_response_at));

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Carbon\Carbon;
+use Database\Factories\LicenseFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Support\Str;
 
 class License extends Model
 {
-    /** @use HasFactory<\Database\Factories\LicenseFactory> */
+    /** @use HasFactory<LicenseFactory> */
     use HasFactory;
 
     public const DEFAULT_GRACE_DAYS = 7;
@@ -38,6 +39,7 @@ class License extends Model
         'activated_at',
         'expires_at',
         'grace_days',
+        'duration_days',
         'revoked_at',
         'reactivated_at',
         'expiry_warning_sent_at',
@@ -56,6 +58,7 @@ class License extends Model
             'activated_at' => 'datetime',
             'expires_at' => 'datetime',
             'grace_days' => 'integer',
+            'duration_days' => 'integer',
             'revoked_at' => 'datetime',
             'reactivated_at' => 'datetime',
             'expiry_warning_sent_at' => 'datetime',
@@ -111,9 +114,12 @@ class License extends Model
             return false;
         }
 
+        $activatedAt = now();
+
         $this->update([
             'tenant_id' => $tenant->id,
-            'activated_at' => now(),
+            'activated_at' => $activatedAt,
+            'expires_at' => $activatedAt->copy()->addDays($this->duration_days),
             'status' => self::STATUS_ACTIVE,
         ]);
 
@@ -167,7 +173,7 @@ class License extends Model
      */
     public function isExpired(): bool
     {
-        return $this->expires_at->isPast();
+        return $this->expires_at !== null && $this->expires_at->isPast();
     }
 
     /**
@@ -187,31 +193,48 @@ class License extends Model
      */
     public function isFullyExpired(): bool
     {
+        if ($this->expires_at === null) {
+            return false;
+        }
+
         return now()->gte($this->gracePeriodEndsAt());
     }
 
     /**
      * Get the date when the grace period ends.
      */
-    public function gracePeriodEndsAt(): Carbon
+    public function gracePeriodEndsAt(): ?Carbon
     {
+        if ($this->expires_at === null) {
+            return null;
+        }
+
         return $this->expires_at->copy()->addDays($this->grace_days);
     }
 
     /**
      * Calculate the number of days until expiration.
      */
-    public function daysUntilExpiry(): int
+    public function daysUntilExpiry(): ?int
     {
+        if ($this->expires_at === null) {
+            return null;
+        }
+
         return (int) max(0, now()->diffInDays($this->expires_at, false));
     }
 
     /**
      * Calculate the number of days until full expiry (including grace period).
      */
-    public function daysUntilFullExpiry(): int
+    public function daysUntilFullExpiry(): ?int
     {
-        return (int) max(0, now()->diffInDays($this->gracePeriodEndsAt(), false));
+        $graceEnd = $this->gracePeriodEndsAt();
+        if ($graceEnd === null) {
+            return null;
+        }
+
+        return (int) max(0, now()->diffInDays($graceEnd, false));
     }
 
     /**

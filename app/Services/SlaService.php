@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\SlaPolicy;
 use App\Models\Ticket;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 
 class SlaService
 {
@@ -28,9 +30,9 @@ class SlaService
     /**
      * Get overdue tickets.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, Ticket>
+     * @return Collection<int, Ticket>
      */
-    public function getOverdueTickets(): \Illuminate\Database\Eloquent\Collection
+    public function getOverdueTickets(): Collection
     {
         return Ticket::withoutGlobalScopes()
             ->open()
@@ -50,9 +52,9 @@ class SlaService
     /**
      * Get overdue tickets that haven't been notified yet.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, Ticket>
+     * @return Collection<int, Ticket>
      */
-    public function getTicketsNeedingBreachWarning(): \Illuminate\Database\Eloquent\Collection
+    public function getTicketsNeedingBreachWarning(): Collection
     {
         return Ticket::withoutGlobalScopes()
             ->open()
@@ -75,7 +77,7 @@ class SlaService
      *
      * @return array<string, mixed>
      */
-    public function getComplianceReport(?\Carbon\Carbon $from = null, ?\Carbon\Carbon $to = null): array
+    public function getComplianceReport(?Carbon $from = null, ?Carbon $to = null): array
     {
         $from = $from ?? now()->subDays(30);
         $to = $to ?? now();
@@ -92,14 +94,15 @@ class SlaService
         $rows = $closedTickets->map(function (Ticket $t) {
             $responseMet = $t->first_response_at && $t->response_due_at && $t->first_response_at->lte($t->response_due_at);
             $responseMissed = $t->first_response_at && $t->response_due_at && $t->first_response_at->gt($t->response_due_at);
-            $resolutionMet = $t->closed_at && $t->resolution_due_at && $t->closed_at->lte($t->resolution_due_at);
-            $resolutionMissed = $t->closed_at && $t->resolution_due_at && $t->closed_at->gt($t->resolution_due_at);
+            // Resolution time excludes hold time, so compare effective hours against the policy target
+            // rather than wall-clock closed_at vs resolution_due_at (which would penalise held tickets).
+            $resolutionHours = $t->getEffectiveResolutionTimeHours();
+            $resolutionTarget = $t->slaPolicy?->resolution_time_hours;
+            $resolutionMet = $resolutionHours !== null && $resolutionTarget !== null && $resolutionHours <= $resolutionTarget;
+            $resolutionMissed = $resolutionHours !== null && $resolutionTarget !== null && $resolutionHours > $resolutionTarget;
 
             $responseHours = $t->first_response_at
                 ? round($t->created_at->diffInHours($t->first_response_at, false), 2)
-                : null;
-            $resolutionHours = $t->closed_at
-                ? round($t->created_at->diffInHours($t->closed_at, false), 2)
                 : null;
 
             $responseStatus = $responseMet ? 'met' : ($responseMissed ? 'missed' : 'na');

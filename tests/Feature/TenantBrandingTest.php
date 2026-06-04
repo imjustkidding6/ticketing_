@@ -137,7 +137,7 @@ class TenantBrandingTest extends TestCase
             'accent_color' => '#457b9d',
         ]);
 
-        $this->get(route('portal.index', ['tenant' => $tenant->slug]))
+        $this->get(route('tenant.landing', ['slug' => $tenant->slug]))
             ->assertOk()
             ->assertSee('--portal-primary: #e63946')
             ->assertSee('--portal-accent: #457b9d');
@@ -147,7 +147,7 @@ class TenantBrandingTest extends TestCase
     {
         $tenant = $this->createBusinessTenant();
 
-        $this->get(route('portal.index', ['tenant' => $tenant->slug]))
+        $this->get(route('tenant.landing', ['slug' => $tenant->slug]))
             ->assertOk()
             ->assertSee('--portal-primary: #4f46e5')
             ->assertSee('--portal-accent: #4338ca');

@@ -189,7 +189,7 @@ class KbPortalTest extends TestCase
         ]);
 
         $this->getJson(route('portal.knowledge-base.search', [
-            'tenant' => $tenant1->slug,
+            'slug' => $tenant1->slug,
             'q' => 'Tenant',
         ]))
             ->assertOk()

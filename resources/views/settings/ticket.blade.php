@@ -16,6 +16,9 @@
                 @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::ServiceReports))
                 <a href="{{ route('settings.service-report') }}" class="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">{{ __('Service Report') }}</a>
                 @endif
+                @if(auth()->user()?->currentTenant()?->apiAccessEnabled())
+                <a href="{{ route('settings.api-tokens') }}" class="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">{{ __('API') }}</a>
+                @endif
             </div>
 
             <div class="rounded-xl bg-white p-6 shadow-sm">

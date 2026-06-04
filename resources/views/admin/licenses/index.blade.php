@@ -60,7 +60,11 @@
                             @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            @localdt($license->expires_at, 'M d, Y')
+                            @if($license->expires_at)
+                                @localdt($license->expires_at, 'M d, Y')
+                            @else
+                                <span class="text-gray-400">{{ $license->duration_days }}d from activation</span>
+                            @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                             <a href="{{ route('admin.licenses.show', $license) }}" class="text-indigo-600 hover:text-indigo-900">View</a>
