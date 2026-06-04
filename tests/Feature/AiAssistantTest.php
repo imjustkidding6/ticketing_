@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\PlanFeature;
 use App\Models\AppSetting;
 use App\Models\ChatConversation;
+use App\Models\ChatMessage;
 use App\Models\Department;
 use App\Models\KbArticle;
 use App\Models\KbCategory;
@@ -212,6 +213,33 @@ class AiAssistantTest extends TestCase
             ->assertOk()->assertJsonStructure(['conversations' => [['id', 'title']]]);
         $this->getJson($this->tenantUrl('/assistant/conversation/'.$cid))
             ->assertOk()->assertJsonStructure(['conversation_id', 'messages' => [['role', 'text']]]);
+    }
+
+    public function test_in_app_assistant_queries_tickets(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $user = $this->setupTenantContext($tenant);
+        $ticket = Ticket::factory()->create([
+            'tenant_id' => $tenant->id, 'assigned_to' => $user->id, 'subject' => 'My assigned issue', 'status' => 'open',
+        ]);
+        // Another tenant's ticket must never appear in the results.
+        $other = Tenant::factory()->create();
+        Ticket::factory()->create(['tenant_id' => $other->id, 'subject' => 'Other tenant ticket']);
+
+        $this->fakeOpenAi([
+            $this->toolCall('query_tickets', ['assigned_to' => 'me', 'status' => 'open']),
+            $this->assistantText('You have 1 open ticket assigned to you.'),
+        ]);
+
+        $this->postJson($this->tenantUrl('/assistant/message'), ['message' => 'what tickets are assigned to me?'])
+            ->assertOk();
+
+        // The tool ran and returned only the agent's tenant-scoped ticket.
+        $toolMessage = ChatMessage::where('role', 'tool')->where('tool_name', 'query_tickets')->first();
+        $this->assertNotNull($toolMessage);
+        $this->assertStringContainsString($ticket->ticket_number, (string) $toolMessage->content);
+        $this->assertStringNotContainsString('Other tenant ticket', (string) $toolMessage->content);
     }
 
     public function test_in_app_assistant_new_chat_creates_new_conversation(): void

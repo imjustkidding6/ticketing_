@@ -13,6 +13,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
 use App\Support\SystemGuide;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -204,6 +205,7 @@ class AiAssistantService
             'search_web' => $this->searchWeb((string) ($args['query'] ?? '')),
             'create_ticket' => $this->createTicketTool($tenant, $conversation, $args),
             'lookup_ticket_status' => $this->lookupTicketStatus($tenant, $args),
+            'query_tickets' => $this->queryTickets($conversation, $args),
             default => ['error' => 'unknown_tool'],
         };
     }
@@ -331,6 +333,76 @@ class AiAssistantService
         ];
     }
 
+    /**
+     * General, safe ticket query for the in-app (agent) assistant. The model composes
+     * the filters; this code always forces tenant scope, stays read-only, and caps rows.
+     *
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function queryTickets(ChatConversation $conversation, array $args): array
+    {
+        $query = Ticket::withoutGlobalScopes()
+            ->where('tenant_id', $conversation->tenant_id)
+            ->notMerged()
+            ->notSpam()
+            ->with(['client', 'assignee']);
+
+        $assignedTo = strtolower(trim((string) ($args['assigned_to'] ?? '')));
+        if ($assignedTo === 'me') {
+            if (! $conversation->user_id) {
+                return ['error' => 'not_available', 'message' => '"assigned to me" is only available to a signed-in team member.'];
+            }
+            $query->where('assigned_to', $conversation->user_id);
+        } elseif ($assignedTo === 'unassigned') {
+            $query->whereNull('assigned_to');
+        }
+
+        if (! empty($args['status'])) {
+            $query->where('status', $args['status']);
+        }
+        if (! empty($args['priority'])) {
+            $query->where('priority', $args['priority']);
+        }
+
+        if (! empty($args['client'])) {
+            $client = (string) $args['client'];
+            $query->whereHas('client', fn ($q) => $q->withoutGlobalScopes()
+                ->where(fn ($w) => $w->where('email', 'like', "%{$client}%")->orWhere('name', 'like', "%{$client}%")));
+        }
+
+        if (! empty($args['search'])) {
+            $search = (string) $args['search'];
+            $query->where(fn ($q) => $q->where('subject', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%")
+                ->orWhere('ticket_number', 'like', "%{$search}%"));
+        }
+
+        foreach (['created_after' => '>=', 'created_before' => '<='] as $key => $op) {
+            if (! empty($args[$key])) {
+                try {
+                    $query->whereDate('created_at', $op, Carbon::parse((string) $args[$key]));
+                } catch (\Throwable $e) {
+                    // ignore unparseable dates
+                }
+            }
+        }
+
+        $limit = max(1, min((int) ($args['limit'] ?? 15), 25));
+
+        $tickets = $query->latest()->limit($limit)->get()->map(fn (Ticket $t) => [
+            'ticket_number' => $t->ticket_number,
+            'subject' => $t->subject,
+            'status' => $t->status,
+            'priority' => $t->priority,
+            'assigned_to' => $t->assignee?->name,
+            'client' => $t->client?->name,
+            'created' => optional($t->created_at)->toDateString(),
+        ])->all();
+
+        return ['count' => count($tickets), 'tickets' => $tickets];
+    }
+
     private function resolveDepartment(Tenant $tenant, mixed $departmentId): ?Department
     {
         $base = Department::withoutGlobalScopes()->where('tenant_id', $tenant->id)->active();
@@ -417,7 +489,7 @@ class AiAssistantService
             ."- This is an ongoing conversation. Remember details the user shared earlier and refer back to them.\n"
             ."- For questions about how to USE this app (how do I…, where is…, e.g. how to create a ticket or change a setting), call search_system_guide and answer with the steps and the exact menu location.\n"
             ."- For questions about the company's own products/services or help content, call search_knowledge_base and cite the article title (and link).\n"
-            ."- Use lookup_ticket_status (ticket number + the client's email) to check an existing ticket.\n"
+            ."- For any question about tickets (mine, by status or priority, for a client, searching, or recent), call query_tickets with just the filters you need.\n"
             ."- Use create_ticket to open a ticket on a client's behalf; confirm the client's name, email, subject, and description first.\n"
             .($this->webSearchConfigured() ? "- For general questions that are NOT about this system or the company's products, use search_web and cite the source link.\n" : '')
             ."- Be concise and helpful, and never invent policies, prices, or facts.\n\n"
@@ -473,6 +545,26 @@ class AiAssistantService
                             'query' => ['type' => 'string', 'description' => 'Keywords about the app action or section'],
                         ],
                         'required' => ['query'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'query_tickets',
+                    'description' => 'Search and list this workspace\'s support tickets with flexible filters. Use for any question about tickets — assigned to me, by status or priority, for a client, free-text search, or a date range. Compose only the filters you need.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'assigned_to' => ['type' => 'string', 'enum' => ['me', 'unassigned', 'anyone'], 'description' => 'Whose tickets (default anyone)'],
+                            'status' => ['type' => 'string', 'enum' => ['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled']],
+                            'priority' => ['type' => 'string', 'enum' => ['low', 'medium', 'high', 'critical']],
+                            'client' => ['type' => 'string', 'description' => 'Filter by client name or email'],
+                            'search' => ['type' => 'string', 'description' => 'Text to match in subject, description, or ticket number'],
+                            'created_after' => ['type' => 'string', 'description' => 'ISO date, e.g. 2026-06-01'],
+                            'created_before' => ['type' => 'string', 'description' => 'ISO date'],
+                            'limit' => ['type' => 'integer', 'description' => 'Max rows (1-25, default 15)'],
+                        ],
                     ],
                 ],
             ],
