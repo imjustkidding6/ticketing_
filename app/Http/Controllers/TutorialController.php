@@ -19,6 +19,11 @@ class TutorialController extends Controller
             'description' => 'Create, assign, and resolve tickets. Learn the full ticket lifecycle.',
             'icon' => 'ticket',
         ],
+        'ai-assistant' => [
+            'title' => 'AI Assistant',
+            'description' => 'Meet your AI teammate — ask it anything, get charts, and resolve tickets faster.',
+            'icon' => 'sparkles',
+        ],
         'client-management' => [
             'title' => 'Client Management',
             'description' => 'Add clients, set up the public portal, and enable ticket tracking.',
