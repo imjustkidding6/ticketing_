@@ -12,7 +12,7 @@ class OnboardingService
     private const STEPS = [
         'customize_workspace' => [
             'label' => 'Customize your workspace',
-            'description' => 'Add your company logo and configure your workspace name to make TechDesk feel like home for your team.',
+            'description' => 'Add your company logo and configure your workspace name to make CliqueHA Nexus feel like home for your team.',
             'route' => 'settings.general',
             'icon' => 'paint-brush',
         ],

@@ -1,6 +1,6 @@
 <div class="prose prose-sm max-w-none text-gray-700">
     <h2 class="text-lg font-semibold text-gray-900">{{ __('Reports & Analytics') }}</h2>
-    <p>{{ __('TechDesk turns your ticket activity into insight — so you can see how much work is coming in, how your team is performing, and where service quality can improve. Every report supports a date-range filter; use it to compare this week to last, or to pull figures for a monthly review.') }}</p>
+    <p>{{ __('CliqueHA Nexus turns your ticket activity into insight — so you can see how much work is coming in, how your team is performing, and where service quality can improve. Every report supports a date-range filter; use it to compare this week to last, or to pull figures for a monthly review.') }}</p>
 
     <h3 class="mt-6 text-base font-semibold text-gray-900">{{ __('Reports Overview') }}</h3>
     <p>{{ __('The overview page is your starting point: total tickets, a breakdown by status, and volume trends over the selected period. Use it to take the pulse of your support operation at a glance, then drill into a specific report for detail.') }}</p>

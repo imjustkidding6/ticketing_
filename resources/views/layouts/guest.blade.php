@@ -22,7 +22,7 @@
             <div>
                 <a href="/" class="flex flex-col items-center gap-2">
                     <img src="/cliqueha-logo.png" alt="{{ config('app.name') }}" class="h-16 w-16 rounded-lg object-cover">
-                    <span class="text-lg font-semibold text-gray-700">{{ config('app.name', 'CliqueHA TechDesk') }}</span>
+                    <span class="text-lg font-semibold text-gray-700">{{ config('app.name', 'CliqueHA Nexus') }}</span>
                 </a>
             </div>
 

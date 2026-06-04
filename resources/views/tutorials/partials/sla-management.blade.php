@@ -1,6 +1,6 @@
 <div class="prose prose-sm max-w-none text-gray-700">
     <h2 class="text-lg font-semibold text-gray-900">{{ __('SLA Management') }}</h2>
-    <p>{{ __('Service Level Agreements (SLAs) define the response and resolution time targets your team commits to. TechDesk applies the right target to every ticket, tracks compliance automatically, and warns your team before a deadline is missed.') }}</p>
+    <p>{{ __('Service Level Agreements (SLAs) define the response and resolution time targets your team commits to. CliqueHA Nexus applies the right target to every ticket, tracks compliance automatically, and warns your team before a deadline is missed.') }}</p>
     <p class="text-xs text-amber-600">{{ __('SLA management is available on Business and Enterprise plans.') }}</p>
 
     <h3 class="mt-6 text-base font-semibold text-gray-900">{{ __('How SLA Policies Work') }}</h3>
@@ -22,7 +22,7 @@
     <p>{{ __('When a ticket is set to On Hold — typically while waiting on the client or a third party — the SLA clock pauses, and it resumes when you take the ticket off hold. Because hold time is excluded, your agents are never penalized for delays outside their control, and the response and resolution figures in reports reflect actual working time.') }}</p>
 
     <h3 class="mt-6 text-base font-semibold text-gray-900">{{ __('Breach Warnings') }}</h3>
-    <p>{{ __('TechDesk checks open tickets for approaching deadlines every 15 minutes. When a ticket nears its response or resolution target, the assigned agent gets an email warning, giving the team a chance to act before the SLA is actually breached.') }}</p>
+    <p>{{ __('CliqueHA Nexus checks open tickets for approaching deadlines every 15 minutes. When a ticket nears its response or resolution target, the assigned agent gets an email warning, giving the team a chance to act before the SLA is actually breached.') }}</p>
     <p class="text-xs text-amber-600">{{ __('Note: Breach warning emails require email notifications to be enabled for your workspace.') }}</p>
 
     <h3 class="mt-6 text-base font-semibold text-gray-900">{{ __('Monitoring Compliance') }}</h3>

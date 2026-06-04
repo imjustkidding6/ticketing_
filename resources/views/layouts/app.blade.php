@@ -100,7 +100,7 @@
                     <div class="flex items-center justify-between">
                         @php
                             $sidebarLogo = null;
-                            $sidebarCompanyName = config('app.name', 'CliqueHA TechDesk');
+                            $sidebarCompanyName = config('app.name', 'CliqueHA Nexus');
                             $sidebarTenant = null;
                             $sidebarHasMultipleTenants = false;
                             $isAdminOrOwner = false;
