@@ -88,5 +88,15 @@
                 </div>
             </footer>
         </div>
+
+        {{-- AI support assistant (shown only when the tenant has the feature and has enabled the portal widget) --}}
+        @php
+            $aiOn = app(\App\Services\PlanService::class)->tenantHasFeature($tenant, \App\Enums\PlanFeature::AiChatbot)
+                && \App\Models\AppSetting::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('key', 'ai_enabled')->value('value') === '1'
+                && \App\Models\AppSetting::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('key', 'ai_portal_widget_enabled')->value('value') === '1';
+        @endphp
+        @if($aiOn)
+            @include('client-portal.partials.ai-chat-widget', ['tenant' => $tenant])
+        @endif
     </body>
 </html>

@@ -770,6 +770,11 @@
             </button>
         </div>
         @endif
+
+        {{-- In-app AI assistant (per-user memory) --}}
+        @if(auth()->user()?->currentTenant() && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot) && (bool) \App\Models\AppSetting::get('ai_enabled', false))
+            @include('partials.app-ai-assistant')
+        @endif
         @endauth
     </body>
 </html>

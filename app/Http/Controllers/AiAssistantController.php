@@ -1,0 +1,158 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Exceptions\OpenAiException;
+use App\Models\AppSetting;
+use App\Models\ChatConversation;
+use App\Models\ChatMessage;
+use App\Models\Tenant;
+use App\Models\Ticket;
+use App\Models\User;
+use App\Services\AiAssistantService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
+
+/**
+ * Authenticated "agent copilot" endpoints. Gated by the ai_chatbot feature
+ * (route middleware); the ticket is tenant-scoped by the global TenantScope.
+ */
+class AiAssistantController extends Controller
+{
+    public function __construct(private AiAssistantService $assistant) {}
+
+    public function draftReply(Ticket $ticket): JsonResponse
+    {
+        $this->checkPermission('view tickets');
+
+        try {
+            $text = $this->assistant->draftAgentReply($ticket);
+        } catch (OpenAiException $e) {
+            report($e);
+
+            return response()->json(['error' => 'The AI assistant is unavailable right now.'], 503);
+        }
+
+        return response()->json(['text' => $text]);
+    }
+
+    public function summarize(Ticket $ticket): JsonResponse
+    {
+        $this->checkPermission('view tickets');
+
+        try {
+            $text = $this->assistant->summarizeTicket($ticket);
+        } catch (OpenAiException $e) {
+            report($e);
+
+            return response()->json(['error' => 'The AI assistant is unavailable right now.'], 503);
+        }
+
+        return response()->json(['text' => $text]);
+    }
+
+    // ─────────── In-app assistant (per-user memory) ───────────
+
+    public function message(Request $request): JsonResponse
+    {
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+        abort_unless((bool) AppSetting::get('ai_enabled', false), 404);
+
+        $validated = $request->validate(['message' => ['required', 'string', 'max:2000']]);
+        $conversation = $this->userConversation($tenant, $request->user());
+
+        try {
+            $reply = $this->assistant->replyToAppMessage($tenant, $conversation, $request->user(), $validated['message']);
+        } catch (OpenAiException $e) {
+            report($e);
+
+            return response()->json(['reply' => "Sorry, I'm having trouble right now. Please try again."]);
+        }
+
+        return response()->json(['reply' => $reply]);
+    }
+
+    public function history(Request $request): JsonResponse
+    {
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+        $conversation = $this->userConversation($tenant, $request->user(), false);
+
+        $messages = $conversation
+            ? $conversation->messages()
+                ->whereIn('role', [ChatMessage::ROLE_USER, ChatMessage::ROLE_ASSISTANT])
+                ->whereNotNull('content')
+                ->get()
+                ->map(fn (ChatMessage $m) => ['role' => $m->role, 'text' => (string) $m->content])
+                ->values()
+            : collect();
+
+        return response()->json(['messages' => $messages]);
+    }
+
+    public function newChat(Request $request): JsonResponse
+    {
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+
+        ChatConversation::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('user_id', $request->user()->id)
+            ->where('channel', ChatConversation::CHANNEL_AGENT)
+            ->where('status', 'active')
+            ->update(['status' => 'archived']);
+
+        return response()->json(['ok' => true]);
+    }
+
+    // ─────────── Saved chat history (admin viewer) ───────────
+
+    public function conversations(): View
+    {
+        $this->checkPermission('manage settings');
+
+        $conversations = ChatConversation::with(['user', 'client'])
+            ->withCount('messages')
+            ->latest('id')
+            ->paginate(20);
+
+        return view('settings.ai-conversations', compact('conversations'));
+    }
+
+    public function showConversation(ChatConversation $conversation): View
+    {
+        $this->checkPermission('manage settings');
+
+        $conversation->load(['user', 'client']);
+        $messages = $conversation->messages()
+            ->whereIn('role', [ChatMessage::ROLE_USER, ChatMessage::ROLE_ASSISTANT])
+            ->whereNotNull('content')
+            ->get();
+
+        return view('settings.ai-conversation', compact('conversation', 'messages'));
+    }
+
+    /**
+     * The user's current in-app conversation (per-user, per-tenant memory).
+     */
+    private function userConversation(Tenant $tenant, User $user, bool $create = true): ?ChatConversation
+    {
+        $conversation = ChatConversation::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('user_id', $user->id)
+            ->where('channel', ChatConversation::CHANNEL_AGENT)
+            ->where('status', 'active')
+            ->latest('id')
+            ->first();
+
+        if ($conversation || ! $create) {
+            return $conversation;
+        }
+
+        return ChatConversation::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $user->id,
+            'channel' => ChatConversation::CHANNEL_AGENT,
+            'status' => 'active',
+        ]);
+    }
+}

@@ -1,0 +1,609 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\AppSetting;
+use App\Models\ChatConversation;
+use App\Models\ChatMessage;
+use App\Models\Client;
+use App\Models\Department;
+use App\Models\KbArticle;
+use App\Models\Tenant;
+use App\Models\Ticket;
+use App\Models\TicketComment;
+use App\Models\User;
+use App\Support\SystemGuide;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+
+/**
+ * Tenant-aware orchestrator for the AI assistant.
+ *
+ * - Portal bot: a multi-turn, tool-calling conversation (search KB, create ticket,
+ *   look up ticket status). Conversation history is persisted.
+ * - Agent copilot: stateless one-shot generations (draft a reply, summarize a ticket).
+ */
+class AiAssistantService
+{
+    private const MAX_TOOL_ITERATIONS = 4;
+
+    public function __construct(
+        private OpenAiService $openAi,
+        private TicketService $ticketService,
+    ) {}
+
+    // ───────────────────────── Portal bot ─────────────────────────
+
+    /**
+     * Handle one user message in a portal conversation and return the assistant's reply.
+     */
+    public function replyToPortalMessage(Tenant $tenant, ChatConversation $conversation, string $userMessage): string
+    {
+        return $this->converse($tenant, $conversation, $userMessage, $this->portalSystemPrompt($tenant), $this->portalTools());
+    }
+
+    /**
+     * Handle one message from a logged-in team member (in-app assistant, per-user memory).
+     */
+    public function replyToAppMessage(Tenant $tenant, ChatConversation $conversation, User $user, string $userMessage): string
+    {
+        return $this->converse($tenant, $conversation, $userMessage, $this->appSystemPrompt($tenant, $user), $this->appTools());
+    }
+
+    /**
+     * Run the persisted tool-calling loop for a conversation and return the assistant reply.
+     *
+     * @param  array<int, array<string, mixed>>  $tools
+     */
+    private function converse(Tenant $tenant, ChatConversation $conversation, string $userMessage, string $systemPrompt, array $tools): string
+    {
+        ChatMessage::create([
+            'chat_conversation_id' => $conversation->id,
+            'role' => ChatMessage::ROLE_USER,
+            'content' => $userMessage,
+        ]);
+
+        $messages = array_merge(
+            [['role' => 'system', 'content' => $systemPrompt]],
+            $this->history($conversation),
+        );
+
+        for ($i = 0; $i < self::MAX_TOOL_ITERATIONS; $i++) {
+            $response = $this->openAi->chat($messages, $tools);
+            $message = $response['choices'][0]['message'] ?? [];
+            $usage = $response['usage'] ?? null;
+            $toolCalls = $message['tool_calls'] ?? [];
+
+            if ($toolCalls === []) {
+                $content = (string) ($message['content'] ?? '');
+                ChatMessage::create([
+                    'chat_conversation_id' => $conversation->id,
+                    'role' => ChatMessage::ROLE_ASSISTANT,
+                    'content' => $content,
+                    'metadata' => $usage ? ['usage' => $usage] : null,
+                ]);
+
+                return $content;
+            }
+
+            // The model asked to call one or more tools — record the request, then run them.
+            $messages[] = ['role' => 'assistant', 'content' => $message['content'] ?? null, 'tool_calls' => $toolCalls];
+            ChatMessage::create([
+                'chat_conversation_id' => $conversation->id,
+                'role' => ChatMessage::ROLE_ASSISTANT,
+                'content' => $message['content'] ?? null,
+                'metadata' => ['tool_calls' => $toolCalls, 'usage' => $usage],
+            ]);
+
+            foreach ($toolCalls as $call) {
+                $name = $call['function']['name'] ?? '';
+                $args = json_decode($call['function']['arguments'] ?? '{}', true) ?: [];
+                $result = $this->executeTool($tenant, $conversation, $name, is_array($args) ? $args : []);
+                $resultJson = (string) json_encode($result);
+
+                $messages[] = ['role' => 'tool', 'tool_call_id' => $call['id'] ?? '', 'content' => $resultJson];
+                ChatMessage::create([
+                    'chat_conversation_id' => $conversation->id,
+                    'role' => ChatMessage::ROLE_TOOL,
+                    'tool_name' => $name,
+                    'content' => $resultJson,
+                    'metadata' => ['tool_call_id' => $call['id'] ?? null, 'args' => $args],
+                ]);
+            }
+        }
+
+        // Safety net if the model kept requesting tools without answering.
+        $fallback = 'Sorry, I was not able to complete that. Would you like me to open a support ticket for you?';
+        ChatMessage::create([
+            'chat_conversation_id' => $conversation->id,
+            'role' => ChatMessage::ROLE_ASSISTANT,
+            'content' => $fallback,
+        ]);
+
+        return $fallback;
+    }
+
+    /**
+     * Clean conversational history for replay (skips intermediate tool-call rows).
+     *
+     * @return array<int, array{role: string, content: string}>
+     */
+    private function history(ChatConversation $conversation): array
+    {
+        return $conversation->messages()
+            ->whereIn('role', [ChatMessage::ROLE_USER, ChatMessage::ROLE_ASSISTANT])
+            ->whereNotNull('content')
+            ->get()
+            ->map(fn (ChatMessage $m) => ['role' => $m->role, 'content' => (string) $m->content])
+            ->all();
+    }
+
+    // ─────────────────────── Agent copilot ───────────────────────
+
+    public function draftAgentReply(Ticket $ticket): string
+    {
+        $kb = $this->knowledgeBaseExcerpts($ticket->tenant, $ticket->subject);
+        $system = 'You are an expert support agent for '.$ticket->tenant->displayName().'. '
+            .'Draft a professional, empathetic reply to the customer for the ticket below, using the knowledge base excerpts where relevant. '
+            .'Be concise and actionable. Do not invent facts; if information is missing, ask the customer for it. '
+            .'Write only the reply body — no subject line and no signature.';
+        $user = "TICKET\nSubject: {$ticket->subject}\nDescription: {$ticket->description}\n\n"
+            ."CONVERSATION SO FAR:\n".$this->ticketContext($ticket)."\n\n"
+            ."KNOWLEDGE BASE:\n".($kb ?: '(none found)');
+
+        return $this->oneShot($system, $user, 600);
+    }
+
+    public function summarizeTicket(Ticket $ticket): string
+    {
+        $system = 'You summarize support tickets for agents. Produce a tight summary: the customer\'s issue, '
+            .'what has happened so far, and the recommended next action. Use short bullet points.';
+        $user = "TICKET\nSubject: {$ticket->subject}\nDescription: {$ticket->description}\n\n"
+            ."CONVERSATION SO FAR:\n".$this->ticketContext($ticket);
+
+        return $this->oneShot($system, $user, 400);
+    }
+
+    private function oneShot(string $system, string $user, int $maxTokens): string
+    {
+        $response = $this->openAi->chat(
+            [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]],
+            [],
+            ['max_tokens' => $maxTokens],
+        );
+
+        return (string) ($response['choices'][0]['message']['content'] ?? '');
+    }
+
+    private function ticketContext(Ticket $ticket): string
+    {
+        $comments = $ticket->comments()->where('is_public', true)->orderBy('id')->get();
+
+        if ($comments->isEmpty()) {
+            return '(no replies yet)';
+        }
+
+        return $comments->map(function (TicketComment $c) {
+            $who = $c->user_id ? 'Agent' : 'Customer';
+
+            return $who.': '.$c->content;
+        })->implode("\n");
+    }
+
+    // ───────────────────────── Tools ─────────────────────────
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function executeTool(Tenant $tenant, ChatConversation $conversation, string $name, array $args): array
+    {
+        return match ($name) {
+            'search_knowledge_base' => $this->searchKnowledgeBase($tenant, (string) ($args['query'] ?? '')),
+            'search_system_guide' => SystemGuide::search((string) ($args['query'] ?? '')),
+            'search_web' => $this->searchWeb((string) ($args['query'] ?? '')),
+            'create_ticket' => $this->createTicketTool($tenant, $conversation, $args),
+            'lookup_ticket_status' => $this->lookupTicketStatus($tenant, $args),
+            default => ['error' => 'unknown_tool'],
+        };
+    }
+
+    /**
+     * @return array{articles: array<int, array<string, mixed>>}
+     */
+    private function searchKnowledgeBase(Tenant $tenant, string $query): array
+    {
+        $query = trim($query);
+        if (strlen($query) < 2) {
+            return ['articles' => []];
+        }
+
+        $articles = KbArticle::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->published()
+            ->where(function ($q) use ($query) {
+                $q->where('title', 'like', "%{$query}%")
+                    ->orWhere('excerpt', 'like', "%{$query}%")
+                    ->orWhere('content', 'like', "%{$query}%");
+            })
+            ->with('category')
+            ->ordered()
+            ->limit(5)
+            ->get()
+            ->map(fn (KbArticle $a) => [
+                'title' => $a->title,
+                'excerpt' => $a->excerpt,
+                'content' => Str::limit(strip_tags((string) $a->content), 1200),
+                'url' => $a->category ? route('portal.knowledge-base.article', [
+                    'slug' => $tenant->slug,
+                    'categorySlug' => $a->category->slug,
+                    'articleSlug' => $a->slug,
+                ]) : null,
+            ])
+            ->all();
+
+        return ['articles' => $articles];
+    }
+
+    private function knowledgeBaseExcerpts(Tenant $tenant, string $query): string
+    {
+        return collect($this->searchKnowledgeBase($tenant, $query)['articles'])
+            ->map(fn ($a) => "### {$a['title']}\n".($a['excerpt'] ?? ''))
+            ->implode("\n\n");
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function createTicketTool(Tenant $tenant, ChatConversation $conversation, array $args): array
+    {
+        $name = trim((string) ($args['name'] ?? ''));
+        $email = trim((string) ($args['email'] ?? ''));
+        $subject = trim((string) ($args['subject'] ?? ''));
+        $description = trim((string) ($args['description'] ?? ''));
+
+        if ($name === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL) || $subject === '' || $description === '') {
+            return ['error' => 'missing_fields', 'message' => 'I need the full name, a valid email, a subject, and a description before opening a ticket.'];
+        }
+
+        $department = $this->resolveDepartment($tenant, $args['department_id'] ?? null);
+        if (! $department) {
+            return ['error' => 'no_department', 'message' => 'No department is available to route this ticket.'];
+        }
+
+        $client = $this->findOrCreateGuestClient($tenant, $email, $name);
+        $trackingToken = Str::random(64);
+
+        $ticket = $this->ticketService->createTicket([
+            'tenant_id' => $tenant->id,
+            'subject' => $subject,
+            'description' => $description,
+            'priority' => null,
+            'department_id' => $department->id,
+            'category_id' => null,
+            'client_id' => $client->id,
+            'created_by' => null,
+            'tracking_token' => $trackingToken,
+            'attachments' => null,
+        ]);
+
+        $conversation->forceFill(['client_id' => $client->id, 'ticket_id' => $ticket->id])->save();
+
+        return [
+            'ticket_number' => $ticket->ticket_number,
+            'status' => $ticket->status,
+            'tracking_url' => route('tenant.track-ticket.token', ['slug' => $tenant->slug, 'token' => $trackingToken]),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function lookupTicketStatus(Tenant $tenant, array $args): array
+    {
+        $number = trim((string) ($args['ticket_number'] ?? ''));
+        $email = trim((string) ($args['email'] ?? ''));
+
+        if ($number === '' || $email === '') {
+            return ['error' => 'missing_fields', 'message' => 'I need both the ticket number and the email used to submit it.'];
+        }
+
+        $ticket = Ticket::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('ticket_number', $number)
+            ->whereHas('client', fn ($q) => $q->withoutGlobalScopes()->where('email', $email))
+            ->first();
+
+        if (! $ticket) {
+            return ['error' => 'not_found', 'message' => 'I could not find a ticket matching that number and email.'];
+        }
+
+        return [
+            'ticket_number' => $ticket->ticket_number,
+            'subject' => $ticket->subject,
+            'status' => $ticket->status,
+            'last_update' => optional($ticket->updated_at)->toDayDateTimeString(),
+            'tracking_url' => $ticket->tracking_token
+                ? route('tenant.track-ticket.token', ['slug' => $tenant->slug, 'token' => $ticket->tracking_token])
+                : null,
+        ];
+    }
+
+    private function resolveDepartment(Tenant $tenant, mixed $departmentId): ?Department
+    {
+        $base = Department::withoutGlobalScopes()->where('tenant_id', $tenant->id)->active();
+
+        if ($departmentId) {
+            $match = (clone $base)->where('id', $departmentId)->first();
+            if ($match) {
+                return $match;
+            }
+        }
+
+        return (clone $base)->ordered()->first();
+    }
+
+    private function findOrCreateGuestClient(Tenant $tenant, string $email, string $name): Client
+    {
+        return Client::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('email', $email)
+            ->first()
+            ?? Client::withoutGlobalScopes()->create([
+                'tenant_id' => $tenant->id,
+                'name' => $name,
+                'email' => $email,
+                'contact_person' => $name,
+                'tier' => Client::TIER_BASIC,
+                'status' => Client::STATUS_ACTIVE,
+            ]);
+    }
+
+    // ─────────────────── Prompt + tool schema ───────────────────
+
+    private function departmentList(Tenant $tenant): string
+    {
+        return Department::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->active()
+            ->ordered()
+            ->get(['id', 'name'])
+            ->map(fn ($d) => "- {$d->id}: {$d->name}")
+            ->implode("\n");
+    }
+
+    private function tenantCustomPrompt(Tenant $tenant): ?string
+    {
+        return AppSetting::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('key', 'ai_system_prompt')
+            ->value('value');
+    }
+
+    /**
+     * Tell the model the current date/time (in the tenant's timezone) — models otherwise
+     * guess their training cutoff. Reads the tenant timezone directly so it also works
+     * on the public portal where there is no session.
+     */
+    private function currentDateLine(Tenant $tenant): string
+    {
+        $tz = AppSetting::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('key', 'timezone')
+            ->value('value') ?: 'UTC';
+
+        try {
+            $now = now()->setTimezone($tz);
+        } catch (\Throwable $e) {
+            $now = now();
+            $tz = 'UTC';
+        }
+
+        return 'The current date and time is '.$now->format('l, F j, Y, g:i A').' ('.$tz.'). '
+            .'Use this whenever the user asks about the date or time.';
+    }
+
+    private function appSystemPrompt(Tenant $tenant, User $user): string
+    {
+        $deptList = $this->departmentList($tenant);
+        $custom = $this->tenantCustomPrompt($tenant);
+
+        $prompt = "You are an AI assistant for the {$tenant->displayName()} support team. "
+            ."You are chatting with {$user->name}, a logged-in team member, to help them work efficiently.\n\n"
+            .$this->currentDateLine($tenant)."\n\n"
+            ."Guidelines:\n"
+            ."- This is an ongoing conversation. Remember details the user shared earlier and refer back to them.\n"
+            ."- For questions about how to USE this app (how do I…, where is…, e.g. how to create a ticket or change a setting), call search_system_guide and answer with the steps and the exact menu location.\n"
+            ."- For questions about the company's own products/services or help content, call search_knowledge_base and cite the article title (and link).\n"
+            ."- Use lookup_ticket_status (ticket number + the client's email) to check an existing ticket.\n"
+            ."- Use create_ticket to open a ticket on a client's behalf; confirm the client's name, email, subject, and description first.\n"
+            .($this->webSearchConfigured() ? "- For general questions that are NOT about this system or the company's products, use search_web and cite the source link.\n" : '')
+            ."- Be concise and helpful, and never invent policies, prices, or facts.\n\n"
+            ."Departments available for new tickets (id: name):\n".($deptList ?: '(none)');
+
+        if (filled($custom)) {
+            $prompt .= "\n\nAdditional instructions from the company:\n".$custom;
+        }
+
+        return $prompt;
+    }
+
+    private function portalSystemPrompt(Tenant $tenant): string
+    {
+        $deptList = $this->departmentList($tenant);
+        $custom = $this->tenantCustomPrompt($tenant);
+
+        $prompt = "You are the support assistant for \"{$tenant->displayName()}\". "
+            ."You help users with this company's products and support. Stay on topic, but be warm and conversational.\n\n"
+            .$this->currentDateLine($tenant)."\n\n"
+            ."Guidelines:\n"
+            ."- This is an ongoing conversation. Remember and use details the user has shared earlier (their name, email, the problem they described) so the chat feels continuous and personal. If they ask what they told you earlier, answer from the conversation above.\n"
+            ."- For any factual product/support question, FIRST call search_knowledge_base, then answer using those articles and cite the article title (and link if available). If nothing relevant is found, say so honestly.\n"
+            ."- If the user wants to raise an issue you cannot resolve, offer to open a support ticket. Before calling create_ticket, collect and CONFIRM the user's full name, a valid email, a short subject, and a clear description. After creating it, give them the ticket number and tracking link.\n"
+            ."- If the user asks about an existing ticket, use lookup_ticket_status with the ticket number and their email.\n"
+            ."- Politely decline only requests that are clearly unrelated to support (jokes, essays, general trivia). Never invent policies, prices, or facts.\n"
+            ."- Be concise and friendly.\n\n"
+            ."Departments available for new tickets (id: name):\n".($deptList ?: '(none)');
+
+        if (filled($custom)) {
+            $prompt .= "\n\nAdditional instructions from the company:\n".$custom;
+        }
+
+        return $prompt;
+    }
+
+    /**
+     * Tools for the in-app (agent) assistant: portal tools plus the product guide.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function appTools(): array
+    {
+        $tools = array_merge($this->portalTools(), [
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'search_system_guide',
+                    'description' => 'Search the CliqueHA Nexus product guide for how to use the app itself — where features live and how to perform actions (create a ticket, change a setting, run a report, manage clients, etc.). Use this for "how do I…" / "where is…" questions about the system.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'query' => ['type' => 'string', 'description' => 'Keywords about the app action or section'],
+                        ],
+                        'required' => ['query'],
+                    ],
+                ],
+            ],
+        ]);
+
+        if ($this->webSearchConfigured()) {
+            $tools[] = $this->webSearchTool();
+        }
+
+        return $tools;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function portalTools(): array
+    {
+        $tools = [
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'search_knowledge_base',
+                    'description' => "Search this company's knowledge base for help articles relevant to the user's question. Use before answering factual product/support questions.",
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'query' => ['type' => 'string', 'description' => 'Keywords from the user question'],
+                        ],
+                        'required' => ['query'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'create_ticket',
+                    'description' => 'Open a support ticket for the user. Only call AFTER confirming the user\'s full name, a valid email, a subject, and a clear description.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'name' => ['type' => 'string'],
+                            'email' => ['type' => 'string'],
+                            'subject' => ['type' => 'string'],
+                            'description' => ['type' => 'string'],
+                            'department_id' => ['type' => 'integer', 'description' => 'Optional department id from the provided list'],
+                        ],
+                        'required' => ['name', 'email', 'subject', 'description'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'lookup_ticket_status',
+                    'description' => 'Look up the status of an existing ticket by its ticket number and the email used to submit it.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'ticket_number' => ['type' => 'string'],
+                            'email' => ['type' => 'string'],
+                        ],
+                        'required' => ['ticket_number', 'email'],
+                    ],
+                ],
+            ],
+        ];
+
+        return $tools;
+    }
+
+    private function webSearchConfigured(): bool
+    {
+        return filled(config('services.tavily.key'));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function webSearchTool(): array
+    {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'search_web',
+                'description' => 'Search the public web for general information that is NOT about this app or the company\'s own products (e.g. general definitions, how-tos, or current external facts). Do not use it for anything answerable from the knowledge base or the system guide.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'query' => ['type' => 'string', 'description' => 'What to search the web for'],
+                    ],
+                    'required' => ['query'],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function searchWeb(string $query): array
+    {
+        $query = trim($query);
+        if ($query === '' || ! $this->webSearchConfigured()) {
+            return ['results' => []];
+        }
+
+        try {
+            $response = Http::timeout(20)->post('https://api.tavily.com/search', [
+                'api_key' => config('services.tavily.key'),
+                'query' => $query,
+                'max_results' => 5,
+                'search_depth' => 'basic',
+                'include_answer' => true,
+            ]);
+
+            if ($response->failed()) {
+                return ['results' => [], 'error' => 'web_search_failed'];
+            }
+
+            $data = $response->json();
+
+            return [
+                'answer' => $data['answer'] ?? null,
+                'results' => collect($data['results'] ?? [])->take(5)->map(fn ($r) => [
+                    'title' => $r['title'] ?? '',
+                    'url' => $r['url'] ?? '',
+                    'content' => Str::limit((string) ($r['content'] ?? ''), 500),
+                ])->all(),
+            ];
+        } catch (\Throwable $e) {
+            return ['results' => [], 'error' => 'web_search_failed'];
+        }
+    }
+}
