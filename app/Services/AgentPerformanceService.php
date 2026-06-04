@@ -28,7 +28,7 @@ class AgentPerformanceService
         $closedTickets = $assignedTickets->where('status', 'closed');
 
         $avgResolutionHours = $closedTickets->avg(function ($ticket) {
-            return $ticket->created_at->diffInHours($ticket->closed_at);
+            return $ticket->getEffectiveResolutionTimeHours();
         });
 
         $avgResponseMinutes = $assignedTickets->filter(fn ($t) => $t->first_response_at)
@@ -111,7 +111,7 @@ class AgentPerformanceService
             'closure_rate' => $tickets->count() > 0
                 ? round(($closedTickets->count() / $tickets->count()) * 100, 1)
                 : 0,
-            'avg_resolution_hours' => round($closedTickets->avg(fn ($t) => $t->created_at->diffInHours($t->closed_at)) ?? 0, 1),
+            'avg_resolution_hours' => round($closedTickets->avg(fn ($t) => $t->getEffectiveResolutionTimeHours()) ?? 0, 1),
             'total_overdue' => $tickets->filter(fn ($t) => $t->isOverdue())->count(),
             'total_unassigned' => $tickets->whereNull('assigned_to')->count(),
         ];

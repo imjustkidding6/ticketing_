@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\AppSetting;
 use App\Models\ServiceReport;
+use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Support\TenantTime;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -19,10 +21,12 @@ class ServiceReportService
     {
         $ticket->load(['client', 'category', 'department', 'products', 'creator', 'assignee', 'tasks', 'slaPolicy']);
 
-        $general = \App\Models\AppSetting::getByGroup('general');
+        $general = AppSetting::getByGroup('general');
 
+        // Exclude hold time when judging SLA compliance: a ticket parked on hold
+        // shouldn't be marked breached for time it spent legitimately paused.
         $slaMet = $ticket->closed_at && $ticket->resolution_due_at
-            ? $ticket->closed_at->lte($ticket->resolution_due_at)
+            ? $ticket->closed_at->copy()->subMinutes($ticket->getTotalHoldTimeMinutes())->lte($ticket->resolution_due_at)
             : null;
 
         $reportData = [
@@ -57,7 +61,7 @@ class ServiceReportService
             ])->toArray(),
             'additional_comments' => $ticket->closing_remarks ?? '',
             'resolution_time' => $ticket->closed_at
-                ? round($ticket->created_at->diffInHours($ticket->closed_at), 1).' hours'
+                ? round($ticket->getEffectiveResolutionTimeHours(), 1).' hours'
                 : 'N/A',
             'sla_compliance' => $slaMet,
         ];
@@ -69,7 +73,7 @@ class ServiceReportService
             'generated_at' => now(),
         ]);
 
-        $tenant = \App\Models\Tenant::find($ticket->tenant_id);
+        $tenant = Tenant::find($ticket->tenant_id);
         $pdf = Pdf::loadView('reports.service-report-pdf', ['data' => $reportData, 'report' => $report, 'tenant' => $tenant]);
         $path = "service-reports/{$report->report_number}.pdf";
         Storage::put($path, $pdf->output());
@@ -88,7 +92,7 @@ class ServiceReportService
             return Storage::download($report->file_path, "{$report->report_number}.pdf");
         }
 
-        $tenant = $report->ticket ? \App\Models\Tenant::find($report->ticket->tenant_id) : null;
+        $tenant = $report->ticket ? Tenant::find($report->ticket->tenant_id) : null;
         $pdf = Pdf::loadView('reports.service-report-pdf', [
             'data' => $report->report_data,
             'report' => $report,
