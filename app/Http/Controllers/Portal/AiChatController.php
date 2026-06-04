@@ -61,6 +61,42 @@ class AiChatController extends Controller
     }
 
     /**
+     * Clean up a customer's rough subject/description on the public submit form,
+     * so submitted tickets land tidy and the self-learning dataset stays clean.
+     * Customers do not receive internal task suggestions.
+     */
+    public function polish(Request $request, string $slug): JsonResponse
+    {
+        $tenant = $this->resolveTenant($slug);
+
+        $validated = $request->validate([
+            'subject' => ['nullable', 'string', 'max:2000'],
+            'description' => ['required', 'string', 'max:8000'],
+        ]);
+
+        if ($this->overDailyCap($tenant)) {
+            return response()->json(['error' => 'limit'], 429);
+        }
+
+        try {
+            $result = $this->assistant->structureTicketDraft(
+                $tenant,
+                (string) ($validated['subject'] ?? ''),
+                $validated['description'],
+            );
+        } catch (OpenAiException $e) {
+            report($e);
+
+            return response()->json(['error' => 'unavailable'], 503);
+        }
+
+        return response()->json([
+            'subject' => $result['subject'],
+            'description' => $result['description'],
+        ]);
+    }
+
+    /**
      * Return the prior messages for a conversation so the widget can restore it on reload.
      */
     public function history(Request $request, string $slug): JsonResponse

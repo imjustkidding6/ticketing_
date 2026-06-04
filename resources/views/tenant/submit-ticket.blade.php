@@ -110,6 +110,29 @@
                     @error('description') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                 </div>
 
+                {{-- AI wording help (portal AI enabled) --}}
+                @if($aiPolishUrl)
+                <div x-data="portalAiPolish()" class="rounded-lg border p-3" style="border-color: color-mix(in srgb, var(--portal-primary) 30%, white); background-color: color-mix(in srgb, var(--portal-primary) 6%, white);">
+                    <div class="flex items-start gap-2.5">
+                        <svg class="mt-0.5 h-5 w-5 shrink-0" style="color: var(--portal-primary);" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-medium text-gray-800">{{ __('Improve your wording with AI') }}</p>
+                            <p class="mt-0.5 text-xs text-gray-500">{{ __('Not sure how to phrase it? Let AI tidy up your subject and description so our team understands your issue faster. You can edit the result before submitting.') }}</p>
+                            <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                                <button type="button" @click="polish()" :disabled="loading"
+                                        class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-white shadow-sm disabled:opacity-50" style="background-color: var(--portal-primary);">
+                                    <svg x-show="!loading" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
+                                    <svg x-show="loading" x-cloak class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                    <span x-text="loading ? @js(__('Improving…')) : @js(__('Improve with AI'))"></span>
+                                </button>
+                                <button type="button" x-show="canRevert" x-cloak @click="revert()" class="text-xs font-medium text-gray-500 underline hover:text-gray-700">{{ __('Undo') }}</button>
+                                <span x-show="note" x-cloak class="text-xs font-medium" :class="error ? 'text-red-600' : 'text-emerald-600'" x-text="note"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
                 {{-- Incident Date --}}
                 <div>
                     <label for="incident_date" class="block text-sm font-medium text-gray-700">{{ __('Incident Date/Time') }} <span class="text-gray-400 font-normal">({{ __('optional') }})</span></label>
@@ -239,6 +262,66 @@
                     if (idx === -1) this.selectedProductIds.push(id);
                     else this.selectedProductIds.splice(idx, 1);
                 }
+            };
+        }
+
+        function portalAiPolish() {
+            return {
+                loading: false,
+                canRevert: false,
+                note: '',
+                error: false,
+                backup: null,
+                url: @js($aiPolishUrl),
+                csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
+                async polish() {
+                    if (this.loading) return;
+                    const s = document.getElementById('subject');
+                    const d = document.getElementById('description');
+                    const description = (d?.value || '').trim();
+                    if (!description) {
+                        this.error = true;
+                        this.note = @js(__('Please add a description first.'));
+                        return;
+                    }
+                    this.loading = true;
+                    this.note = '';
+                    this.error = false;
+                    this.backup = { subject: s?.value || '', description: d?.value || '' };
+                    try {
+                        const res = await fetch(this.url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' },
+                            body: JSON.stringify({ subject: s?.value || '', description }),
+                        });
+                        if (res.status === 429) {
+                            this.error = true;
+                            this.note = @js(__('AI is busy right now. Please try again later.'));
+                            return;
+                        }
+                        if (!res.ok) throw new Error('failed');
+                        const data = await res.json();
+                        if (s && data.subject) { s.value = data.subject; s.dispatchEvent(new Event('input')); }
+                        if (d && data.description) { d.value = data.description; }
+                        this.canRevert = true;
+                        this.note = @js(__('Improved ✨'));
+                    } catch (e) {
+                        this.error = true;
+                        this.note = @js(__('Could not reach AI. Please try again.'));
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                revert() {
+                    if (!this.backup) return;
+                    const s = document.getElementById('subject');
+                    const d = document.getElementById('description');
+                    if (s) { s.value = this.backup.subject; s.dispatchEvent(new Event('input')); }
+                    if (d) { d.value = this.backup.description; }
+                    this.canRevert = false;
+                    this.error = false;
+                    this.note = @js(__('Reverted.'));
+                },
             };
         }
     </script>

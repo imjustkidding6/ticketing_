@@ -229,6 +229,40 @@ class AiAssistantTest extends TestCase
         ])->assertNotFound();
     }
 
+    public function test_portal_polish_cleans_customer_wording_without_tasks(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+
+        $this->fakeOpenAi([[
+            'choices' => [['message' => ['role' => 'assistant', 'content' => json_encode([
+                'subject' => 'Cannot log in to my account',
+                'description' => 'The user is unable to log in and sees an error message.',
+                'tasks' => ['Reset the password'],
+            ])]]],
+            'usage' => ['total_tokens' => 20],
+        ]]);
+
+        $response = $this->postJson(route('tenant.ai-polish', ['slug' => $tenant->slug]), [
+            'subject' => 'cant login',
+            'description' => 'i cant login to my acount it says error pls help',
+        ]);
+
+        $response->assertOk()->assertJsonStructure(['subject', 'description']);
+        $this->assertStringContainsString('Cannot log in', $response->json('subject'));
+        // Customers must NOT receive internal task suggestions.
+        $this->assertNull($response->json('tasks'));
+    }
+
+    public function test_portal_polish_is_not_found_when_portal_ai_disabled(): void
+    {
+        $tenant = $this->enterpriseTenant(); // feature present, no opt-in toggles
+
+        $this->postJson(route('tenant.ai-polish', ['slug' => $tenant->slug]), [
+            'description' => 'something broke',
+        ])->assertNotFound();
+    }
+
     public function test_in_app_assistant_keeps_per_user_conversation(): void
     {
         $tenant = $this->enterpriseTenant();

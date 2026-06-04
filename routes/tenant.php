@@ -56,6 +56,7 @@ Route::post('track-ticket/{token}/reply', [ClientPortalController::class, 'publi
 // Public AI assistant (no auth; feature + opt-in gating done in the controller)
 Route::post('chat', [AiChatController::class, 'message'])->name('tenant.ai-chat')->middleware('throttle:ai-chat');
 Route::get('chat/history', [AiChatController::class, 'history'])->name('tenant.ai-chat.history')->middleware('throttle:ai-chat');
+Route::post('submit-ticket/polish', [AiChatController::class, 'polish'])->name('tenant.ai-polish')->middleware('throttle:ai-chat');
 
 // Knowledge Base portal (public, feature-gated at controller level)
 Route::get('kb', [KbPortalController::class, 'index'])->name('portal.knowledge-base.index');
