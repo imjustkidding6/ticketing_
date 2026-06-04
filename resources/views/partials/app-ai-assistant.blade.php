@@ -60,17 +60,51 @@
                         <template x-if="m.chart">
                             <div class="mt-2 w-56 max-w-full">
                                 <p x-show="m.chart.title" class="mb-1 text-xs font-semibold text-gray-700" x-text="m.chart.title"></p>
-                                <div class="space-y-1">
-                                    <template x-for="(d, j) in m.chart.data" :key="j">
-                                        <div class="flex items-center gap-2 text-xs">
-                                            <span class="w-16 shrink-0 truncate text-gray-600" x-text="d.label"></span>
-                                            <div class="h-3 flex-1 rounded bg-gray-100">
-                                                <div class="h-3 rounded bg-indigo-500" :style="'width:' + barPct(m.chart, d) + '%'"></div>
+
+                                <!-- Bar -->
+                                <template x-if="(m.chart.type || 'bar') === 'bar'">
+                                    <div class="space-y-1">
+                                        <template x-for="(d, j) in m.chart.data" :key="j">
+                                            <div class="flex items-center gap-2 text-xs">
+                                                <span class="w-16 shrink-0 truncate text-gray-600" x-text="d.label"></span>
+                                                <div class="h-3 flex-1 rounded bg-gray-100">
+                                                    <div class="h-3 rounded bg-indigo-500" :style="'width:' + barPct(m.chart, d) + '%'"></div>
+                                                </div>
+                                                <span class="w-7 shrink-0 text-right tabular-nums text-gray-700" x-text="d.value"></span>
                                             </div>
-                                            <span class="w-7 shrink-0 text-right tabular-nums text-gray-700" x-text="d.value"></span>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Pie (CSS conic-gradient; avoids the Alpine x-for-in-SVG namespace bug) -->
+                                <template x-if="m.chart.type === 'pie' || m.chart.type === 'donut'">
+                                    <div class="flex items-center gap-3">
+                                        <div class="h-24 w-24 shrink-0 rounded-full ring-1 ring-gray-200" :style="'background:' + pieGradient(m.chart)"></div>
+                                        <div class="min-w-0 space-y-0.5">
+                                            <template x-for="(s, j) in pieSlices(m.chart)" :key="j">
+                                                <div class="flex items-center gap-1.5 text-xs">
+                                                    <span class="h-2 w-2 shrink-0 rounded-full" :style="'background:' + s.color"></span>
+                                                    <span class="truncate text-gray-600" x-text="s.label"></span>
+                                                    <span class="shrink-0 tabular-nums text-gray-400" x-text="s.pct + '%'"></span>
+                                                </div>
+                                            </template>
                                         </div>
-                                    </template>
-                                </div>
+                                    </div>
+                                </template>
+
+                                <!-- Line (static polyline renders reliably inside SVG) -->
+                                <template x-if="m.chart.type === 'line'">
+                                    <div>
+                                        <svg viewBox="0 0 100 40" class="h-24 w-full" preserveAspectRatio="none">
+                                            <polyline :points="linePoints(m.chart)" fill="none" stroke="#6366f1" stroke-width="1.5"
+                                                      vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"></polyline>
+                                        </svg>
+                                        <div class="mt-1 flex justify-between text-[10px] text-gray-400">
+                                            <span x-text="(m.chart.data[0] || {}).label"></span>
+                                            <span x-text="(m.chart.data[m.chart.data.length - 1] || {}).label"></span>
+                                        </div>
+                                    </div>
+                                </template>
                             </div>
                         </template>
                     </div>
@@ -264,6 +298,41 @@
             barPct(chart, d) {
                 const max = Math.max(...chart.data.map((x) => Number(x.value) || 0), 1);
                 return Math.round(((Number(d.value) || 0) / max) * 100);
+            },
+            chartColors() {
+                return ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6', '#a855f7', '#ec4899', '#14b8a6'];
+            },
+            // Pie legend rows (label + color + percentage of total).
+            pieSlices(chart) {
+                const data = chart.data || [];
+                const total = data.reduce((s, x) => s + (Number(x.value) || 0), 0) || 1;
+                const colors = this.chartColors();
+                return data.map((d, i) => ({
+                    label: d.label, value: d.value,
+                    pct: Math.round(((Number(d.value) || 0) / total) * 100),
+                    color: colors[i % colors.length],
+                }));
+            },
+            // CSS conic-gradient string drawing each slice as a wedge.
+            pieGradient(chart) {
+                const data = chart.data || [];
+                const total = data.reduce((s, x) => s + (Number(x.value) || 0), 0) || 1;
+                const colors = this.chartColors();
+                let acc = 0;
+                const stops = data.map((d, i) => {
+                    const start = acc;
+                    acc += ((Number(d.value) || 0) / total) * 100;
+                    return `${colors[i % colors.length]} ${start}% ${acc}%`;
+                });
+                return `conic-gradient(${stops.join(', ')})`;
+            },
+            linePoints(chart) {
+                const data = chart.data || [];
+                const n = data.length;
+                const max = Math.max(...data.map((x) => Number(x.value) || 0), 1);
+                return data
+                    .map((d, i) => `${n <= 1 ? 50 : (i / (n - 1)) * 100},${38 - ((Number(d.value) || 0) / max) * 34}`)
+                    .join(' ');
             },
 
             startResize(e) {
