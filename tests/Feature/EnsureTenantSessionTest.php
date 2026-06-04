@@ -29,7 +29,9 @@ class EnsureTenantSessionTest extends TestCase
     public function test_slug_resolves_tenant_and_sets_session(): void
     {
         $user = User::factory()->create();
-        $tenant = Tenant::factory()->create();
+        // Dashboard access now requires a valid (non-expired) license; without one
+        // EnsureTenantSession redirects to license.expired.
+        $tenant = Tenant::factory()->withLicense()->create();
         $tenant->addUser($user);
 
         $response = $this->actingAs($user)

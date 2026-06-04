@@ -14,6 +14,8 @@ class ExampleTest extends TestCase
     {
         $response = $this->get('/');
 
-        $response->assertStatus(200);
+        // Guests hitting the root route are redirected to the login page
+        // (HomeController redirects based on auth/tenant context).
+        $response->assertRedirect(route('login'));
     }
 }

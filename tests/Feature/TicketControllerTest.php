@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\Department;
 use App\Models\License;
 use App\Models\Plan;
+use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
@@ -24,7 +25,18 @@ class TicketControllerTest extends TestCase
         $plan = Plan::factory()->create(['slug' => 'business', 'features' => PlanFeature::forPlan('business')]);
         $license = License::factory()->active()->forPlan($plan)->create();
 
-        return Tenant::factory()->create(['license_id' => $license->id]);
+        $tenant = Tenant::factory()->create(['license_id' => $license->id]);
+
+        // Business+ tenants enforce the SLA-policy guard on priority changes; seed a
+        // catch-all policy (any tier, any priority) so ticket operations aren't blocked.
+        SlaPolicy::factory()->create([
+            'tenant_id' => $tenant->id,
+            'priority' => null,
+            'client_tier' => null,
+            'is_active' => true,
+        ]);
+
+        return $tenant;
     }
 
     private function setupTenantContext(Tenant $tenant, string $role = 'admin'): User
@@ -225,8 +237,10 @@ class TicketControllerTest extends TestCase
         $otherUser = User::factory()->create();
         $otherTicket = Ticket::factory()->create(['tenant_id' => $tenant2->id, 'created_by' => $otherUser->id]);
 
+        // Cross-tenant tickets are hidden by the global TenantScope, so route-model
+        // binding resolves to "not found" rather than "forbidden".
         $this->get($this->tenantUrl("/tickets/{$otherTicket->id}"))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_agent_cannot_delete_tickets(): void

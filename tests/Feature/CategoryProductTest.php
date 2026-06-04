@@ -55,10 +55,12 @@ class CategoryProductTest extends TestCase
     public function test_update_category(): void
     {
         [$tenant] = $this->setupContext();
+        $dept = Department::factory()->create(['tenant_id' => $tenant->id]);
         $cat = TicketCategory::factory()->create(['tenant_id' => $tenant->id]);
 
         $this->put($this->tenantUrl("/categories/{$cat->id}"), [
             'name' => 'Updated Category',
+            'department_id' => $dept->id,
             'color' => '#00ff00',
             'is_active' => true,
         ])->assertRedirect();

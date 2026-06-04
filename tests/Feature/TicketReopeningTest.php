@@ -39,7 +39,7 @@ class TicketReopeningTest extends TestCase
     private function setupTenantContext(Tenant $tenant): User
     {
         $user = User::factory()->create();
-        $tenant->addUser($user, 'member');
+        $tenant->addUser($user, 'owner');
 
         $this->actingAs($user)
             ->withTenant($tenant)

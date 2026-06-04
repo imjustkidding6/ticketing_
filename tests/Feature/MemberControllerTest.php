@@ -17,7 +17,7 @@ class MemberControllerTest extends TestCase
 
     private function setupContext(): array
     {
-        $plan = Plan::factory()->create(['slug' => 'business', 'features' => PlanFeature::forPlan('business'), 'seats' => 25]);
+        $plan = Plan::factory()->create(['slug' => 'business', 'features' => PlanFeature::forPlan('business')]);
         $license = License::factory()->active()->forPlan($plan)->create(['seats' => 25]);
         $tenant = Tenant::factory()->create(['license_id' => $license->id]);
         $user = User::factory()->create();
@@ -46,13 +46,13 @@ class MemberControllerTest extends TestCase
 
         $this->post($this->tenantUrl('/members'), [
             'name' => 'New Agent',
-            'email' => 'agent@example.com',
+            'email' => 'agent@gmail.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'role' => 'agent',
         ])->assertRedirect();
 
-        $this->assertDatabaseHas('users', ['email' => 'agent@example.com']);
+        $this->assertDatabaseHas('users', ['email' => 'agent@gmail.com']);
     }
 
     public function test_show_member_with_performance(): void
@@ -67,7 +67,7 @@ class MemberControllerTest extends TestCase
     public function test_update_member(): void
     {
         [$tenant] = $this->setupContext();
-        $member = User::factory()->create();
+        $member = User::factory()->create(['email' => 'member@gmail.com']);
         $tenant->addUser($member, 'member');
 
         $roleService = app(TenantRoleService::class);
@@ -119,7 +119,7 @@ class MemberControllerTest extends TestCase
 
     public function test_agent_cannot_manage_users(): void
     {
-        $plan = Plan::factory()->create(['slug' => 'biz3', 'features' => PlanFeature::forPlan('business'), 'seats' => 25]);
+        $plan = Plan::factory()->create(['slug' => 'biz3', 'features' => PlanFeature::forPlan('business')]);
         $license = License::factory()->active()->forPlan($plan)->create(['seats' => 25]);
         $tenant = Tenant::factory()->create(['license_id' => $license->id]);
         $user = User::factory()->create();

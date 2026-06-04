@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\Department;
 use App\Models\License;
 use App\Models\Plan;
+use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
@@ -32,7 +33,18 @@ class TicketNotificationTest extends TestCase
         ]);
         $license = License::factory()->active()->forPlan($plan)->create();
 
-        return Tenant::factory()->create(['license_id' => $license->id]);
+        $tenant = Tenant::factory()->create(['license_id' => $license->id]);
+
+        // Business+ tenants enforce the SLA-policy guard when a ticket priority is set;
+        // seed a catch-all policy (any tier, any priority) so ticket creation succeeds.
+        SlaPolicy::factory()->create([
+            'tenant_id' => $tenant->id,
+            'priority' => null,
+            'client_tier' => null,
+            'is_active' => true,
+        ]);
+
+        return $tenant;
     }
 
     private function createStarterTenant(): Tenant
