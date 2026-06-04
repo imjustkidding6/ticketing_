@@ -54,4 +54,34 @@ class OpenAiService
 
         return $response->json() ?? [];
     }
+
+    /**
+     * Run a live web search using OpenAI's built-in web-search model.
+     * These models do not accept temperature/tools, so this is a separate call.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws OpenAiException
+     */
+    public function webSearch(string $query): array
+    {
+        if (! $this->isConfigured()) {
+            throw new OpenAiException('OpenAI API key is not configured.');
+        }
+
+        $response = Http::withToken((string) config('services.openai.api_key'))
+            ->timeout(45)
+            ->retry(2, 200, throw: false)
+            ->post(rtrim((string) config('services.openai.base_url', 'https://api.openai.com/v1'), '/').'/chat/completions', [
+                'model' => config('services.openai.search_model', 'gpt-4o-mini-search-preview'),
+                'messages' => [['role' => 'user', 'content' => $query]],
+                'web_search_options' => (object) [],
+            ]);
+
+        if ($response->failed()) {
+            throw new OpenAiException('OpenAI web search failed ('.$response->status().'): '.$response->body());
+        }
+
+        return $response->json() ?? [];
+    }
 }

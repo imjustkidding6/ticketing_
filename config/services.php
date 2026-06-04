@@ -44,13 +44,9 @@ return [
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        // Model used for the live web-search tool (OpenAI's built-in web search).
+        'search_model' => env('OPENAI_SEARCH_MODEL', 'gpt-4o-mini-search-preview'),
         'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
-    ],
-
-    // Web search provider for the AI assistant (general, non-system questions).
-    // Optional — the search_web tool is only exposed when a key is set.
-    'tavily' => [
-        'key' => env('TAVILY_API_KEY'),
     ],
 
 ];

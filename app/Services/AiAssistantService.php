@@ -14,7 +14,6 @@ use App\Models\TicketComment;
 use App\Models\User;
 use App\Support\SystemGuide;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 /**
@@ -746,7 +745,7 @@ class AiAssistantService
 
     private function webSearchConfigured(): bool
     {
-        return filled(config('services.tavily.key'));
+        return $this->openAi->isConfigured();
     }
 
     /**
@@ -781,27 +780,22 @@ class AiAssistantService
         }
 
         try {
-            $response = Http::timeout(20)->post('https://api.tavily.com/search', [
-                'api_key' => config('services.tavily.key'),
-                'query' => $query,
-                'max_results' => 5,
-                'search_depth' => 'basic',
-                'include_answer' => true,
-            ]);
+            $data = $this->openAi->webSearch($query);
+            $message = $data['choices'][0]['message'] ?? [];
 
-            if ($response->failed()) {
-                return ['results' => [], 'error' => 'web_search_failed'];
+            $citations = [];
+            foreach (($message['annotations'] ?? []) as $annotation) {
+                if (($annotation['type'] ?? '') === 'url_citation' && isset($annotation['url_citation'])) {
+                    $citations[] = [
+                        'title' => $annotation['url_citation']['title'] ?? '',
+                        'url' => $annotation['url_citation']['url'] ?? '',
+                    ];
+                }
             }
 
-            $data = $response->json();
-
             return [
-                'answer' => $data['answer'] ?? null,
-                'results' => collect($data['results'] ?? [])->take(5)->map(fn ($r) => [
-                    'title' => $r['title'] ?? '',
-                    'url' => $r['url'] ?? '',
-                    'content' => Str::limit((string) ($r['content'] ?? ''), 500),
-                ])->all(),
+                'answer' => (string) ($message['content'] ?? ''),
+                'citations' => $citations,
             ];
         } catch (\Throwable $e) {
             return ['results' => [], 'error' => 'web_search_failed'];
