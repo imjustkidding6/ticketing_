@@ -183,6 +183,11 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::get('settings/service-report', [AppSettingController::class, 'serviceReport'])->name('settings.service-report')->middleware('feature:service_reports');
     Route::post('settings/service-report', [AppSettingController::class, 'saveServiceReport'])->middleware('feature:service_reports');
 
+    // API Tokens
+    Route::get('settings/api-tokens', [AppSettingController::class, 'apiTokens'])->name('settings.api-tokens');
+    Route::post('settings/api-tokens', [AppSettingController::class, 'generateApiToken'])->name('settings.api-tokens.store');
+    Route::delete('settings/api-tokens/{apiToken}', [AppSettingController::class, 'revokeApiToken'])->name('settings.api-tokens.destroy');
+
     // Reports
     Route::get('reports', [ReportController::class, 'overview'])->name('reports.overview');
     Route::get('reports/departments', [ReportController::class, 'departments'])->name('reports.departments');

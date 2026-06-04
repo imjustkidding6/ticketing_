@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Models\AppSetting;
+use Database\Factories\TenantFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 
 class Tenant extends Model
 {
-    /** @use HasFactory<\Database\Factories\TenantFactory> */
+    /** @use HasFactory<TenantFactory> */
     use HasFactory;
 
     /**
@@ -124,6 +124,18 @@ class Tenant extends Model
     public function isLicenseValid(): bool
     {
         return $this->license !== null && $this->license->isValid();
+    }
+
+    /**
+     * Whether API settings (token management) are exposed for this tenant.
+     *
+     * TEMPORARY: hard-limited to the production "Cliqueha" tenant during rollout.
+     * TODO: remove this gate (and its callers in AppSettingController + the settings
+     * views) once the API feature is released to all tenants.
+     */
+    public function apiAccessEnabled(): bool
+    {
+        return $this->name === 'Cliqueha';
     }
 
     /**
