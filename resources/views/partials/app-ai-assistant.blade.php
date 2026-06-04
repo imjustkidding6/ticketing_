@@ -52,7 +52,12 @@
             <template x-for="(m, i) in messages" :key="i">
                 <div :class="m.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
                     <div :class="m.role === 'user' ? 'rounded-2xl rounded-br-sm bg-indigo-600 px-3 py-2 text-sm text-white' : 'rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-gray-800 ring-1 ring-gray-200'"
-                         class="max-w-[85%] whitespace-pre-line break-words" x-text="m.text"></div>
+                         class="max-w-[85%]">
+                        <template x-if="m.image">
+                            <img :src="m.image" alt="attachment" class="mb-1 max-h-48 max-w-full rounded-lg object-contain">
+                        </template>
+                        <div x-show="m.text" class="whitespace-pre-line break-words" x-text="m.text"></div>
+                    </div>
                 </div>
             </template>
             <div x-show="loading" class="flex justify-start">
@@ -181,7 +186,9 @@
                 const file = this.file;
                 if ((!text && !file) || this.loading) return;
                 const wasNew = !this.currentId;
-                this.messages.push({ role: 'user', text: text + (file ? '\n📎 ' + file.name : '') });
+                const isImage = file && (file.type || '').startsWith('image/');
+                const preview = isImage ? URL.createObjectURL(file) : null;
+                this.messages.push({ role: 'user', text: text + (file && !isImage ? '\n📎 ' + file.name : ''), image: preview });
                 this.input = '';
                 this.file = null;
                 if (this.$refs.file) this.$refs.file.value = '';
