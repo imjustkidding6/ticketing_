@@ -6,6 +6,7 @@ use App\Enums\PlanFeature;
 use App\Models\AppSetting;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
+use App\Models\Client;
 use App\Models\Department;
 use App\Models\KbArticle;
 use App\Models\KbCategory;
@@ -240,6 +241,32 @@ class AiAssistantTest extends TestCase
         $this->assertNotNull($toolMessage);
         $this->assertStringContainsString($ticket->ticket_number, (string) $toolMessage->content);
         $this->assertStringNotContainsString('Other tenant ticket', (string) $toolMessage->content);
+    }
+
+    public function test_in_app_assistant_ticket_stats_and_clients(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $this->setupTenantContext($tenant);
+        Ticket::factory()->count(2)->create(['tenant_id' => $tenant->id, 'status' => 'open']);
+        Ticket::factory()->create(['tenant_id' => $tenant->id, 'status' => 'closed']);
+        Client::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Acme', 'email' => 'acme@example.com']);
+
+        // One sequence for both turns (Http::fake stubs accumulate, so a single sequence is consumed in order).
+        $this->fakeOpenAi([
+            $this->toolCall('ticket_stats', []), $this->assistantText('2 open, 1 closed.'),
+            $this->toolCall('query_clients', ['search' => 'acme']), $this->assistantText('Found Acme.'),
+        ]);
+
+        $this->postJson($this->tenantUrl('/assistant/message'), ['message' => 'how many open tickets?'])->assertOk();
+        $stats = ChatMessage::where('tool_name', 'ticket_stats')->latest('id')->first();
+        $this->assertNotNull($stats);
+        $this->assertStringContainsString('open', (string) $stats->content);
+
+        $this->postJson($this->tenantUrl('/assistant/message'), ['message' => 'find client acme'])->assertOk();
+        $clients = ChatMessage::where('tool_name', 'query_clients')->latest('id')->first();
+        $this->assertNotNull($clients);
+        $this->assertStringContainsString('acme@example.com', (string) $clients->content);
     }
 
     public function test_in_app_assistant_new_chat_creates_new_conversation(): void

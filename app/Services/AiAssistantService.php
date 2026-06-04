@@ -206,6 +206,8 @@ class AiAssistantService
             'create_ticket' => $this->createTicketTool($tenant, $conversation, $args),
             'lookup_ticket_status' => $this->lookupTicketStatus($tenant, $args),
             'query_tickets' => $this->queryTickets($conversation, $args),
+            'query_clients' => $this->queryClients($conversation, $args),
+            'ticket_stats' => $this->ticketStats($conversation, $args),
             default => ['error' => 'unknown_tool'],
         };
     }
@@ -403,6 +405,80 @@ class AiAssistantService
         return ['count' => count($tickets), 'tickets' => $tickets];
     }
 
+    /**
+     * Safe, tenant-scoped client search for the in-app assistant.
+     *
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function queryClients(ChatConversation $conversation, array $args): array
+    {
+        $query = Client::withoutGlobalScopes()->where('tenant_id', $conversation->tenant_id);
+
+        if (! empty($args['search'])) {
+            $search = (string) $args['search'];
+            $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('contact_person', 'like', "%{$search}%"));
+        }
+        if (! empty($args['tier'])) {
+            $query->where('tier', $args['tier']);
+        }
+        if (! empty($args['status'])) {
+            $query->where('status', $args['status']);
+        }
+
+        $limit = max(1, min((int) ($args['limit'] ?? 15), 25));
+
+        $clients = $query
+            ->withCount(['tickets' => fn ($q) => $q->withoutGlobalScopes()->where('tenant_id', $conversation->tenant_id)])
+            ->latest('id')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Client $c) => [
+                'name' => $c->name,
+                'email' => $c->email,
+                'contact_person' => $c->contact_person,
+                'tier' => $c->tier,
+                'status' => $c->status,
+                'tickets' => $c->tickets_count,
+            ])->all();
+
+        return ['count' => count($clients), 'clients' => $clients];
+    }
+
+    /**
+     * Accurate ticket counts by status (optionally mine / within a date range).
+     *
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function ticketStats(ChatConversation $conversation, array $args): array
+    {
+        $base = Ticket::withoutGlobalScopes()
+            ->where('tenant_id', $conversation->tenant_id)
+            ->notMerged()
+            ->notSpam();
+
+        if (strtolower((string) ($args['assigned_to'] ?? '')) === 'me' && $conversation->user_id) {
+            $base->where('assigned_to', $conversation->user_id);
+        }
+
+        foreach (['created_after' => '>=', 'created_before' => '<='] as $key => $op) {
+            if (! empty($args[$key])) {
+                try {
+                    $base->whereDate('created_at', $op, Carbon::parse((string) $args[$key]));
+                } catch (\Throwable $e) {
+                    // ignore unparseable dates
+                }
+            }
+        }
+
+        $byStatus = (clone $base)->selectRaw('status, count(*) as c')->groupBy('status')->pluck('c', 'status')->all();
+
+        return ['total' => array_sum($byStatus), 'by_status' => $byStatus];
+    }
+
     private function resolveDepartment(Tenant $tenant, mixed $departmentId): ?Department
     {
         $base = Department::withoutGlobalScopes()->where('tenant_id', $tenant->id)->active();
@@ -491,6 +567,7 @@ class AiAssistantService
             ."- For questions about the company's own products/services or help content, call search_knowledge_base and cite the article title (and link).\n"
             ."- For general questions (comparisons, concepts, definitions, industry knowledge — e.g. how this differs from another tool), answer directly and confidently from your own knowledge. Do NOT tell the user something is 'not in the knowledge base' — the knowledge base only holds the company's own help articles, not general knowledge.\n"
             ."- For any question about tickets (mine, by status or priority, for a client, searching, or recent), call query_tickets with just the filters you need.\n"
+            ."- For ticket counts or workload (\"how many open tickets\", \"my closed this week\"), call ticket_stats. For questions about clients, call query_clients.\n"
             ."- Use create_ticket to open a ticket on a client's behalf; confirm the client's name, email, subject, and description first.\n"
             .($this->webSearchConfigured() ? "- For general questions that are NOT about this system or the company's products, use search_web and cite the source link.\n" : '')
             ."- Be concise and helpful, and never invent policies, prices, or facts.\n\n"
@@ -565,6 +642,37 @@ class AiAssistantService
                             'created_after' => ['type' => 'string', 'description' => 'ISO date, e.g. 2026-06-01'],
                             'created_before' => ['type' => 'string', 'description' => 'ISO date'],
                             'limit' => ['type' => 'integer', 'description' => 'Max rows (1-25, default 15)'],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'query_clients',
+                    'description' => 'Search and list clients in this workspace by name, email, or contact person; optionally filter by tier or status.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'search' => ['type' => 'string', 'description' => 'Name, email, or contact-person text'],
+                            'tier' => ['type' => 'string', 'enum' => ['basic', 'premium', 'enterprise']],
+                            'status' => ['type' => 'string', 'enum' => ['active', 'inactive']],
+                            'limit' => ['type' => 'integer', 'description' => 'Max rows (1-25, default 15)'],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'ticket_stats',
+                    'description' => 'Get accurate ticket counts for this workspace, broken down by status. Use for "how many open/closed tickets", "my workload", or counts over a date range.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'assigned_to' => ['type' => 'string', 'enum' => ['me', 'anyone'], 'description' => 'Whose tickets (default anyone)'],
+                            'created_after' => ['type' => 'string', 'description' => 'ISO date'],
+                            'created_before' => ['type' => 'string', 'description' => 'ISO date'],
                         ],
                     ],
                 ],
