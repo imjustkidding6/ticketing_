@@ -65,8 +65,8 @@
         </div>
 
         <form x-show="view === 'chat'" @submit.prevent="send()" class="flex items-end gap-2 border-t border-gray-200 bg-white px-3 py-2.5">
-            <textarea x-model="input" @keydown.enter.prevent="send()" rows="1" :disabled="loading"
-                      placeholder="{{ __('Ask the assistant...') }}"
+            <textarea x-model="input" @keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); send(); }" rows="1" :disabled="loading"
+                      placeholder="{{ __('Ask the assistant... (Shift+Enter for a new line)') }}"
                       class="max-h-24 flex-1 resize-none rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
             <button type="submit" :disabled="loading || !input.trim()"
                     class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40" aria-label="{{ __('Send') }}">

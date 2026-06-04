@@ -43,9 +43,9 @@
 
         {{-- Input --}}
         <form @submit.prevent="send()" class="flex items-end gap-2 border-t border-gray-200 bg-white px-3 py-2.5">
-            <textarea x-model="input" @keydown.enter.prevent="send()" rows="1"
+            <textarea x-model="input" @keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); send(); }" rows="1"
                       :disabled="loading"
-                      placeholder="{{ __('Type your message...') }}"
+                      placeholder="{{ __('Type your message... (Shift+Enter for a new line)') }}"
                       class="max-h-24 flex-1 resize-none rounded-lg border-gray-300 text-sm focus:border-gray-400 focus:ring-0"></textarea>
             <button type="submit" :disabled="loading || !input.trim()"
                     class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white disabled:opacity-40"
