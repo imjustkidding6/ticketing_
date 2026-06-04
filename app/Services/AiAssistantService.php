@@ -489,6 +489,7 @@ class AiAssistantService
             ."- This is an ongoing conversation. Remember details the user shared earlier and refer back to them.\n"
             ."- For questions about how to USE this app (how do I…, where is…, e.g. how to create a ticket or change a setting), call search_system_guide and answer with the steps and the exact menu location.\n"
             ."- For questions about the company's own products/services or help content, call search_knowledge_base and cite the article title (and link).\n"
+            ."- For general questions (comparisons, concepts, definitions, industry knowledge — e.g. how this differs from another tool), answer directly and confidently from your own knowledge. Do NOT tell the user something is 'not in the knowledge base' — the knowledge base only holds the company's own help articles, not general knowledge.\n"
             ."- For any question about tickets (mine, by status or priority, for a client, searching, or recent), call query_tickets with just the filters you need.\n"
             ."- Use create_ticket to open a ticket on a client's behalf; confirm the client's name, email, subject, and description first.\n"
             .($this->webSearchConfigured() ? "- For general questions that are NOT about this system or the company's products, use search_web and cite the source link.\n" : '')
