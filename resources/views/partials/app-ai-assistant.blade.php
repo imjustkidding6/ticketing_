@@ -118,6 +118,20 @@
                                 </template>
                             </div>
                         </template>
+                        {{-- Save a helpful answer to learned knowledge --}}
+                        <template x-if="m.role !== 'user' && learnEnabled && m.text">
+                            <div class="mt-1.5 flex items-center gap-2 border-t border-gray-100 pt-1.5">
+                                <button type="button" x-show="!m.saved" @click="saveToKnowledge(i)" :disabled="m.saving"
+                                        class="inline-flex items-center gap-1 text-[11px] font-medium text-gray-400 hover:text-indigo-600 disabled:opacity-50">
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" /></svg>
+                                    <span x-text="m.saving ? @js(__('Saving…')) : @js(__('Save to knowledge'))"></span>
+                                </button>
+                                <span x-show="m.saved" x-cloak class="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600">
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                                    {{ __('Saved to knowledge') }}
+                                </span>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </template>
@@ -203,7 +217,9 @@
             ],
             width: parseInt(localStorage.getItem('ai_chat_width')) || 352,
             resizing: false,
+            learnEnabled: {{ (bool) \App\Models\AppSetting::get('ai_learn_from_chat', false) ? 'true' : 'false' }},
             messageUrl: '{{ route('assistant.message') }}',
+            learnUrl: '{{ route('assistant.learn') }}',
             listUrl: '{{ route('assistant.conversations') }}',
             conversationUrl: '{{ route('assistant.conversation', ['conversation' => 'CONV_ID']) }}',
             csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
@@ -320,6 +336,28 @@
             },
 
             scrollToEnd() { const el = this.$refs.scroll; if (el) el.scrollTop = el.scrollHeight; },
+
+            // Save a helpful assistant answer (with its preceding question) to learned knowledge.
+            async saveToKnowledge(i) {
+                const m = this.messages[i];
+                if (!m || m.role === 'user' || m.saving || m.saved || !m.text) return;
+                let question = '';
+                for (let k = i - 1; k >= 0; k--) {
+                    if (this.messages[k].role === 'user' && this.messages[k].text) { question = this.messages[k].text; break; }
+                }
+                if (!question) return;
+                m.saving = true;
+                try {
+                    const res = await fetch(this.learnUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' },
+                        body: JSON.stringify({ question, answer: m.text }),
+                    });
+                    if (res.ok) m.saved = true;
+                } catch (e) { /* ignore */ } finally {
+                    m.saving = false;
+                }
+            },
 
             // Extract a ```chart ...``` block (if any) from assistant text and parse it.
             parseChart(text) {

@@ -8,6 +8,7 @@ use App\Models\ChatMessage;
 use App\Models\Client;
 use App\Models\Department;
 use App\Models\KbArticle;
+use App\Models\LearnedSnippet;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -585,7 +586,80 @@ class AiAssistantService
             'similarity' => round($s['score'], 3),
         ], array_slice($scored, 0, 5));
 
-        return ['count' => count($tickets), 'tickets' => $tickets];
+        $learned = $this->searchLearnedSnippets($conversation->tenant_id, $queryVector);
+
+        return ['count' => count($tickets), 'tickets' => $tickets, 'learned' => $learned];
+    }
+
+    /**
+     * Semantically match the query against confirmed-helpful Q&A snippets the team
+     * saved from past chats (opt-in self-learning).
+     *
+     * @param  array<int, float>  $queryVector
+     * @return array<int, array<string, mixed>>
+     */
+    private function searchLearnedSnippets(int $tenantId, array $queryVector): array
+    {
+        $snippets = LearnedSnippet::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('embedding')
+            ->latest('id')
+            ->limit(500)
+            ->get();
+
+        $scored = [];
+        foreach ($snippets as $snippet) {
+            $vector = json_decode((string) $snippet->embedding, true);
+            if (! is_array($vector) || $vector === []) {
+                continue;
+            }
+            $score = $this->cosineSimilarity($queryVector, $vector);
+            if ($score < 0.3) { // ignore weak matches so we don't surface noise
+                continue;
+            }
+            $scored[] = ['score' => $score, 'snippet' => $snippet];
+        }
+
+        usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
+
+        return array_map(fn ($x) => [
+            'question' => mb_substr((string) $x['snippet']->question, 0, 200),
+            'answer' => mb_substr((string) $x['snippet']->answer, 0, 600),
+            'similarity' => round($x['score'], 3),
+        ], array_slice($scored, 0, 3));
+    }
+
+    /**
+     * Store a confirmed-helpful question/answer pair so the assistant can reuse it.
+     * Embeds the question for later semantic retrieval.
+     */
+    public function learnFromExchange(Tenant $tenant, ?User $user, string $question, string $answer): bool
+    {
+        $question = trim($question);
+        $answer = trim($answer);
+        if ($question === '' || $answer === '') {
+            return false;
+        }
+
+        $embedding = null;
+        try {
+            $vector = $this->openAi->embed(mb_substr($question, 0, 2000));
+            if ($vector !== []) {
+                $embedding = json_encode($vector);
+            }
+        } catch (\Throwable $e) {
+            // Persist without an embedding; it simply won't be semantically retrievable.
+        }
+
+        LearnedSnippet::create([
+            'tenant_id' => $tenant->id,
+            'created_by' => $user?->id,
+            'question' => mb_substr($question, 0, 2000),
+            'answer' => mb_substr($answer, 0, 8000),
+            'embedding' => $embedding,
+        ]);
+
+        return true;
     }
 
     /**
@@ -704,7 +778,7 @@ class AiAssistantService
             .$this->currentDateLine($tenant)."\n\n"
             ."Guidelines:\n"
             ."- This is an ongoing conversation. Remember details the user shared earlier and refer back to them.\n"
-            ."- When an agent describes a problem to solve, FIRST call search_resolved_tickets to see how the team resolved similar issues before, and base your suggestion on those proven resolutions. This is how you learn from the team's history.\n"
+            ."- When an agent describes a problem to solve, OR asks a question the team may have handled before, FIRST call search_resolved_tickets. It returns both past ticket resolutions and answers agents previously confirmed as helpful (the \"learned\" list) — prefer those proven answers and cite that it worked before. This is how you learn from the team's history.\n"
             ."- For questions about how to USE this app (how do I…, where is…, e.g. how to create a ticket or change a setting), call search_system_guide and answer with the steps and the exact menu location.\n"
             ."- For questions about the company's own products/services or help content, call search_knowledge_base and cite the article title (and link).\n"
             ."- For general questions (comparisons, concepts, definitions, industry knowledge — e.g. how this differs from another tool), answer directly and confidently from your own knowledge. Do NOT tell the user something is 'not in the knowledge base' — the knowledge base only holds the company's own help articles, not general knowledge.\n"
@@ -832,7 +906,7 @@ class AiAssistantService
                 'type' => 'function',
                 'function' => [
                     'name' => 'search_resolved_tickets',
-                    'description' => 'Find how similar PAST problems were resolved, learned from this workspace\'s closed tickets via semantic search. Call this first whenever an agent describes a problem they need to solve.',
+                    'description' => 'Find how similar PAST problems were resolved — learned from this workspace\'s closed tickets AND from answers agents previously confirmed as helpful — via semantic search. Returns "tickets" (past resolutions) and "learned" (confirmed-helpful Q&A). Call this first whenever an agent describes a problem they need to solve.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [

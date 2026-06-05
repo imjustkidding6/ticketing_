@@ -55,10 +55,18 @@
                                 <span class="block text-xs text-gray-500">{{ __('Adds "Draft with AI" and "Summarize" buttons for your agents.') }}</span>
                             </span>
                         </label>
+                        <label class="flex items-start gap-3">
+                            <input type="checkbox" name="ai_learn_from_chat" value="1" {{ ($settings['ai_learn_from_chat'] ?? false) ? 'checked' : '' }} class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            <span>
+                                <span class="block text-sm font-medium text-gray-700">{{ __('Let agents teach the assistant from chat') }}</span>
+                                <span class="block text-xs text-gray-500">{{ __('Adds a "Save to knowledge" button on assistant replies. Saved answers are reused for similar future questions. Review and remove them anytime under "Learned answers".') }}</span>
+                            </span>
+                        </label>
                     </div>
                 </div>
 
-                <div class="mt-4 text-right">
+                <div class="mt-4 flex items-center justify-end gap-4">
+                    <a href="{{ route('settings.ai.knowledge') }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">{{ __('Learned answers') }} &rarr;</a>
                     <a href="{{ route('settings.ai.conversations') }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">{{ __('View saved conversation history') }} &rarr;</a>
                 </div>
 

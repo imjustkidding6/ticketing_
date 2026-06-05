@@ -264,6 +264,40 @@ class AiAssistantTest extends TestCase
         ])->assertNotFound();
     }
 
+    public function test_agent_can_save_a_learned_answer_when_enabled(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        AppSetting::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'key' => 'ai_learn_from_chat', 'value' => '1', 'type' => 'boolean', 'group' => 'ai',
+        ]);
+        $user = $this->setupTenantContext($tenant);
+
+        $this->fakeOpenAi([$this->embedResponse([0.1, 0.2, 0.3])]);
+
+        $this->postJson($this->tenantUrl('/assistant/learn'), [
+            'question' => 'How do I reset a license?',
+            'answer' => 'Open Licenses, select it, and click Reset.',
+        ])->assertOk()->assertJson(['ok' => true]);
+
+        $this->assertDatabaseHas('learned_snippets', [
+            'tenant_id' => $tenant->id,
+            'question' => 'How do I reset a license?',
+            'created_by' => $user->id,
+        ]);
+    }
+
+    public function test_learn_is_not_found_when_learning_disabled(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant); // ai_enabled on, but ai_learn_from_chat is off
+        $this->setupTenantContext($tenant);
+
+        $this->postJson($this->tenantUrl('/assistant/learn'), [
+            'question' => 'q', 'answer' => 'a',
+        ])->assertNotFound();
+    }
+
     public function test_page_context_resolver_reads_the_current_page(): void
     {
         $tenant = $this->enterpriseTenant();

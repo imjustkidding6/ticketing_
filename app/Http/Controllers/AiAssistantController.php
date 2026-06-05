@@ -6,6 +6,7 @@ use App\Exceptions\OpenAiException;
 use App\Models\AppSetting;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
+use App\Models\LearnedSnippet;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\User;
@@ -13,6 +14,7 @@ use App\Services\AiAssistantService;
 use App\Services\PageContextResolver;
 use App\Support\FileParser;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -126,6 +128,51 @@ class AiAssistantController extends Controller
         }
 
         return response()->json(['reply' => $reply, 'conversation_id' => $conversation->id]);
+    }
+
+    /**
+     * Save a confirmed-helpful assistant answer to the tenant's learned knowledge
+     * (opt-in via ai_learn_from_chat), so it can be reused for similar questions.
+     */
+    public function learn(Request $request): JsonResponse
+    {
+        $this->checkPermission('view tickets');
+        abort_unless(
+            (bool) AppSetting::get('ai_enabled', false) && (bool) AppSetting::get('ai_learn_from_chat', false),
+            404
+        );
+
+        $validated = $request->validate([
+            'question' => ['required', 'string', 'max:2000'],
+            'answer' => ['required', 'string', 'max:8000'],
+        ]);
+
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+        $this->assistant->learnFromExchange($tenant, $request->user(), $validated['question'], $validated['answer']);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Review screen for the saved (learned) answers — so admins can see and prune
+     * what the assistant has been taught.
+     */
+    public function knowledge(): View
+    {
+        $this->checkPermission('manage settings');
+
+        $snippets = LearnedSnippet::with('creator')->latest('id')->paginate(20);
+
+        return view('settings.ai-knowledge', compact('snippets'));
+    }
+
+    public function deleteKnowledge(LearnedSnippet $snippet): RedirectResponse
+    {
+        $this->checkPermission('manage settings');
+
+        $snippet->delete(); // tenant-scoped by the global scope
+
+        return back()->with('success', 'Learned answer removed.');
     }
 
     /**

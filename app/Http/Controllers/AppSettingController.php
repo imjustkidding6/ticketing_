@@ -151,10 +151,11 @@ class AppSettingController extends Controller
             'ai_enabled' => ['nullable', 'string'],
             'ai_portal_widget_enabled' => ['nullable', 'string'],
             'ai_agent_copilot_enabled' => ['nullable', 'string'],
+            'ai_learn_from_chat' => ['nullable', 'string'],
             'ai_system_prompt' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        foreach (['ai_enabled', 'ai_portal_widget_enabled', 'ai_agent_copilot_enabled'] as $key) {
+        foreach (['ai_enabled', 'ai_portal_widget_enabled', 'ai_agent_copilot_enabled', 'ai_learn_from_chat'] as $key) {
             AppSetting::set($key, isset($validated[$key]) ? '1' : '0', 'boolean', 'ai');
         }
 

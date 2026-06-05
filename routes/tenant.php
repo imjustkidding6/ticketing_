@@ -161,6 +161,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
 
     // In-app AI assistant (per-user memory) — feature-gated
     Route::post('assistant/message', [AiAssistantController::class, 'message'])->name('assistant.message')->middleware('feature:ai_chatbot');
+    Route::post('assistant/learn', [AiAssistantController::class, 'learn'])->name('assistant.learn')->middleware('feature:ai_chatbot');
     Route::get('assistant/conversations', [AiAssistantController::class, 'myConversations'])->name('assistant.conversations')->middleware('feature:ai_chatbot');
     Route::get('assistant/conversation/{conversation}', [AiAssistantController::class, 'myConversationMessages'])->name('assistant.conversation')->middleware('feature:ai_chatbot');
 
@@ -200,6 +201,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::post('settings/ai', [AppSettingController::class, 'saveAi'])->middleware('feature:ai_chatbot');
     Route::get('settings/ai/conversations', [AiAssistantController::class, 'conversations'])->name('settings.ai.conversations')->middleware('feature:ai_chatbot');
     Route::get('settings/ai/conversations/{conversation}', [AiAssistantController::class, 'showConversation'])->name('settings.ai.conversation')->middleware('feature:ai_chatbot');
+    Route::get('settings/ai/knowledge', [AiAssistantController::class, 'knowledge'])->name('settings.ai.knowledge')->middleware('feature:ai_chatbot');
+    Route::delete('settings/ai/knowledge/{snippet}', [AiAssistantController::class, 'deleteKnowledge'])->name('settings.ai.knowledge.delete')->middleware('feature:ai_chatbot');
     Route::get('settings/branding', [AppSettingController::class, 'branding'])->name('settings.branding');
     Route::post('settings/branding', [AppSettingController::class, 'saveBranding']);
     Route::get('settings/service-report', [AppSettingController::class, 'serviceReport'])->name('settings.service-report')->middleware('feature:service_reports');
