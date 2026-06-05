@@ -293,6 +293,7 @@
                         const fd = new FormData();
                         fd.append('message', text || 'Please read this file and tell me what it contains.');
                         if (this.currentId) fd.append('conversation_id', this.currentId);
+                        fd.append('page_path', window.location.pathname);
                         fd.append('file', file);
                         res = await fetch(this.messageUrl, {
                             method: 'POST',
@@ -303,7 +304,7 @@
                         res = await fetch(this.messageUrl, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' },
-                            body: JSON.stringify({ message: text, conversation_id: this.currentId }),
+                            body: JSON.stringify({ message: text, conversation_id: this.currentId, page_path: window.location.pathname }),
                         });
                     }
                     const data = await res.json();

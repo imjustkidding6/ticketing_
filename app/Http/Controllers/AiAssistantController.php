@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\AiAssistantService;
+use App\Services\PageContextResolver;
 use App\Support\FileParser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -96,10 +97,13 @@ class AiAssistantController extends Controller
         $validated = $request->validate([
             'message' => ['required', 'string', 'max:2000'],
             'conversation_id' => ['nullable', 'integer'],
+            'page_path' => ['nullable', 'string', 'max:2048'],
             'file' => ['nullable', 'file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp,pdf,txt,csv,json'],
         ]);
 
         $conversation = $this->resolveUserConversation($tenant, $request->user(), $validated['conversation_id'] ?? null);
+
+        $pageContext = app(PageContextResolver::class)->describe($tenant, $validated['page_path'] ?? null);
 
         $message = $validated['message'];
         $imageDataUrl = null;
@@ -114,7 +118,7 @@ class AiAssistantController extends Controller
         }
 
         try {
-            $reply = $this->assistant->replyToAppMessage($tenant, $conversation, $request->user(), $message, $imageDataUrl);
+            $reply = $this->assistant->replyToAppMessage($tenant, $conversation, $request->user(), $message, $imageDataUrl, $pageContext);
         } catch (OpenAiException $e) {
             report($e);
 

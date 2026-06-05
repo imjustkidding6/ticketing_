@@ -45,9 +45,9 @@ class AiAssistantService
     /**
      * Handle one message from a logged-in team member (in-app assistant, per-user memory).
      */
-    public function replyToAppMessage(Tenant $tenant, ChatConversation $conversation, User $user, string $userMessage, ?string $imageDataUrl = null): string
+    public function replyToAppMessage(Tenant $tenant, ChatConversation $conversation, User $user, string $userMessage, ?string $imageDataUrl = null, ?string $pageContext = null): string
     {
-        return $this->converse($tenant, $conversation, $userMessage, $this->appSystemPrompt($tenant, $user), $this->appTools(), $imageDataUrl);
+        return $this->converse($tenant, $conversation, $userMessage, $this->appSystemPrompt($tenant, $user, $pageContext), $this->appTools(), $imageDataUrl);
     }
 
     /**
@@ -694,7 +694,7 @@ class AiAssistantService
             .'Use this whenever the user asks about the date or time.';
     }
 
-    private function appSystemPrompt(Tenant $tenant, User $user): string
+    private function appSystemPrompt(Tenant $tenant, User $user, ?string $pageContext = null): string
     {
         $deptList = $this->departmentList($tenant);
         $custom = $this->tenantCustomPrompt($tenant);
@@ -718,6 +718,11 @@ class AiAssistantService
             .($this->webSearchConfigured() ? "- For general questions that are NOT about this system or the company's products, use search_web and cite the source link.\n" : '')
             ."- Be concise and helpful, and never invent policies, prices, or facts.\n\n"
             ."Departments available for new tickets (id: name):\n".($deptList ?: '(none)');
+
+        if (filled($pageContext)) {
+            $prompt .= "\n\nCURRENT PAGE CONTEXT (what the user is looking at right now):\n".$pageContext."\n"
+                .'When the user says "this page", "this ticket", "here", or asks for help without spelling out the details, use this context to understand what they mean and tailor your help to it. Do not ask them to repeat information that is already in this context.';
+        }
 
         if (filled($custom)) {
             $prompt .= "\n\nAdditional instructions from the company:\n".$custom;

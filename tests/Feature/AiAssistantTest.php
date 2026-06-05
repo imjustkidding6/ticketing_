@@ -15,6 +15,7 @@ use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\PageContextResolver;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -261,6 +262,29 @@ class AiAssistantTest extends TestCase
         $this->postJson(route('tenant.ai-polish', ['slug' => $tenant->slug]), [
             'description' => 'something broke',
         ])->assertNotFound();
+    }
+
+    public function test_page_context_resolver_reads_the_current_page(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->setupTenantContext($tenant); // sets session current_tenant_id (for the global scope)
+        $ticket = Ticket::factory()->create([
+            'tenant_id' => $tenant->id, 'subject' => 'Login is broken', 'status' => 'open', 'priority' => 'high',
+        ]);
+
+        $resolver = app(PageContextResolver::class);
+
+        // A ticket detail page surfaces the ticket's own details.
+        $ctx = $resolver->describe($tenant, "/{$tenant->slug}/tickets/{$ticket->id}");
+        $this->assertStringContainsString($ticket->ticket_number, $ctx);
+        $this->assertStringContainsString('Login is broken', $ctx);
+        $this->assertStringContainsString('high', $ctx);
+
+        // Generic pages get a friendly label; the slug prefix is stripped.
+        $this->assertStringContainsString('Tickets list', $resolver->describe($tenant, "/{$tenant->slug}/tickets"));
+        $this->assertStringContainsString('Create Ticket', $resolver->describe($tenant, "/{$tenant->slug}/tickets/create"));
+        $this->assertStringContainsString('Dashboard', $resolver->describe($tenant, "/{$tenant->slug}/dashboard"));
+        $this->assertNull($resolver->describe($tenant, null));
     }
 
     public function test_in_app_assistant_keeps_per_user_conversation(): void
