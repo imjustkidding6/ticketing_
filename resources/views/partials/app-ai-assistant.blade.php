@@ -5,13 +5,19 @@
          x-transition:enter="transition ease-out duration-150"
          x-transition:enter-start="opacity-0 translate-y-2"
          x-transition:enter-end="opacity-100 translate-y-0"
-         :style="'width:' + width + 'px'"
+         :style="'width:' + width + 'px; height:' + height + 'px'"
          :class="resizing ? 'select-none' : ''"
-         class="relative mb-3 flex h-[32rem] max-h-[75vh] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
+         class="relative mb-3 flex max-h-[85vh] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
         {{-- Drag handle (left edge) to resize width --}}
-        <div @pointerdown="startResize($event)" class="group absolute inset-y-0 left-0 z-20 flex w-2 cursor-ew-resize items-center justify-center" title="{{ __('Drag to resize') }}">
+        <div @pointerdown="startResize($event, 'x')" class="group absolute inset-y-0 left-0 z-20 flex w-2 cursor-ew-resize items-center justify-center" title="{{ __('Drag to resize') }}">
             <div class="h-10 w-1 rounded-full bg-white/30 group-hover:bg-white/70"></div>
         </div>
+        {{-- Drag handle (top edge) to resize height --}}
+        <div @pointerdown="startResize($event, 'y')" class="group absolute inset-x-0 top-0 z-20 flex h-2 cursor-ns-resize items-center justify-center" title="{{ __('Drag to resize') }}">
+            <div class="h-1 w-10 rounded-full bg-white/30 group-hover:bg-white/70"></div>
+        </div>
+        {{-- Drag handle (top-left corner) to resize both --}}
+        <div @pointerdown="startResize($event, 'both')" class="absolute left-0 top-0 z-30 h-3.5 w-3.5 cursor-nwse-resize" title="{{ __('Drag to resize') }}"></div>
         <div class="flex items-center justify-between bg-gradient-to-r from-indigo-600 via-indigo-600 to-violet-600 px-4 py-3 pl-5 text-white">
             <div class="flex items-center gap-2.5">
                 <span class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/25">
@@ -216,6 +222,7 @@
                 { icon: '✨', label: @js(__('What can you do?')), prompt: @js(__('What can you help me with?')) },
             ],
             width: parseInt(localStorage.getItem('ai_chat_width')) || 352,
+            height: parseInt(localStorage.getItem('ai_chat_height')) || 512,
             resizing: false,
             learnEnabled: {{ (bool) \App\Models\AppSetting::get('ai_learn_from_chat', false) ? 'true' : 'false' }},
             messageUrl: '{{ route('assistant.message') }}',
@@ -417,18 +424,25 @@
                     .join(' ');
             },
 
-            startResize(e) {
+            startResize(e, axis = 'x') {
                 this.resizing = true;
-                const startX = e.clientX;
-                const startWidth = this.width;
+                const startX = e.clientX, startY = e.clientY;
+                const startWidth = this.width, startHeight = this.height;
                 const maxWidth = () => Math.min(760, window.innerWidth - 48);
+                const maxHeight = () => Math.min(900, window.innerHeight - 120);
                 const onMove = (ev) => {
-                    // Anchored bottom-right: dragging the left edge leftward widens the panel.
-                    this.width = Math.max(320, Math.min(startWidth + (startX - ev.clientX), maxWidth()));
+                    // Anchored bottom-right: drag the left edge to widen, the top edge to grow taller.
+                    if (axis === 'x' || axis === 'both') {
+                        this.width = Math.max(320, Math.min(startWidth + (startX - ev.clientX), maxWidth()));
+                    }
+                    if (axis === 'y' || axis === 'both') {
+                        this.height = Math.max(320, Math.min(startHeight + (startY - ev.clientY), maxHeight()));
+                    }
                 };
                 const onUp = () => {
                     this.resizing = false;
                     localStorage.setItem('ai_chat_width', this.width);
+                    localStorage.setItem('ai_chat_height', this.height);
                     window.removeEventListener('pointermove', onMove);
                     window.removeEventListener('pointerup', onUp);
                 };

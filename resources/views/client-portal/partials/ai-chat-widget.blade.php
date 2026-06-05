@@ -5,13 +5,19 @@
          x-transition:enter="transition ease-out duration-150"
          x-transition:enter-start="opacity-0 translate-y-2"
          x-transition:enter-end="opacity-100 translate-y-0"
-         :style="'width:' + width + 'px'"
+         :style="'width:' + width + 'px; height:' + height + 'px'"
          :class="resizing ? 'select-none' : ''"
-         class="relative mb-3 flex h-[32rem] max-h-[80vh] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
+         class="relative mb-3 flex max-h-[85vh] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
         {{-- Drag handle (left edge) to resize width --}}
-        <div @pointerdown="startResize($event)" class="group absolute inset-y-0 left-0 z-20 flex w-2 cursor-ew-resize items-center justify-center" title="{{ __('Drag to resize') }}">
+        <div @pointerdown="startResize($event, 'x')" class="group absolute inset-y-0 left-0 z-20 flex w-2 cursor-ew-resize items-center justify-center" title="{{ __('Drag to resize') }}">
             <div class="h-10 w-1 rounded-full bg-gray-300 group-hover:bg-gray-400"></div>
         </div>
+        {{-- Drag handle (top edge) to resize height --}}
+        <div @pointerdown="startResize($event, 'y')" class="group absolute inset-x-0 top-0 z-20 flex h-2 cursor-ns-resize items-center justify-center" title="{{ __('Drag to resize') }}">
+            <div class="h-1 w-10 rounded-full bg-white/30 group-hover:bg-white/70"></div>
+        </div>
+        {{-- Drag handle (top-left corner) to resize both --}}
+        <div @pointerdown="startResize($event, 'both')" class="absolute left-0 top-0 z-30 h-3.5 w-3.5 cursor-nwse-resize" title="{{ __('Drag to resize') }}"></div>
         {{-- Header --}}
         <div class="flex items-center justify-between px-4 py-3 pl-5 text-white" style="background-color: var(--portal-primary);">
             <div class="flex items-center gap-2">
@@ -78,6 +84,7 @@
             input: '',
             loading: false,
             width: parseInt(localStorage.getItem('portal_chat_width_{{ $tenant->slug }}')) || 352,
+            height: parseInt(localStorage.getItem('portal_chat_height_{{ $tenant->slug }}')) || 512,
             resizing: false,
             storageKey: 'ai_chat_token_{{ $tenant->slug }}',
             sessionToken: localStorage.getItem('ai_chat_token_{{ $tenant->slug }}') || null,
@@ -159,18 +166,25 @@
                 if (el) el.scrollTop = el.scrollHeight;
             },
 
-            startResize(e) {
+            startResize(e, axis = 'x') {
                 this.resizing = true;
-                const startX = e.clientX;
-                const startWidth = this.width;
+                const startX = e.clientX, startY = e.clientY;
+                const startWidth = this.width, startHeight = this.height;
                 const maxWidth = () => Math.min(760, window.innerWidth - 48);
+                const maxHeight = () => Math.min(900, window.innerHeight - 120);
                 const onMove = (ev) => {
-                    // Anchored bottom-right: dragging the left edge leftward widens the panel.
-                    this.width = Math.max(300, Math.min(startWidth + (startX - ev.clientX), maxWidth()));
+                    // Anchored bottom-right: drag the left edge to widen, the top edge to grow taller.
+                    if (axis === 'x' || axis === 'both') {
+                        this.width = Math.max(300, Math.min(startWidth + (startX - ev.clientX), maxWidth()));
+                    }
+                    if (axis === 'y' || axis === 'both') {
+                        this.height = Math.max(320, Math.min(startHeight + (startY - ev.clientY), maxHeight()));
+                    }
                 };
                 const onUp = () => {
                     this.resizing = false;
                     localStorage.setItem('portal_chat_width_{{ $tenant->slug }}', this.width);
+                    localStorage.setItem('portal_chat_height_{{ $tenant->slug }}', this.height);
                     window.removeEventListener('pointermove', onMove);
                     window.removeEventListener('pointerup', onUp);
                 };
