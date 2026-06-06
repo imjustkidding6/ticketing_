@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AppSetting;
+use App\Models\BugReport;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\Client;
@@ -13,8 +14,10 @@ use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
+use App\Notifications\BugReportFiled;
 use App\Support\SystemGuide;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 
 /**
@@ -264,6 +267,7 @@ class AiAssistantService
             'query_clients' => $this->queryClients($conversation, $args),
             'ticket_stats' => $this->ticketStats($conversation, $args),
             'search_resolved_tickets' => $this->searchResolvedTickets($conversation, (string) ($args['query'] ?? '')),
+            'report_bug' => $this->createBugReport($conversation, $args),
             default => ['error' => 'unknown_tool'],
         };
     }
@@ -663,6 +667,44 @@ class AiAssistantService
     }
 
     /**
+     * Record a product bug the user reported in chat, and notify internal staff.
+     * Reuses the conversation's tenant + user as the reporter.
+     *
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function createBugReport(ChatConversation $conversation, array $args): array
+    {
+        $title = trim((string) ($args['title'] ?? ''));
+        $description = trim((string) ($args['description'] ?? ''));
+        if ($title === '' || $description === '') {
+            return ['error' => 'need_more_info', 'message' => 'A short title and a description are required to file the bug.'];
+        }
+
+        $severity = in_array($args['severity'] ?? '', BugReport::SEVERITIES, true) ? (string) $args['severity'] : 'medium';
+
+        $bug = BugReport::create([
+            'tenant_id' => $conversation->tenant_id,
+            'reported_by' => $conversation->user_id,
+            'chat_conversation_id' => $conversation->id,
+            'title' => mb_substr($title, 0, 200),
+            'description' => mb_substr($description, 0, 5000),
+            'steps_to_reproduce' => filled($args['steps_to_reproduce'] ?? null) ? mb_substr(trim((string) $args['steps_to_reproduce']), 0, 3000) : null,
+            'area' => filled($args['area'] ?? null) ? mb_substr(trim((string) $args['area']), 0, 120) : null,
+            'severity' => $severity,
+            'status' => BugReport::STATUS_NEW,
+        ]);
+
+        // Notify internal CliqueHA staff (cross-tenant) that a new bug was filed.
+        $admins = User::where('is_admin', true)->get();
+        if ($admins->isNotEmpty()) {
+            Notification::send($admins, new BugReportFiled($bug));
+        }
+
+        return ['bug_reference' => $bug->reference(), 'status' => 'received'];
+    }
+
+    /**
      * @param  array<int, float>  $a
      * @param  array<int, float>  $b
      */
@@ -789,6 +831,7 @@ class AiAssistantService
             ."Set \"type\" to \"bar\" for comparing categories, \"pie\" for parts of a whole (a breakdown or share of totals), or \"line\" for a trend over time (ordered points). Pick the type that best fits the data.\n"
             ."Write a one-line summary before the block, and only include a chart block when a visualization is asked for.\n"
             ."- Use create_ticket to open a ticket on a client's behalf; confirm the client's name, email, subject, and description first.\n"
+            ."- If the user reports that something in THIS system is broken or erroring (a defect/bug in the app itself — not a how-to question and not their own customers' tickets), gather a clear title, description, reproduction steps, and the affected area, confirm with the user, then call report_bug and tell them the bug reference. Let them know the team has been notified and they'll get an update here when it's addressed.\n"
             .($this->webSearchConfigured() ? "- For general questions that are NOT about this system or the company's products, use search_web and cite the source link.\n" : '')
             ."- Be concise and helpful, and never invent policies, prices, or facts.\n\n"
             ."Departments available for new tickets (id: name):\n".($deptList ?: '(none)');
@@ -913,6 +956,24 @@ class AiAssistantService
                             'query' => ['type' => 'string', 'description' => 'The problem, error, or symptom to find past resolutions for'],
                         ],
                         'required' => ['query'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'report_bug',
+                    'description' => 'File a bug about THIS system (CliqueHA Nexus) when the user reports that something in the app is broken, erroring, or behaving incorrectly. The report goes to the internal team, who can hand it to an AI programmer to fix. Do NOT use this for how-to questions, feature requests, or the user\'s own customers\' support tickets. Confirm the details with the user first, then report the bug number back to them.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'title' => ['type' => 'string', 'description' => 'A concise one-line summary of the bug'],
+                            'description' => ['type' => 'string', 'description' => 'What is wrong, including any error message and what the user expected to happen'],
+                            'steps_to_reproduce' => ['type' => 'string', 'description' => 'Numbered steps to trigger the bug, if known'],
+                            'area' => ['type' => 'string', 'description' => 'The part of the app affected, e.g. "tickets", "reports", "SLA", "login"'],
+                            'severity' => ['type' => 'string', 'enum' => ['low', 'medium', 'high', 'critical']],
+                        ],
+                        'required' => ['title', 'description'],
                     ],
                 ],
             ],

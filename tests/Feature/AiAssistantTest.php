@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\PlanFeature;
 use App\Models\AppSetting;
+use App\Models\BugReport;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\Client;
@@ -15,6 +16,7 @@ use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Notifications\BugReportFiled;
 use App\Services\PageContextResolver;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -296,6 +298,79 @@ class AiAssistantTest extends TestCase
         $this->postJson($this->tenantUrl('/assistant/learn'), [
             'question' => 'q', 'answer' => 'a',
         ])->assertNotFound();
+    }
+
+    public function test_report_bug_tool_files_a_bug_and_notifies_staff(): void
+    {
+        Notification::fake();
+
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $user = $this->setupTenantContext($tenant);
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->fakeOpenAi([
+            $this->toolCall('report_bug', [
+                'title' => 'Saving a ticket throws a 500',
+                'description' => 'Clicking Save on the ticket form returns a 500 error.',
+                'severity' => 'high',
+            ]),
+            $this->assistantText('Thanks — I logged that as BUG-1 and the team has been notified.'),
+        ]);
+
+        $this->postJson($this->tenantUrl('/assistant/message'), [
+            'message' => 'There is a bug: saving a ticket throws a 500.',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('bug_reports', [
+            'tenant_id' => $tenant->id,
+            'reported_by' => $user->id,
+            'title' => 'Saving a ticket throws a 500',
+            'severity' => 'high',
+            'status' => 'new',
+        ]);
+        Notification::assertSentTo($admin, BugReportFiled::class);
+    }
+
+    public function test_admin_can_send_bug_to_ai_programmer(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $tenant = $this->enterpriseTenant();
+        $bug = BugReport::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'title' => 'x', 'description' => 'y', 'severity' => 'medium', 'status' => 'new',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.bugs.fix', $bug->id))->assertRedirect();
+
+        $this->assertEquals('escalated', $bug->fresh()->status);
+    }
+
+    public function test_non_admin_cannot_access_bug_queue(): void
+    {
+        $user = User::factory()->create(['is_admin' => false]);
+
+        $this->actingAs($user)->get('/admin/bugs')->assertForbidden();
+    }
+
+    public function test_bug_status_updates_surface_to_the_reporter(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $user = $this->setupTenantContext($tenant);
+        $bug = BugReport::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'reported_by' => $user->id,
+            'title' => 'x', 'description' => 'y', 'severity' => 'medium', 'status' => 'pr_opened',
+        ]);
+
+        $this->getJson($this->tenantUrl('/assistant/bug-updates'))
+            ->assertOk()
+            ->assertJsonFragment(['reference' => 'BUG-'.$bug->id, 'status' => 'pr_opened']);
+
+        $this->postJson($this->tenantUrl('/assistant/bug-updates/ack'))->assertOk();
+        $this->assertEquals('pr_opened', $bug->fresh()->user_notified_status);
+
+        // Already acknowledged → no longer surfaced.
+        $this->getJson($this->tenantUrl('/assistant/bug-updates'))->assertOk()->assertJsonCount(0, 'updates');
     }
 
     public function test_page_context_resolver_reads_the_current_page(): void

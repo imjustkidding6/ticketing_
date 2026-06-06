@@ -68,7 +68,7 @@
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
                         </span>
                     </template>
-                    <div :class="m.role === 'user' ? 'rounded-2xl rounded-br-sm bg-indigo-600 px-3 py-2 text-sm text-white' : 'rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-gray-800 ring-1 ring-gray-200'"
+                    <div :class="m.role === 'user' ? 'rounded-2xl rounded-br-sm bg-indigo-600 px-3 py-2 text-sm text-white' : (m.system ? 'rounded-2xl rounded-bl-sm bg-indigo-50 px-3 py-2 text-sm text-indigo-900 ring-1 ring-indigo-200' : 'rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-gray-800 ring-1 ring-gray-200')"
                          class="max-w-[85%]">
                         <template x-if="m.image">
                             <img :src="m.image" alt="attachment" class="mb-1 max-h-48 max-w-full rounded-lg object-contain">
@@ -200,6 +200,11 @@
         <svg x-show="!open" class="relative h-7 w-7 transition group-hover:rotate-12" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
         <svg x-show="open" x-cloak class="relative h-7 w-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
         <span x-show="!open" class="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-white"></span>
+        {{-- Alert dot when there's a bug-status update to read --}}
+        <span x-show="!open && hasBugUpdates" x-cloak class="absolute -left-0.5 -top-0.5 flex h-3.5 w-3.5">
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
+            <span class="relative inline-flex h-3.5 w-3.5 rounded-full bg-amber-500 ring-2 ring-white"></span>
+        </span>
     </button>
 </div>
 
@@ -225,11 +230,43 @@
             height: parseInt(localStorage.getItem('ai_chat_height')) || 512,
             resizing: false,
             learnEnabled: {{ (bool) \App\Models\AppSetting::get('ai_learn_from_chat', false) ? 'true' : 'false' }},
+            pendingBugUpdates: [],
+            hasBugUpdates: false,
             messageUrl: '{{ route('assistant.message') }}',
             learnUrl: '{{ route('assistant.learn') }}',
+            bugUpdatesUrl: '{{ route('assistant.bug-updates') }}',
+            bugAckUrl: '{{ route('assistant.bug-updates.ack') }}',
             listUrl: '{{ route('assistant.conversations') }}',
             conversationUrl: '{{ route('assistant.conversation', ['conversation' => 'CONV_ID']) }}',
             csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
+
+            init() {
+                // Check for bug-status updates so the launcher can show an alert dot.
+                this.fetchBugUpdates();
+            },
+
+            async fetchBugUpdates() {
+                try {
+                    const res = await fetch(this.bugUpdatesUrl, { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json();
+                    this.pendingBugUpdates = data.updates || [];
+                    this.hasBugUpdates = this.pendingBugUpdates.length > 0;
+                } catch (e) { /* ignore */ }
+            },
+
+            // Surface reported-bug updates as assistant messages, then acknowledge them.
+            async surfaceBugUpdates() {
+                if (! this.pendingBugUpdates.length) return;
+                for (const u of this.pendingBugUpdates) {
+                    this.messages.push({ role: 'assistant', text: u.message, system: true });
+                }
+                this.pendingBugUpdates = [];
+                this.hasBugUpdates = false;
+                this.$nextTick(() => this.scrollToEnd());
+                try {
+                    await fetch(this.bugAckUrl, { method: 'POST', headers: { 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' } });
+                } catch (e) { /* ignore */ }
+            },
 
             async toggle() {
                 this.open = !this.open;
@@ -237,7 +274,10 @@
                     this.booted = true;
                     await this.boot();
                 }
-                if (this.open && this.view === 'chat') this.$nextTick(() => this.scrollToEnd());
+                if (this.open) {
+                    await this.surfaceBugUpdates();
+                    if (this.view === 'chat') this.$nextTick(() => this.scrollToEnd());
+                }
             },
 
             async boot() {
