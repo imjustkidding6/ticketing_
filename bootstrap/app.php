@@ -33,6 +33,11 @@ return Application::configure(basePath: dirname(__DIR__))
             SetTenantUrlDefaults::class,
         ]);
 
+        // Inbound webhooks authenticate by signature, not a CSRF token.
+        $middleware->validateCsrfTokens(except: [
+            'webhooks/*',
+        ]);
+
         $middleware->alias([
             'admin' => AdminMiddleware::class,
             'tenant' => EnsureTenantSession::class,

@@ -51,4 +51,13 @@ return [
         'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
     ],
 
+    // GitHub bridge for the "AI Programmer": the app files an issue (label ai-fix)
+    // that the Claude Code GitHub Action turns into a fix PR; a webhook reports back.
+    'github' => [
+        'token' => env('GITHUB_TOKEN'),
+        'repo' => env('GITHUB_REPO'),               // e.g. "CliqueHA-Information-Services/ticketing"
+        'webhook_secret' => env('GITHUB_WEBHOOK_SECRET'),
+        'api_url' => env('GITHUB_API_URL', 'https://api.github.com'),
+    ],
+
 ];

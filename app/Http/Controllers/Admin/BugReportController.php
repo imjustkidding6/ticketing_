@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exceptions\GitHubException;
 use App\Http\Controllers\Controller;
 use App\Models\BugReport;
 use App\Models\ChatMessage;
+use App\Services\GitHubService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -62,10 +64,11 @@ class BugReportController extends Controller
     }
 
     /**
-     * Phase 1: hand the bug to the AI Programmer. For now this just marks it
-     * escalated; Phase 2 creates the GitHub issue that triggers Claude Code.
+     * Hand the bug to the AI Programmer: file a GitHub issue labelled "ai-fix"
+     * (which triggers the Claude Code Action to open a fix PR). Falls back to a
+     * local escalation when GitHub isn't configured yet, so the queue still works.
      */
-    public function fix(int $bug): RedirectResponse
+    public function fix(GitHubService $github, int $bug): RedirectResponse
     {
         $bug = BugReport::withoutGlobalScopes()->findOrFail($bug);
 
@@ -73,9 +76,51 @@ class BugReportController extends Controller
             return back()->with('error', 'This bug has already been sent to the AI Programmer.');
         }
 
-        $bug->update(['status' => BugReport::STATUS_ESCALATED]);
+        if (! $github->isConfigured()) {
+            $bug->update(['status' => BugReport::STATUS_ESCALATED]);
 
-        return back()->with('success', "Sent {$bug->reference()} to the AI Programmer.");
+            return back()->with('success', "Escalated {$bug->reference()} (GitHub isn't configured yet, so no issue was filed).");
+        }
+
+        try {
+            $issue = $github->createIssue(
+                "[AI-fix] {$bug->title}",
+                $this->issueBody($bug),
+                ['ai-fix'],
+            );
+        } catch (GitHubException $e) {
+            report($e);
+
+            return back()->with('error', 'Could not file the GitHub issue. Please try again.');
+        }
+
+        $bug->update([
+            'status' => BugReport::STATUS_ESCALATED,
+            'github_issue_number' => $issue['number'],
+        ]);
+
+        return back()->with('success', "Sent {$bug->reference()} to the AI Programmer (issue #{$issue['number']}).");
+    }
+
+    /** Structured, PII-free issue body for the AI Programmer. */
+    private function issueBody(BugReport $bug): string
+    {
+        $parts = ["_Reported through the AI Assistant ({$bug->reference()})._", ''];
+        $parts[] = '**Area:** '.($bug->area ?: 'n/a');
+        $parts[] = '**Severity:** '.$bug->severity;
+        $parts[] = '';
+        $parts[] = '### Description';
+        $parts[] = $bug->description;
+        if (filled($bug->steps_to_reproduce)) {
+            $parts[] = '';
+            $parts[] = '### Steps to reproduce';
+            $parts[] = $bug->steps_to_reproduce;
+        }
+        $parts[] = '';
+        $parts[] = '---';
+        $parts[] = 'Implement a fix on a new branch, run `php artisan test`, and open a PR that closes this issue.';
+
+        return implode("\n", $parts);
     }
 
     /**

@@ -23,6 +23,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class AiAssistantTest extends TestCase
@@ -350,6 +351,74 @@ class AiAssistantTest extends TestCase
         $user = User::factory()->create(['is_admin' => false]);
 
         $this->actingAs($user)->get('/admin/bugs')->assertForbidden();
+    }
+
+    public function test_admin_fix_files_a_github_issue_when_configured(): void
+    {
+        config(['services.github.token' => 'gh-test', 'services.github.repo' => 'CliqueHA-Information-Services/ticketing']);
+        Http::fake(['api.github.com/*' => Http::response(['number' => 77, 'html_url' => 'https://github.com/x/y/issues/77'], 201)]);
+
+        $admin = User::factory()->create(['is_admin' => true]);
+        $tenant = $this->enterpriseTenant();
+        $bug = BugReport::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'title' => 'x', 'description' => 'y', 'severity' => 'high', 'status' => 'new',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.bugs.fix', $bug->id))->assertRedirect();
+
+        $bug->refresh();
+        $this->assertEquals('escalated', $bug->status);
+        $this->assertEquals(77, $bug->github_issue_number);
+        Http::assertSent(fn ($r) => str_contains($r->url(), 'api.github.com') && str_contains($r->url(), '/issues'));
+    }
+
+    public function test_github_webhook_moves_bug_to_pr_opened_then_merged(): void
+    {
+        config(['services.github.webhook_secret' => 'whsec']);
+        $tenant = $this->enterpriseTenant();
+        $bug = BugReport::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'title' => 'x', 'description' => 'y', 'severity' => 'medium',
+            'status' => 'escalated', 'github_issue_number' => 42,
+        ]);
+
+        // PR opened referencing the issue.
+        $opened = json_encode(['action' => 'opened', 'pull_request' => [
+            'title' => 'Fix export bug', 'body' => 'Closes #42', 'html_url' => 'https://github.com/x/y/pull/9', 'merged' => false,
+        ]]);
+        $this->postWebhook($opened)->assertOk();
+        $this->assertEquals('pr_opened', $bug->fresh()->status);
+        $this->assertEquals('https://github.com/x/y/pull/9', $bug->fresh()->github_pr_url);
+
+        // PR merged.
+        $merged = json_encode(['action' => 'closed', 'pull_request' => [
+            'title' => 'Fix export bug', 'body' => 'Closes #42', 'html_url' => 'https://github.com/x/y/pull/9', 'merged' => true,
+        ]]);
+        $this->postWebhook($merged)->assertOk();
+        $this->assertEquals('merged', $bug->fresh()->status);
+    }
+
+    public function test_github_webhook_rejects_a_bad_signature(): void
+    {
+        config(['services.github.webhook_secret' => 'whsec']);
+
+        $payload = json_encode(['action' => 'opened', 'pull_request' => ['body' => 'Closes #1', 'merged' => false]]);
+        $this->call('POST', '/webhooks/github', [], [], [], [
+            'HTTP_X_GITHUB_EVENT' => 'pull_request',
+            'HTTP_X_HUB_SIGNATURE_256' => 'sha256=deadbeef',
+            'CONTENT_TYPE' => 'application/json',
+        ], $payload)->assertForbidden();
+    }
+
+    /** POST a signed pull_request webhook payload. */
+    private function postWebhook(string $payload): TestResponse
+    {
+        $sig = 'sha256='.hash_hmac('sha256', $payload, 'whsec');
+
+        return $this->call('POST', '/webhooks/github', [], [], [], [
+            'HTTP_X_GITHUB_EVENT' => 'pull_request',
+            'HTTP_X_HUB_SIGNATURE_256' => $sig,
+            'CONTENT_TYPE' => 'application/json',
+        ], $payload);
     }
 
     public function test_bug_status_updates_surface_to_the_reporter(): void

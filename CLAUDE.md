@@ -242,6 +242,18 @@ OpenAI-powered assistant gated by the **`ai_chatbot`** feature (**Enterprise onl
 
 **Deploy notes:** `composer install` (pdfparser); set `OPENAI_API_KEY` + optional `OPENAI_MODEL`/`OPENAI_SEARCH_MODEL`/`OPENAI_EMBED_MODEL`; `migrate` (adds `chat_conversations`, `chat_messages`, `tickets.solution_embedding`, `learned_snippets`); re-apply `PlanFeature::forPlan('enterprise')` to existing Enterprise plans' `features` so `ai_chatbot` is present; ensure the scheduler runs `ai:embed-tickets`; `config:cache`.
 
+### AI Bug Fixing ("AI Programmer" = Claude Code)
+
+A closed loop where a user reports a product bug to the AI Assistant and an autonomous coding agent (Claude Code, via the GitHub Action) opens a fix PR.
+
+**Flow:** user reports a bug in chat → `report_bug` tool files a `BugReport` (`bug_reports` table, `BelongsToTenant`; reporter + the conversation it came from) → internal staff (`is_admin`) are notified (`BugReportFiled`) and review it at **`/admin/bugs`** (`Admin\BugReportController`, cross-tenant via `withoutGlobalScopes()`) → staff click **"Fix with AI Programmer"** → `GitHubService::createIssue()` files an issue labelled **`ai-fix`** → `.github/workflows/claude-fix.yml` (Anthropic's `anthropics/claude-code-action`) implements a fix on a branch, runs the suite, and opens a **PR** → `POST /webhooks/github` (`GitHubWebhookController`, HMAC-`X-Hub-Signature-256` validated, CSRF-exempt via `bootstrap/app.php`) advances `BugReport.status` (`escalated`→`pr_opened`→`merged`, matched to the bug by the issue number referenced in the PR) → the reporter sees the update **inside the assistant** (`assistant.bug-updates` + `ack`; an amber launcher dot and an indigo status message).
+
+**Status lifecycle** (`BugReport` consts): `new`→`triaged`→`escalated`→`pr_opened`→`merged`/`closed`/`rejected`. `USER_FACING_STATUSES` (pr_opened/merged/rejected) are surfaced to the reporter once (`user_notified_status` guards repeats).
+
+**Guardrails:** only `is_admin` can escalate (intake is Enterprise via `ai_chatbot`, but the Fix queue is internal/cross-tenant). Claude Code runs only in GitHub's sandboxed CI (no prod/tenant data); it opens a **PR only** — a human merges and the unchanged `deploy.yml` ships from `main`. No auto-deploy. The issue body is PII-free (the admin reviews before escalating).
+
+**Config / secrets (set later):** `config/services.php` `github` block — `GITHUB_TOKEN` (fine-grained PAT, issues:write on the repo), `GITHUB_REPO`, `GITHUB_WEBHOOK_SECRET`. The Action needs repo secret **`ANTHROPIC_API_KEY`** (not in the app). Until configured, `GitHubService::isConfigured()` is false and **Fix gracefully degrades** to a local escalation (no issue filed), so the queue still works. Point a GitHub repo webhook (PR events) at `/webhooks/github` with the same secret.
+
 ### Escalation System
 
 Agent tiering (Enterprise only): 3 tiers (tier_1, tier_2, tier_3). Escalation enforced:

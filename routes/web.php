@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\SystemAnnouncementController;
 use App\Http\Controllers\Admin\TenantController as AdminTenantController;
 use App\Http\Controllers\Admin\TenantFeedbackController as AdminTenantFeedbackController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\GitHubWebhookController;
 use App\Http\Controllers\HealthCheckController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProfileController;
@@ -23,6 +24,9 @@ use Illuminate\Support\Str;
 Route::get('/', HomeController::class);
 
 Route::get('/health', HealthCheckController::class)->name('health');
+
+// Inbound GitHub webhooks for the AI Programmer loop (signature-authenticated).
+Route::post('/webhooks/github', [GitHubWebhookController::class, 'handle'])->name('webhooks.github');
 
 Route::get('/register/check-slug', function (Request $request) {
     $slug = Str::slug($request->query('slug', ''));

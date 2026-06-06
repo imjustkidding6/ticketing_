@@ -56,6 +56,9 @@
                     <div class="flex justify-between"><dt class="text-gray-500">Tenant</dt><dd class="font-medium text-gray-800">{{ $bug->tenant?->name ?? '—' }}</dd></div>
                     <div class="flex justify-between"><dt class="text-gray-500">Reporter</dt><dd class="font-medium text-gray-800">{{ $bug->reporter?->name ?? '—' }}</dd></div>
                     <div class="flex justify-between"><dt class="text-gray-500">Reported</dt><dd class="font-medium text-gray-800">{{ $bug->created_at->format('M d, Y g:i A') }}</dd></div>
+                    @if($bug->github_issue_number)
+                        <div class="flex justify-between"><dt class="text-gray-500">GitHub issue</dt><dd class="font-medium text-gray-800">#{{ $bug->github_issue_number }}</dd></div>
+                    @endif
                     @if($bug->github_pr_url)
                         <div class="flex justify-between"><dt class="text-gray-500">PR</dt><dd><a href="{{ $bug->github_pr_url }}" target="_blank" class="font-medium text-indigo-600 hover:text-indigo-500">View PR</a></dd></div>
                     @endif
