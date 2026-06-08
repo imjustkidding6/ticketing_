@@ -127,6 +127,7 @@ Controllers enforce permissions via `$this->checkPermission('permission name')` 
 | `OpenAiService` | Thin HTTP client for OpenAI (`chat()`, `webSearch()`, `embed()`); no tenant logic |
 | `AiAssistantService` | Tenant-aware AI orchestrator: tool-calling loop, copilot one-shots, ticket-draft polish, embeddings learning (see **AI Assistant**) |
 | `PageContextResolver` | Turns the URL path the agent is viewing into a description (+ ticket/client details) for the assistant |
+| `GitHubService` | Thin HTTP client for the GitHub REST API (`createIssue()`, `getPull()`) used by the AI Programmer loop (see **AI Bug Fixing**) |
 
 Ancillary namespaces:
 - `app/Notifications/` — Per-event notifications (`TicketCreated`, `TicketAssigned`, `TicketStatusChanged`, `SlaBreachWarning`, client variants, `SystemAnnouncement`). Dispatched by services rather than controllers; respect the `email_notifications` feature where relevant.
@@ -252,7 +253,7 @@ A closed loop where a user reports a product bug to the AI Assistant and an auto
 
 **Guardrails:** only `is_admin` can escalate (intake is Enterprise via `ai_chatbot`, but the Fix queue is internal/cross-tenant). Claude Code runs only in GitHub's sandboxed CI (no prod/tenant data); it opens a **PR only** — a human merges and the unchanged `deploy.yml` ships from `main`. No auto-deploy. The issue body is PII-free (the admin reviews before escalating).
 
-**Config / secrets (set later):** `config/services.php` `github` block — `GITHUB_TOKEN` (fine-grained PAT, issues:write on the repo), `GITHUB_REPO`, `GITHUB_WEBHOOK_SECRET`. The Action needs repo secret **`ANTHROPIC_API_KEY`** (not in the app). Until configured, `GitHubService::isConfigured()` is false and **Fix gracefully degrades** to a local escalation (no issue filed), so the queue still works. Point a GitHub repo webhook (PR events) at `/webhooks/github` with the same secret.
+**Config / secrets (set later):** `migrate` adds the `bug_reports` table. `config/services.php` `github` block — `GITHUB_TOKEN` (fine-grained PAT, issues:write on the repo), `GITHUB_REPO`, `GITHUB_WEBHOOK_SECRET`. The Action needs repo secret **`ANTHROPIC_API_KEY`** (not in the app). Until configured, `GitHubService::isConfigured()` is false and **Fix gracefully degrades** to a local escalation (no issue filed), so the queue still works. Point a GitHub repo webhook (PR events) at `/webhooks/github` with the same secret.
 
 ### Escalation System
 
