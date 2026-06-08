@@ -36,9 +36,19 @@ return [
     ],
 
     'google' => [
-        'client_id'     => env('GOOGLE_CLIENT_ID'),
+        'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
-        'redirect'      => env('GOOGLE_REDIRECT_URI', '/auth/google/callback'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', '/auth/google/callback'),
+    ],
+
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        // Model used for the live web-search tool (OpenAI's built-in web search).
+        'search_model' => env('OPENAI_SEARCH_MODEL', 'gpt-4o-mini-search-preview'),
+        // Embedding model used to learn from resolved tickets (semantic search).
+        'embed_model' => env('OPENAI_EMBED_MODEL', 'text-embedding-3-small'),
+        'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
     ],
 
 ];

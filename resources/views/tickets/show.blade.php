@@ -357,6 +357,53 @@
                         @if(!in_array($ticket->status, ['closed', 'cancelled']))
                             <form method="POST" action="{{ route('tickets.comments.store', $ticket) }}" enctype="multipart/form-data" class="mt-4 border-t border-gray-200 pt-4">
                                 @csrf
+                                {{-- AI Copilot (draft / summarize) --}}
+                                @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot) && (bool) \App\Models\AppSetting::get('ai_agent_copilot_enabled', false))
+                                    <div x-data="ticketAiCopilot()" class="mb-3 rounded-lg border border-indigo-100 bg-indigo-50/60 p-3">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="text-xs font-semibold text-indigo-700">{{ __('AI Assistant') }}</span>
+                                            <button type="button" @click="draft()" :disabled="loading" class="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50 disabled:opacity-50">
+                                                <span x-show="!(action === 'draft' && loading)">{{ __('Draft with AI') }}</span>
+                                                <span x-show="action === 'draft' && loading" x-cloak>{{ __('Drafting...') }}</span>
+                                            </button>
+                                            <button type="button" @click="summarize()" :disabled="loading" class="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50 disabled:opacity-50">
+                                                <span x-show="!(action === 'summarize' && loading)">{{ __('Summarize') }}</span>
+                                                <span x-show="action === 'summarize' && loading" x-cloak>{{ __('Summarizing...') }}</span>
+                                            </button>
+                                        </div>
+                                        <div x-show="summary" x-cloak class="mt-2 whitespace-pre-line rounded-md bg-white p-2 text-xs text-gray-700 ring-1 ring-gray-200" x-text="summary"></div>
+                                        <p x-show="error" x-cloak class="mt-2 text-xs text-red-600" x-text="error"></p>
+                                    </div>
+                                    <script>
+                                        function ticketAiCopilot() {
+                                            return {
+                                                loading: false, action: null, summary: '', error: '',
+                                                draftUrl: '{{ route('tickets.ai.draft-reply', $ticket) }}',
+                                                summaryUrl: '{{ route('tickets.ai.summarize', $ticket) }}',
+                                                csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
+                                                async call(url) {
+                                                    this.error = ''; this.loading = true;
+                                                    try {
+                                                        const res = await fetch(url, { method: 'POST', headers: { 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' } });
+                                                        const data = await res.json().catch(() => ({}));
+                                                        if (!res.ok) throw new Error(data.error || @js(__('The AI request failed.')));
+                                                        return data.text || '';
+                                                    } finally { this.loading = false; this.action = null; }
+                                                },
+                                                async draft() {
+                                                    this.action = 'draft';
+                                                    try { const t = await this.call(this.draftUrl); const ta = document.getElementById('comment_content'); if (ta) { ta.value = t; ta.focus(); } }
+                                                    catch (e) { this.error = e.message; }
+                                                },
+                                                async summarize() {
+                                                    this.action = 'summarize';
+                                                    try { this.summary = await this.call(this.summaryUrl); }
+                                                    catch (e) { this.error = e.message; }
+                                                },
+                                            };
+                                        }
+                                    </script>
+                                @endif
                                 {{-- Canned Response Insertion --}}
                                 @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::CannedResponses) && $cannedResponses->isNotEmpty())
                                     <div class="mb-3">

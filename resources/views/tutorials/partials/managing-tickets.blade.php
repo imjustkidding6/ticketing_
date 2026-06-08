@@ -1,6 +1,6 @@
 <div class="prose prose-sm max-w-none text-gray-700">
     <h2 class="text-lg font-semibold text-gray-900">{{ __('Managing Tickets') }}</h2>
-    <p>{{ __('Tickets are the heart of TechDesk. This guide covers the full lifecycle — creating a ticket, working it, and bringing it to a clean close — along with the power features your plan unlocks.') }}</p>
+    <p>{{ __('Tickets are the heart of CliqueHA Nexus. This guide covers the full lifecycle — creating a ticket, working it, and bringing it to a clean close — along with the power features your plan unlocks.') }}</p>
 
     <h3 class="mt-6 text-base font-semibold text-gray-900">{{ __('Creating a Ticket') }}</h3>
     <p>{{ __('Click "Create Ticket" from the Tickets page. Pick the client (or create one on the fly), write a clear subject and description, and choose the department, category, and priority. You can assign an agent now or leave it open for triage. If you use products, link the relevant ones so the ticket shows up in product reporting.') }}</p>

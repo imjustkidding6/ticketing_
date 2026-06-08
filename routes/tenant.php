@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AgentScheduleController;
+use App\Http\Controllers\AiAssistantController;
 use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\CannedResponseController;
 use App\Http\Controllers\CategoryController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\KbPortalController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\Portal\AiChatController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
@@ -50,6 +52,11 @@ Route::post('submit-ticket', [ClientPortalController::class, 'publicSubmitStore'
 Route::get('track-ticket', [ClientPortalController::class, 'publicTrackForm'])->name('tenant.track-ticket');
 Route::get('track-ticket/{token}', [ClientPortalController::class, 'publicTrackByToken'])->name('tenant.track-ticket.token');
 Route::post('track-ticket/{token}/reply', [ClientPortalController::class, 'publicReply'])->name('tenant.track-ticket.reply');
+
+// Public AI assistant (no auth; feature + opt-in gating done in the controller)
+Route::post('chat', [AiChatController::class, 'message'])->name('tenant.ai-chat')->middleware('throttle:ai-chat');
+Route::get('chat/history', [AiChatController::class, 'history'])->name('tenant.ai-chat.history')->middleware('throttle:ai-chat');
+Route::post('submit-ticket/polish', [AiChatController::class, 'polish'])->name('tenant.ai-polish')->middleware('throttle:ai-chat');
 
 // Knowledge Base portal (public, feature-gated at controller level)
 Route::get('kb', [KbPortalController::class, 'index'])->name('portal.knowledge-base.index');
@@ -146,6 +153,18 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::post('tickets/{ticket}/unmerge', [TicketController::class, 'unmerge'])->name('tickets.unmerge')->middleware('feature:ticket_merging');
     Route::post('tickets/{ticket}/reopen', [TicketController::class, 'reopen'])->name('tickets.reopen')->middleware('feature:ticket_reopening');
 
+    // AI agent copilot (draft reply / summarize) — feature-gated
+    Route::post('tickets/{ticket}/ai/draft-reply', [AiAssistantController::class, 'draftReply'])->name('tickets.ai.draft-reply')->middleware('feature:ai_chatbot');
+    Route::post('tickets/{ticket}/ai/summarize', [AiAssistantController::class, 'summarize'])->name('tickets.ai.summarize')->middleware('feature:ai_chatbot');
+    // AI clean-up of a rough ticket draft on the create form (subject/description/tasks)
+    Route::post('tickets-ai/structure', [AiAssistantController::class, 'structureDraft'])->name('tickets.ai.structure')->middleware('feature:ai_chatbot');
+
+    // In-app AI assistant (per-user memory) — feature-gated
+    Route::post('assistant/message', [AiAssistantController::class, 'message'])->name('assistant.message')->middleware('feature:ai_chatbot');
+    Route::post('assistant/learn', [AiAssistantController::class, 'learn'])->name('assistant.learn')->middleware('feature:ai_chatbot');
+    Route::get('assistant/conversations', [AiAssistantController::class, 'myConversations'])->name('assistant.conversations')->middleware('feature:ai_chatbot');
+    Route::get('assistant/conversation/{conversation}', [AiAssistantController::class, 'myConversationMessages'])->name('assistant.conversation')->middleware('feature:ai_chatbot');
+
     // Ticket Comments (Enterprise via feature gate)
     Route::post('tickets/{ticket}/comments', [TicketCommentController::class, 'store'])->name('tickets.comments.store')->middleware('feature:client_comments');
     Route::put('tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update'])->name('tickets.comments.update')->middleware('feature:client_comments');
@@ -178,6 +197,12 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::get('settings/notifications', [AppSettingController::class, 'notifications'])->name('settings.notifications')->middleware('feature:email_notifications');
     Route::post('settings/notifications', [AppSettingController::class, 'saveNotifications'])->middleware('feature:email_notifications');
     Route::post('settings/notifications/test', [AppSettingController::class, 'testEmail'])->name('settings.notifications.test')->middleware('feature:email_notifications');
+    Route::get('settings/ai', [AppSettingController::class, 'ai'])->name('settings.ai')->middleware('feature:ai_chatbot');
+    Route::post('settings/ai', [AppSettingController::class, 'saveAi'])->middleware('feature:ai_chatbot');
+    Route::get('settings/ai/conversations', [AiAssistantController::class, 'conversations'])->name('settings.ai.conversations')->middleware('feature:ai_chatbot');
+    Route::get('settings/ai/conversations/{conversation}', [AiAssistantController::class, 'showConversation'])->name('settings.ai.conversation')->middleware('feature:ai_chatbot');
+    Route::get('settings/ai/knowledge', [AiAssistantController::class, 'knowledge'])->name('settings.ai.knowledge')->middleware('feature:ai_chatbot');
+    Route::delete('settings/ai/knowledge/{snippet}', [AiAssistantController::class, 'deleteKnowledge'])->name('settings.ai.knowledge.delete')->middleware('feature:ai_chatbot');
     Route::get('settings/branding', [AppSettingController::class, 'branding'])->name('settings.branding');
     Route::post('settings/branding', [AppSettingController::class, 'saveBranding']);
     Route::get('settings/service-report', [AppSettingController::class, 'serviceReport'])->name('settings.service-report')->middleware('feature:service_reports');

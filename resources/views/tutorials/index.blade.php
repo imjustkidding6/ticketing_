@@ -5,7 +5,7 @@
 
     <div class="py-6" x-data="tutorialSearch()" x-init="filter(); initSpy()">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <p class="mb-4 text-sm text-gray-600">{{ __('Everything you need to get the most out of TechDesk, on one page. Use the search box to jump straight to what you need, or browse the guides in the sidebar.') }}</p>
+            <p class="mb-4 text-sm text-gray-600">{{ __('Everything you need to get the most out of CliqueHA Nexus, on one page. Use the search box to jump straight to what you need, or browse the guides in the sidebar.') }}</p>
 
             {{-- Search bar (sticky) --}}
             <div class="sticky top-16 z-20 -mx-4 mb-6 border-b border-gray-200 bg-gray-50/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">

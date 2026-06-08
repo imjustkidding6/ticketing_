@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\PlanFeature;
+use App\Models\AppSetting;
 use App\Models\Client;
 use App\Models\Department;
 use App\Models\Product;
@@ -14,6 +15,7 @@ use App\Models\User;
 use App\Notifications\TicketCreatedNotification;
 use App\Services\PlanService;
 use App\Services\TicketService;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -371,7 +373,13 @@ class ClientPortalController extends Controller
 
         $allowAttachments = $this->planService->tenantHasFeature($tenant, PlanFeature::Attachments);
 
-        return view('tenant.submit-ticket', compact('tenant', 'departments', 'categories', 'products', 'kbSearchUrl', 'allowAttachments'));
+        // AI "polish" of the customer's subject/description — same gating as the portal chat widget.
+        $aiPolish = $this->planService->tenantHasFeature($tenant, PlanFeature::AiChatbot)
+            && AppSetting::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('key', 'ai_enabled')->value('value') === '1'
+            && AppSetting::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('key', 'ai_portal_widget_enabled')->value('value') === '1';
+        $aiPolishUrl = $aiPolish ? route('tenant.ai-polish', ['slug' => $tenant->slug]) : null;
+
+        return view('tenant.submit-ticket', compact('tenant', 'departments', 'categories', 'products', 'kbSearchUrl', 'allowAttachments', 'aiPolishUrl'));
     }
 
     /**
@@ -636,7 +644,7 @@ class ClientPortalController extends Controller
     /**
      * Load active, ordered departments and categories for a tenant.
      *
-     * @return array{0: \Illuminate\Database\Eloquent\Collection, 1: \Illuminate\Database\Eloquent\Collection}
+     * @return array{0: Collection, 1: Collection}
      */
     private function loadDepartmentsAndCategories(Tenant $tenant): array
     {

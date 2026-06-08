@@ -1,6 +1,6 @@
 <div class="prose prose-sm max-w-none text-gray-700">
     <h2 class="text-lg font-semibold text-gray-900">{{ __('Getting Started') }}</h2>
-    <p>{{ __('Welcome to TechDesk! This guide walks you through setting up your workspace from scratch so your team can start receiving and resolving support tickets. Work through the steps in order — each one builds on the last. Most of these are also tracked on the onboarding checklist on your dashboard.') }}</p>
+    <p>{{ __('Welcome to CliqueHA Nexus! This guide walks you through setting up your workspace from scratch so your team can start receiving and resolving support tickets. Work through the steps in order — each one builds on the last. Most of these are also tracked on the onboarding checklist on your dashboard.') }}</p>
 
     <div class="mt-3 rounded-md border-l-4 border-indigo-400 bg-indigo-50 p-3 text-xs text-indigo-900">
         {{ __('Tip: The dashboard checklist mirrors these steps and marks each one complete automatically as you go. You can dismiss it once you are set up and re-open it any time from this Tutorials section.') }}
@@ -45,7 +45,7 @@
     @include('tutorials.partials._figure', ['img' => 'ticket-create.png', 'alt' => __('Create ticket form'), 'caption' => __('The Create Ticket form, where you choose the client, department, category, and priority.')])
 
     <h3 class="mt-6 text-base font-semibold text-gray-900">{{ __('8. Share Your Public Portal') }}</h3>
-    <p>{{ __('On Business and Enterprise plans, your workspace has a public portal where clients can submit and track tickets without an account. Its address is your workspace slug. Share that link, or add it to your website and email signatures, so requests flow straight into TechDesk.') }}</p>
+    <p>{{ __('On Business and Enterprise plans, your workspace has a public portal where clients can submit and track tickets without an account. Its address is your workspace slug. Share that link, or add it to your website and email signatures, so requests flow straight into CliqueHA Nexus.') }}</p>
     <p class="text-xs text-amber-600">{{ __('Note: The public portal is available on Business and Enterprise plans.') }}</p>
 
     <div class="mt-6 rounded-md border-l-4 border-emerald-400 bg-emerald-50 p-3 text-xs text-emerald-900">

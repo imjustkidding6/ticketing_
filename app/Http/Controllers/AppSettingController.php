@@ -129,6 +129,43 @@ class AppSettingController extends Controller
     }
 
     /**
+     * Display AI assistant settings.
+     */
+    public function ai(): View
+    {
+        $this->checkPermission('manage settings');
+
+        $settings = AppSetting::getByGroup('ai');
+
+        return view('settings.ai', compact('settings'));
+    }
+
+    /**
+     * Save AI assistant settings.
+     */
+    public function saveAi(Request $request): RedirectResponse
+    {
+        $this->checkPermission('manage settings');
+
+        $validated = $request->validate([
+            'ai_enabled' => ['nullable', 'string'],
+            'ai_portal_widget_enabled' => ['nullable', 'string'],
+            'ai_agent_copilot_enabled' => ['nullable', 'string'],
+            'ai_learn_from_chat' => ['nullable', 'string'],
+            'ai_system_prompt' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        foreach (['ai_enabled', 'ai_portal_widget_enabled', 'ai_agent_copilot_enabled', 'ai_learn_from_chat'] as $key) {
+            AppSetting::set($key, isset($validated[$key]) ? '1' : '0', 'boolean', 'ai');
+        }
+
+        AppSetting::set('ai_system_prompt', $validated['ai_system_prompt'] ?? '', 'string', 'ai');
+
+        return redirect()->route('settings.ai')
+            ->with('success', 'AI assistant settings saved.');
+    }
+
+    /**
      * Send a test email using the configured SMTP settings.
      */
     public function testEmail(Request $request): RedirectResponse

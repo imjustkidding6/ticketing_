@@ -12,7 +12,7 @@
                     <div class="rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-white p-6 shadow-sm">
                         <div class="flex items-start justify-between">
                             <div>
-                                <h3 class="text-lg font-semibold text-gray-900">{{ __('Get Started with TechDesk') }}</h3>
+                                <h3 class="text-lg font-semibold text-gray-900">{{ __('Get Started with CliqueHA Nexus') }}</h3>
                                 <p class="mt-1 text-sm text-gray-500">{{ __('Complete these steps to set up your workspace.') }}</p>
                             </div>
                             <button @click="dismiss()" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">

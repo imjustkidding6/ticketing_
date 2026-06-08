@@ -1,6 +1,6 @@
 <div class="prose prose-sm max-w-none text-gray-700">
     <h2 class="text-lg font-semibold text-gray-900">{{ __('Client Management') }}</h2>
-    <p>{{ __('Clients are the people and companies who submit and track tickets. TechDesk lets you manage them internally and gives them a public-facing portal to self-serve.') }}</p>
+    <p>{{ __('Clients are the people and companies who submit and track tickets. CliqueHA Nexus lets you manage them internally and gives them a public-facing portal to self-serve.') }}</p>
 
     <h3 class="mt-6 text-base font-semibold text-gray-900">{{ __('Adding Clients') }}</h3>
     <p>{{ __('Go to Clients and click "Create Client". Enter their name, email, phone, and company, and optionally set a tier for SLA prioritization. Clients are also created automatically the first time someone submits a ticket through the public portal, so your client list grows on its own.') }}</p>
@@ -26,7 +26,7 @@
         <li>{{ __('Track a ticket using its number and their email, or via the unique tracking link sent to them.') }}</li>
         <li>{{ __('Browse knowledge base articles to find answers before they ever open a ticket.') }}</li>
     </ul>
-    <p>{{ __('Share the portal link on your website, in email signatures, and on invoices so requests flow straight into TechDesk.') }}</p>
+    <p>{{ __('Share the portal link on your website, in email signatures, and on invoices so requests flow straight into CliqueHA Nexus.') }}</p>
     <p class="text-xs text-amber-600">{{ __('Note: The public portal is available on Business and Enterprise plans. The knowledge base is an Enterprise feature.') }}</p>
     @include('tutorials.partials._figure', ['img' => 'portal-submit.png', 'alt' => __('Public ticket submission form'), 'caption' => __('The public portal submission form your clients use to raise a ticket without an account.')])
 

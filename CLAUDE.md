@@ -80,7 +80,7 @@ Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->get();
 Features are gated via `PlanFeature` enum (`app/Enums/PlanFeature.php`):
 - **Starter** — No gated features (core functionality only, no public portal)
 - **Business** — 10 features: `audit_logs`, `billing`, `spam_management`, `service_reports`, `attachments`, `agent_schedule`, `sla_management`, `sla_report`, `email_notifications`, `detailed_reporting`
-- **Enterprise** — All Business + 8: `ticket_merging`, `ticket_reopening`, `custom_roles`, `department_management`, `agent_escalation`, `client_comments`, `knowledge_base`, `canned_responses`
+- **Enterprise** — All Business + 9: `ticket_merging`, `ticket_reopening`, `custom_roles`, `department_management`, `agent_escalation`, `client_comments`, `knowledge_base`, `canned_responses`, `ai_chatbot`
 
 Enforcement points:
 - **Routes:** `->middleware('feature:feature_name')` — returns 403 for missing features
@@ -124,6 +124,9 @@ Controllers enforce permissions via `$this->checkPermission('permission name')` 
 | `TenantRoleService` | Default role/permission setup, role sync |
 | `TenantMailService` | Per-tenant SMTP configuration |
 | `TenantUrlHelper` | Helper for building tenant-prefixed URLs outside request context |
+| `OpenAiService` | Thin HTTP client for OpenAI (`chat()`, `webSearch()`, `embed()`); no tenant logic |
+| `AiAssistantService` | Tenant-aware AI orchestrator: tool-calling loop, copilot one-shots, ticket-draft polish, embeddings learning (see **AI Assistant**) |
+| `PageContextResolver` | Turns the URL path the agent is viewing into a description (+ ticket/client details) for the assistant |
 
 Ancillary namespaces:
 - `app/Notifications/` — Per-event notifications (`TicketCreated`, `TicketAssigned`, `TicketStatusChanged`, `SlaBreachWarning`, client variants, `SystemAnnouncement`). Dispatched by services rather than controllers; respect the `email_notifications` feature where relevant.
@@ -142,6 +145,7 @@ Models opt into audit logging via the `LogsActivity` trait (`app/Models/Traits/L
 Defined in `routes/console.php`:
 - **`SendSlaBreachWarnings`** — every 15 minutes. Checks tickets with overdue response/resolution times and notifies assigned agents. Only fires if tenant has `email_notifications` feature enabled.
 - **`CheckLicenseExpirations`** — daily at 02:00 UTC. Multi-stage notification lifecycle: 4–7 days = approaching, 0–3 days = imminent, then grace period tracking, then final status flip to `EXPIRED`. Uses warning flags on the license to avoid duplicate sends.
+- **`EmbedResolvedTickets`** (`ai:embed-tickets {--limit=200}`) — every 15 minutes, `withoutOverlapping()`. Embeds closed tickets without a `solution_embedded_at` so the AI assistant can learn from past resolutions. No-op if OpenAI isn't configured. See **AI Assistant**.
 
 ### Ticket Hold Time & SLA
 
@@ -210,6 +214,33 @@ Token-authenticated REST API under `/api/v1/`, defined in `routes/api.php` (moun
 **Endpoints:** `GET/POST /tickets`, `GET /tickets/{ticketNumber}`, `POST /clients`, `GET /departments`, `GET /categories`. List/show responses go through `TicketController::presentTicket()` (a hand-rolled array shape, not an API Resource). Ticket creation reuses `TicketService::createTicket()` and `firstOrCreate`s the client by email.
 
 **Token management UI** — `AppSettingController::apiTokens/generateApiToken/revokeApiToken` (routes `settings.api-tokens*`, view `settings/api-tokens.blade.php`), gated by the `manage settings` permission. The plain token is shown **once** via a flashed `plain_token` after generation; it is never recoverable afterward. `ApiToken` is itself a `BelongsToTenant` model, so the management screens are tenant-scoped normally.
+
+### AI Assistant (OpenAI)
+
+OpenAI-powered assistant gated by the **`ai_chatbot`** feature (**Enterprise only**; `PlanFeature::AiChatbot`, `minimumPlan()='enterprise'`). Everything is also opt-in per tenant via `ai` settings (default off), so it ships dark.
+
+**Two low-level + orchestrator services:**
+- `OpenAiService` — `chat($messages, $tools, $opts)` (model `OPENAI_MODEL`, default `gpt-4o-mini`), `webSearch($query)` (model `OPENAI_SEARCH_MODEL` = `gpt-4o-mini-search-preview`; no temperature/tools), `embed($text)` (model `OPENAI_EMBED_MODEL` = `text-embedding-3-small`). Config in `config/services.php` under `openai`. `isConfigured()` gates everything.
+- `AiAssistantService` — tenant-aware orchestrator. `converse()` runs a persisted **tool-calling loop** (max 4 iterations). Tools (function-calling): `search_knowledge_base`, `search_system_guide` (`app/Support/SystemGuide.php`), `search_web`, `create_ticket`, `lookup_ticket_status`, `query_tickets`, `query_clients`, `ticket_stats`, `search_resolved_tickets` (embeddings retrieval — also returns confirmed-helpful "learned" snippets). The AI composes filters; code enforces tenant scope + read-only + row caps. Charts: the model emits a ```chart fenced JSON block (`{type: bar|pie|line, title, data:[{label,value}]}`) rendered client-side.
+
+**Two channels** (`ChatConversation.channel`, `ChatMessage`):
+- **In-app agent assistant** — `partials/app-ai-assistant.blade.php`, floating widget included in `layouts/app.blade.php` (gated by feature + `ai_enabled`). Per-user conversation history, file upload (`app/Support/FileParser.php` → images/vision, PDF via `smalot/pdfparser`, text), bar/pie/line charts, **page-context awareness** (sends `window.location.pathname`; `PageContextResolver` describes the page incl. ticket/client details), **Save to knowledge** button (opt-in learning), resizable **width + height** (drag handles, persisted in localStorage). Endpoints: `assistant.message`, `assistant.learn`, `assistant.conversations`, `assistant.conversation`.
+- **Public portal bot** — `client-portal/partials/ai-chat-widget.blade.php`, included from the portal layout (gated by feature + `ai_enabled` + `ai_portal_widget_enabled`). Per-browser-session token, throttled (`throttle:ai-chat`) + per-tenant daily cap. Controller `Portal\AiChatController` (`tenant.ai-chat`, `tenant.ai-chat.history`). Public gating is done **in the controller** (no session for `feature:` middleware) — mirrors `KbPortalController::resolveTenant`.
+
+**Agent copilot (one-shot, stateless)** — `tickets.ai.draft-reply`, `tickets.ai.summarize` (gated by feature; UI shown when `ai_agent_copilot_enabled`).
+
+**Ticket-draft AI clean-up** — `AiAssistantService::structureTicketDraft()` rewrites a rough subject/description into a clean subject + structured description + suggested resolution tasks (strict JSON; never invents facts). Keeps the data feeding self-learning tidy. Surfaces:
+- Create form (`tickets.ai.structure`) — subject + description + tasks; shared partial `tickets/partials/_ai-assist.blade.php`.
+- Edit form — same partial with `$withTasks=false`.
+- Public submit form (`tenant.ai-polish`, `Portal\AiChatController@polish`) — subject + description only (no internal tasks); throttled + daily cap.
+
+**Self-learning (genuine ML, not base-model training):**
+- *From resolved tickets* — `EmbedResolvedTickets` (`ai:embed-tickets`, scheduled) embeds closed tickets onto `tickets.solution_embedding` / `solution_embedded_at`. `search_resolved_tickets` embeds the agent's query and cosine-matches (top 5).
+- *From chat (opt-in)* — `ai_learn_from_chat` setting (default off). Agents click **Save to knowledge** on a reply → `LearnedSnippet` (`learned_snippets` table, `BelongsToTenant`) stores the Q&A + question embedding. Surfaced via `search_resolved_tickets` (the "learned" list, cosine ≥0.3). **Reviewable/removable** at `settings.ai.knowledge` (`settings/ai-knowledge.blade.php`). OpenAI API data is not used to train their models; nothing is learned silently.
+
+**Settings (`ai` group, `AppSettingController::ai/saveAi`, view `settings/ai.blade.php`)** — `ai_enabled` (master), `ai_portal_widget_enabled`, `ai_agent_copilot_enabled`, `ai_learn_from_chat`, `ai_system_prompt` (custom instructions). Admin viewers: conversation history (`settings.ai.conversations`) and learned answers (`settings.ai.knowledge`). All AI routes are `feature:ai_chatbot`-gated; the settings tab is feature-gated across all settings pages.
+
+**Deploy notes:** `composer install` (pdfparser); set `OPENAI_API_KEY` + optional `OPENAI_MODEL`/`OPENAI_SEARCH_MODEL`/`OPENAI_EMBED_MODEL`; `migrate` (adds `chat_conversations`, `chat_messages`, `tickets.solution_embedding`, `learned_snippets`); re-apply `PlanFeature::forPlan('enterprise')` to existing Enterprise plans' `features` so `ai_chatbot` is present; ensure the scheduler runs `ai:embed-tickets`; `config:cache`.
 
 ### Escalation System
 

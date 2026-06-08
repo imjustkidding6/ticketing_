@@ -10,6 +10,9 @@
                     @csrf
 
                     <div class="space-y-6">
+                        {{-- AI clean-up (Enterprise + copilot enabled) --}}
+                        @include('tickets.partials._ai-assist')
+
                         {{-- Client --}}
                         <div>
                             <label for="client_id" class="block text-sm font-medium text-gray-700">{{ __('Client') }} <span class="text-red-500">*</span></label>
@@ -236,7 +239,14 @@
 
         function taskChecklist() {
             return {
-                tasks: {!! json_encode(old('tasks', [''])) !!}
+                tasks: {!! json_encode(old('tasks', [''])) !!},
+                init() {
+                    // Let the AI assist card replace the checklist with suggested tasks.
+                    window.addEventListener('ai-fill-tasks', (e) => {
+                        const list = Array.isArray(e.detail) ? e.detail.map((t) => String(t).trim()).filter(Boolean) : [];
+                        this.tasks = list.length ? list : [''];
+                    });
+                }
             };
         }
 
