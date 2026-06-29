@@ -1,3 +1,11 @@
+@php
+    $lock = fn ($k) => ($locked[$k] ?? false);
+    $lockedInputClass = 'bg-gray-100 cursor-not-allowed text-gray-500';
+    $lockedProductNames = ($locked['product_ids'] ?? false)
+        ? $products->whereIn('id', $prefill['product_ids'])->pluck('name')->all()
+        : [];
+    $anyLocked = collect($locked)->contains(true);
+@endphp
 <x-client-portal-layout :tenant="$tenant" :hide-nav="true">
     {{-- Hero Section --}}
     <div class="-mt-8 pb-12 pt-16" style="background-color: var(--portal-primary);">
@@ -25,33 +33,24 @@
             <form method="POST" action="{{ route('tenant.submit-ticket.store', ['slug' => $tenant->slug]) }}" class="space-y-5" enctype="multipart/form-data">
                 @csrf
 
+                @if($anyLocked)
+                    <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 flex items-start gap-2.5">
+                        <svg class="mt-0.5 h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+                        <p class="text-sm text-gray-600">{{ __('Some details were filled in from your link and can\'t be changed. Just complete the remaining fields and submit.') }}</p>
+                    </div>
+                @endif
+
                 {{-- Name & Email --}}
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="name" class="block text-sm font-medium text-gray-700">{{ __('Your Name') }} <span class="text-red-500">*</span></label>
-                        <input type="text" name="name" id="name" value="{{ old('name') }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <input type="text" name="name" id="name" value="{{ old('name', $prefill['name'] ?? '') }}" required @if($lock('name')) readonly @endif class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm @if($lock('name')) {{ $lockedInputClass }} @endif">
                         @error('name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                     </div>
                     <div>
                         <label for="email" class="block text-sm font-medium text-gray-700">{{ __('Email Address') }} <span class="text-red-500">*</span></label>
-                        <input type="email" name="email" id="email" value="{{ old('email') }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <input type="email" name="email" id="email" value="{{ old('email', $prefill['email'] ?? '') }}" required @if($lock('email')) readonly @endif class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm @if($lock('email')) {{ $lockedInputClass }} @endif">
                         @error('email') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                    </div>
-                </div>
-
-                {{-- Subject with KB Suggestions --}}
-                <div x-data="kbSuggestions()">
-                    <label for="subject" class="block text-sm font-medium text-gray-700">{{ __('Subject') }} <span class="text-red-500">*</span></label>
-                    <input type="text" name="subject" id="subject" value="{{ old('subject') }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="{{ __('Brief summary of your issue') }}" x-on:input.debounce.400ms="search($event.target.value)">
-                    @error('subject') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-
-                    <div x-show="articles.length > 0" x-cloak class="mt-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
-                        <p class="text-xs font-medium text-indigo-700 mb-2">{{ __('These articles may answer your question:') }}</p>
-                        <template x-for="article in articles" :key="article.id">
-                            <a :href="article.url" target="_blank" class="block text-sm text-indigo-600 hover:text-indigo-800 py-1">
-                                <span x-text="article.title"></span>
-                            </a>
-                        </template>
                     </div>
                 </div>
 
@@ -60,27 +59,45 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label for="department_id" class="block text-sm font-medium text-gray-700">{{ __('Department') }} <span class="text-red-500">*</span></label>
-                            <select name="department_id" id="department_id" required x-model="departmentId" @change="onDepartmentChange()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <select name="department_id" id="department_id" x-model="departmentId" @change="onDepartmentChange()" @if($lock('department_id')) disabled @else required @endif class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm @if($lock('department_id')) {{ $lockedInputClass }} @endif">
                                 <option value="">{{ __('Select department') }}</option>
                                 @foreach($departments as $department)
                                     <option value="{{ $department->id }}">{{ $department->name }}</option>
                                 @endforeach
                             </select>
+                            @if($lock('department_id'))
+                                <input type="hidden" name="department_id" value="{{ $prefill['department_id'] }}">
+                            @endif
                             @error('department_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
                         <div>
                             <label for="category_id" class="block text-sm font-medium text-gray-700">{{ __('Category') }}</label>
-                            <select name="category_id" id="category_id" x-model="categoryId" @change="onCategoryChange()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <select name="category_id" id="category_id" x-model="categoryId" @change="onCategoryChange()" @if($lock('category_id')) disabled @endif class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm @if($lock('category_id')) {{ $lockedInputClass }} @endif">
                                 <option value="">{{ __('Select category') }}</option>
                                 <template x-for="cat in categories" :key="cat.id">
                                     <option :value="cat.id" x-text="cat.name"></option>
                                 </template>
                             </select>
+                            @if($lock('category_id'))
+                                <input type="hidden" name="category_id" value="{{ $prefill['category_id'] }}">
+                            @endif
                             @error('category_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
                     </div>
 
                     {{-- Products / Services (Multi-select) --}}
+                    @if($lock('product_ids'))
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-700">{{ __('Products / Services') }}</label>
+                        <div class="mt-1 w-full rounded-md border border-gray-300 {{ $lockedInputClass }} py-2 px-3 text-sm">
+                            {{ implode(', ', $lockedProductNames) }}
+                        </div>
+                        @foreach($prefill['product_ids'] as $productId)
+                            <input type="hidden" name="product_ids[]" value="{{ $productId }}">
+                        @endforeach
+                        @error('product_ids') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                    @else
                     <div class="mt-4 relative" x-show="products.length > 0" x-cloak>
                         <label class="block text-sm font-medium text-gray-700">{{ __('Products / Services') }}</label>
                         <button type="button" @click="productOpen = !productOpen" class="mt-1 relative w-full cursor-pointer rounded-md border border-gray-300 bg-white py-2 pl-3 pr-10 text-left shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm">
@@ -100,6 +117,23 @@
                             </template>
                         </div>
                         @error('product_ids') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                    @endif
+                </div>
+
+                {{-- Subject with KB Suggestions --}}
+                <div x-data="kbSuggestions()">
+                    <label for="subject" class="block text-sm font-medium text-gray-700">{{ __('Subject') }} <span class="text-red-500">*</span></label>
+                    <input type="text" name="subject" id="subject" value="{{ old('subject', $prefill['subject'] ?? '') }}" required @if($lock('subject')) readonly @endif class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm @if($lock('subject')) {{ $lockedInputClass }} @endif" placeholder="{{ __('Brief summary of your issue') }}" x-on:input.debounce.400ms="search($event.target.value)">
+                    @error('subject') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+
+                    <div x-show="articles.length > 0" x-cloak class="mt-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+                        <p class="text-xs font-medium text-indigo-700 mb-2">{{ __('These articles may answer your question:') }}</p>
+                        <template x-for="article in articles" :key="article.id">
+                            <a :href="article.url" target="_blank" class="block text-sm text-indigo-600 hover:text-indigo-800 py-1">
+                                <span x-text="article.title"></span>
+                            </a>
+                        </template>
                     </div>
                 </div>
 
@@ -218,11 +252,11 @@
     <script>
         function cascadingSelects() {
             return {
-                departmentId: '{{ old('department_id', '') }}',
-                categoryId: '{{ old('category_id', '') }}',
+                departmentId: '{{ old('department_id', $prefill['department_id'] ?? '') }}',
+                categoryId: '{{ old('category_id', $prefill['category_id'] ?? '') }}',
                 categories: [],
                 products: [],
-                selectedProductIds: {!! json_encode(array_map('intval', old('product_ids', []))) !!},
+                selectedProductIds: {!! json_encode(array_map('intval', old('product_ids', $prefill['product_ids'] ?? []))) !!},
                 productOpen: false,
                 async init() {
                     if (this.departmentId) {
