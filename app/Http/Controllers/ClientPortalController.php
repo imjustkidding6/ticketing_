@@ -354,7 +354,7 @@ class ClientPortalController extends Controller
     /**
      * Public submit ticket form (no auth required, under /{slug}/submit-ticket).
      */
-    public function publicSubmitForm(string $slug): View
+    public function publicSubmitForm(Request $request, string $slug): View
     {
         $tenant = $this->resolvePublicTenant($slug);
         $this->abortIfStarter($tenant);
@@ -379,7 +379,105 @@ class ClientPortalController extends Controller
             && AppSetting::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('key', 'ai_portal_widget_enabled')->value('value') === '1';
         $aiPolishUrl = $aiPolish ? route('tenant.ai-polish', ['slug' => $tenant->slug]) : null;
 
-        return view('tenant.submit-ticket', compact('tenant', 'departments', 'categories', 'products', 'kbSearchUrl', 'allowAttachments', 'aiPolishUrl'));
+        // Deep-link prefill: a field passed in the query string (by name or id) is
+        // pre-filled and locked (read-only) so an external system can hand off a
+        // customer to a ready-made form. See resolveSubmitPrefill().
+        [$prefill, $locked] = $this->resolveSubmitPrefill($request, $departments, $categories, $products);
+
+        return view('tenant.submit-ticket', compact('tenant', 'departments', 'categories', 'products', 'kbSearchUrl', 'allowAttachments', 'aiPolishUrl', 'prefill', 'locked'));
+    }
+
+    /**
+     * Resolve query-string prefill values for the public submit form.
+     *
+     * Each supported field present in the URL is returned in $prefill (selects
+     * resolved to ids) and flagged in $locked so the view can render it read-only.
+     * Select values may be passed as a name (case-insensitive) or a numeric id.
+     *
+     * @return array{0: array<string, mixed>, 1: array<string, bool>}
+     */
+    private function resolveSubmitPrefill(Request $request, $departments, $categories, $products): array
+    {
+        $prefill = [
+            'name' => null,
+            'email' => null,
+            'subject' => null,
+            'department_id' => null,
+            'category_id' => null,
+            'product_ids' => [],
+        ];
+        $locked = [];
+
+        foreach (['name', 'email', 'subject'] as $field) {
+            $value = $request->query($field);
+            if (is_string($value) && trim($value) !== '') {
+                $prefill[$field] = trim($value);
+                $locked[$field] = true;
+            }
+        }
+
+        $deptParam = $request->query('department', $request->query('department_id'));
+        if (filled($deptParam)) {
+            $dept = $this->matchByIdOrName($departments, $deptParam);
+            if ($dept) {
+                $prefill['department_id'] = $dept->id;
+                $locked['department_id'] = true;
+            }
+        }
+
+        $catParam = $request->query('category', $request->query('category_id'));
+        if (filled($catParam)) {
+            $pool = $prefill['department_id']
+                ? $categories->where('department_id', $prefill['department_id'])
+                : $categories;
+            $cat = $this->matchByIdOrName($pool, $catParam);
+            if ($cat) {
+                $prefill['category_id'] = $cat->id;
+                $locked['category_id'] = true;
+            }
+        }
+
+        // Products accept several aliases (PHP turns "Product and services" into
+        // "Product_and_services") and may be comma-separated or repeated.
+        $prodParam = $request->query('product_ids',
+            $request->query('products',
+                $request->query('product',
+                    $request->query('Product_and_services'))));
+        if (filled($prodParam)) {
+            $tokens = is_array($prodParam) ? $prodParam : explode(',', (string) $prodParam);
+            $ids = [];
+            foreach ($tokens as $token) {
+                $match = $this->matchByIdOrName($products, $token);
+                if ($match) {
+                    $ids[] = $match->id;
+                }
+            }
+            if ($ids) {
+                $prefill['product_ids'] = array_values(array_unique($ids));
+                $locked['product_ids'] = true;
+            }
+        }
+
+        return [$prefill, $locked];
+    }
+
+    /**
+     * Find a model in a collection by numeric id or case-insensitive name match.
+     */
+    private function matchByIdOrName($collection, $value)
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (ctype_digit($value) && ($byId = $collection->firstWhere('id', (int) $value))) {
+            return $byId;
+        }
+
+        $needle = mb_strtolower($value);
+
+        return $collection->first(fn ($item) => mb_strtolower((string) $item->name) === $needle);
     }
 
     /**

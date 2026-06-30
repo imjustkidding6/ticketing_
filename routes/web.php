@@ -1,19 +1,23 @@
 <?php
 
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
+use App\Http\Controllers\Admin\BugReportController as AdminBugReportController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DistributorController;
 use App\Http\Controllers\Admin\LicenseController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\SettingsController as AdminSettingsController;
 use App\Http\Controllers\Admin\SystemAnnouncementController;
-use App\Http\Controllers\Admin\TenantFeedbackController as AdminTenantFeedbackController;
 use App\Http\Controllers\Admin\TenantController as AdminTenantController;
+use App\Http\Controllers\Admin\TenantFeedbackController as AdminTenantFeedbackController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\GitHubWebhookController;
 use App\Http\Controllers\HealthCheckController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\TenantController;
+use App\Models\Tenant;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
@@ -21,13 +25,16 @@ Route::get('/', HomeController::class);
 
 Route::get('/health', HealthCheckController::class)->name('health');
 
-Route::get('/register/check-slug', function (\Illuminate\Http\Request $request) {
+// Inbound GitHub webhooks for the AI Programmer loop (signature-authenticated).
+Route::post('/webhooks/github', [GitHubWebhookController::class, 'handle'])->name('webhooks.github');
+
+Route::get('/register/check-slug', function (Request $request) {
     $slug = Str::slug($request->query('slug', ''));
     $reserved = ['admin', 'www', 'mail', 'api', 'portal', 'app', 'support', 'help', 'status', 'login', 'register', 'profile', 'up', 'logout'];
     $available = $slug
         && strlen($slug) >= 3
         && ! in_array($slug, $reserved)
-        && ! \App\Models\Tenant::where('slug', $slug)->exists();
+        && ! Tenant::where('slug', $slug)->exists();
 
     return response()->json(['available' => $available]);
 })->middleware('guest')->name('register.check-slug');
@@ -37,15 +44,16 @@ Route::get('/no-tenant', function () {
 })->middleware(['auth'])->name('dashboard.no-tenant');
 
 Route::get('/{slug}/license-expired', function (string $slug) {
-    $tenant = \App\Models\Tenant::where('slug', $slug)->firstOrFail();
+    $tenant = Tenant::where('slug', $slug)->firstOrFail();
     abort_unless(auth()->user()?->belongsToTenant($tenant), 403);
+
     return view('tenant.license-expired', [
-        'tenant'  => $tenant,
+        'tenant' => $tenant,
         'license' => $tenant->license,
     ]);
 })->where('slug', '[a-z0-9][a-z0-9\-]*[a-z0-9]')
-  ->middleware(['auth'])
-  ->name('license.expired');
+    ->middleware(['auth'])
+    ->name('license.expired');
 
 Route::middleware('auth')->group(function () {
     Route::get('/tenant/select', [TenantController::class, 'select'])->name('tenant.select');
@@ -100,6 +108,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('feedback/{feedback}', [AdminTenantFeedbackController::class, 'show'])->name('feedback.show');
     Route::patch('feedback/{feedback}', [AdminTenantFeedbackController::class, 'update'])->name('feedback.update');
     Route::delete('feedback/{feedback}', [AdminTenantFeedbackController::class, 'destroy'])->name('feedback.destroy');
+
+    // AI Bug Reports → AI Programmer
+    Route::get('bugs', [AdminBugReportController::class, 'index'])->name('bugs.index');
+    Route::get('bugs/{bug}', [AdminBugReportController::class, 'show'])->name('bugs.show');
+    Route::post('bugs/{bug}/fix', [AdminBugReportController::class, 'fix'])->name('bugs.fix');
+    Route::post('bugs/{bug}/status', [AdminBugReportController::class, 'updateStatus'])->name('bugs.status');
 });
 
 require __DIR__.'/auth.php';

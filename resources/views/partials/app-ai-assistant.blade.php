@@ -61,67 +61,31 @@
 
         {{-- Chat view --}}
         <div x-show="view === 'chat'" x-ref="scroll" class="flex-1 space-y-3 overflow-y-auto bg-gray-50 px-4 py-4">
-            <template x-for="(m, i) in messages" :key="i">
+            <template x-for="(m, i) in messages" :key="m.uid ?? i">
                 <div :class="m.role === 'user' ? 'flex justify-end' : 'flex items-end justify-start gap-2'">
                     <template x-if="m.role !== 'user'">
                         <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
                         </span>
                     </template>
-                    <div :class="m.role === 'user' ? 'rounded-2xl rounded-br-sm bg-indigo-600 px-3 py-2 text-sm text-white' : 'rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-gray-800 ring-1 ring-gray-200'"
+                    <div :class="m.role === 'user' ? 'rounded-2xl rounded-br-sm bg-indigo-600 px-3 py-2 text-sm text-white' : (m.system ? 'rounded-2xl rounded-bl-sm bg-indigo-50 px-3 py-2 text-sm text-indigo-900 ring-1 ring-indigo-200' : 'rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-gray-800 ring-1 ring-gray-200')"
                          class="max-w-[85%]">
                         <template x-if="m.image">
                             <img :src="m.image" alt="attachment" class="mb-1 max-h-48 max-w-full rounded-lg object-contain">
                         </template>
-                        <div x-show="m.text" class="whitespace-pre-line break-words" x-text="m.text"></div>
+                        <template x-if="m.role === 'user'">
+                            <div x-show="m.text" class="whitespace-pre-line break-words" x-text="m.text"></div>
+                        </template>
+                        <template x-if="m.role !== 'user'">
+                            <div x-show="m.text" class="nx-prose break-words" x-html="md(m.text)"></div>
+                        </template>
+                        {{-- Rich chart, rendered with ApexCharts (axes, tooltips, legend) --}}
                         <template x-if="m.chart">
-                            <div class="mt-2 w-56 max-w-full">
+                            <div class="mt-2 w-full">
                                 <p x-show="m.chart.title" class="mb-1 text-xs font-semibold text-gray-700" x-text="m.chart.title"></p>
-
-                                <!-- Bar -->
-                                <template x-if="(m.chart.type || 'bar') === 'bar'">
-                                    <div class="space-y-1">
-                                        <template x-for="(d, j) in m.chart.data" :key="j">
-                                            <div class="flex items-center gap-2 text-xs">
-                                                <span class="w-16 shrink-0 truncate text-gray-600" x-text="d.label"></span>
-                                                <div class="h-3 flex-1 rounded bg-gray-100">
-                                                    <div class="h-3 rounded bg-indigo-500" :style="'width:' + barPct(m.chart, d) + '%'"></div>
-                                                </div>
-                                                <span class="w-7 shrink-0 text-right tabular-nums text-gray-700" x-text="d.value"></span>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </template>
-
-                                <!-- Pie (CSS conic-gradient; avoids the Alpine x-for-in-SVG namespace bug) -->
-                                <template x-if="m.chart.type === 'pie' || m.chart.type === 'donut'">
-                                    <div class="flex items-center gap-3">
-                                        <div class="h-24 w-24 shrink-0 rounded-full ring-1 ring-gray-200" :style="'background:' + pieGradient(m.chart)"></div>
-                                        <div class="min-w-0 space-y-0.5">
-                                            <template x-for="(s, j) in pieSlices(m.chart)" :key="j">
-                                                <div class="flex items-center gap-1.5 text-xs">
-                                                    <span class="h-2 w-2 shrink-0 rounded-full" :style="'background:' + s.color"></span>
-                                                    <span class="truncate text-gray-600" x-text="s.label"></span>
-                                                    <span class="shrink-0 tabular-nums text-gray-400" x-text="s.pct + '%'"></span>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                <!-- Line (static polyline renders reliably inside SVG) -->
-                                <template x-if="m.chart.type === 'line'">
-                                    <div>
-                                        <svg viewBox="0 0 100 40" class="h-24 w-full" preserveAspectRatio="none">
-                                            <polyline :points="linePoints(m.chart)" fill="none" stroke="#6366f1" stroke-width="1.5"
-                                                      vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"></polyline>
-                                        </svg>
-                                        <div class="mt-1 flex justify-between text-[10px] text-gray-400">
-                                            <span x-text="(m.chart.data[0] || {}).label"></span>
-                                            <span x-text="(m.chart.data[m.chart.data.length - 1] || {}).label"></span>
-                                        </div>
-                                    </div>
-                                </template>
+                                <div class="overflow-hidden rounded-lg bg-white p-1 ring-1 ring-gray-100"
+                                     :style="'height:' + chartH(m.chart) + 'px'"
+                                     x-init="$nextTick(() => renderChart($el, m.chart))"></div>
                             </div>
                         </template>
                         {{-- Save a helpful answer to learned knowledge --}}
@@ -200,6 +164,11 @@
         <svg x-show="!open" class="relative h-7 w-7 transition group-hover:rotate-12" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
         <svg x-show="open" x-cloak class="relative h-7 w-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
         <span x-show="!open" class="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-white"></span>
+        {{-- Alert dot when there's a bug-status update to read --}}
+        <span x-show="!open && hasBugUpdates" x-cloak class="absolute -left-0.5 -top-0.5 flex h-3.5 w-3.5">
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
+            <span class="relative inline-flex h-3.5 w-3.5 rounded-full bg-amber-500 ring-2 ring-white"></span>
+        </span>
     </button>
 </div>
 
@@ -209,6 +178,7 @@
             open: false,
             view: 'chat',
             messages: [],
+            _uidSeq: 0,
             conversations: [],
             currentId: null,
             input: '',
@@ -225,11 +195,43 @@
             height: parseInt(localStorage.getItem('ai_chat_height')) || 512,
             resizing: false,
             learnEnabled: {{ (bool) \App\Models\AppSetting::get('ai_learn_from_chat', false) ? 'true' : 'false' }},
+            pendingBugUpdates: [],
+            hasBugUpdates: false,
             messageUrl: '{{ route('assistant.message') }}',
             learnUrl: '{{ route('assistant.learn') }}',
+            bugUpdatesUrl: '{{ route('assistant.bug-updates') }}',
+            bugAckUrl: '{{ route('assistant.bug-updates.ack') }}',
             listUrl: '{{ route('assistant.conversations') }}',
             conversationUrl: '{{ route('assistant.conversation', ['conversation' => 'CONV_ID']) }}',
             csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
+
+            init() {
+                // Check for bug-status updates so the launcher can show an alert dot.
+                this.fetchBugUpdates();
+            },
+
+            async fetchBugUpdates() {
+                try {
+                    const res = await fetch(this.bugUpdatesUrl, { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json();
+                    this.pendingBugUpdates = data.updates || [];
+                    this.hasBugUpdates = this.pendingBugUpdates.length > 0;
+                } catch (e) { /* ignore */ }
+            },
+
+            // Surface reported-bug updates as assistant messages, then acknowledge them.
+            async surfaceBugUpdates() {
+                if (! this.pendingBugUpdates.length) return;
+                for (const u of this.pendingBugUpdates) {
+                    this.messages.push(this.tag({ role: 'assistant', text: u.message, system: true }));
+                }
+                this.pendingBugUpdates = [];
+                this.hasBugUpdates = false;
+                this.$nextTick(() => this.scrollToEnd());
+                try {
+                    await fetch(this.bugAckUrl, { method: 'POST', headers: { 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' } });
+                } catch (e) { /* ignore */ }
+            },
 
             async toggle() {
                 this.open = !this.open;
@@ -237,7 +239,10 @@
                     this.booted = true;
                     await this.boot();
                 }
-                if (this.open && this.view === 'chat') this.$nextTick(() => this.scrollToEnd());
+                if (this.open) {
+                    await this.surfaceBugUpdates();
+                    if (this.view === 'chat') this.$nextTick(() => this.scrollToEnd());
+                }
             },
 
             async boot() {
@@ -250,7 +255,7 @@
             },
 
             greet() {
-                this.messages.push({ role: 'assistant', text: @js(__('Hi :name! 👋 I\'m Nexus AI, your AI teammate. I can dig through your tickets, draw charts, draft replies, and learn from how your team has solved problems before. What can I help you with?', ['name' => Auth::user()->name])) });
+                this.messages.push(this.tag({ role: 'assistant', text: @js(__('Hi :name! 👋 I\'m Nexus AI, your AI teammate. I can dig through your tickets, draw charts, draft replies, and learn from how your team has solved problems before. What can I help you with?', ['name' => Auth::user()->name])) }));
             },
 
             suggest(prompt) {
@@ -304,7 +309,7 @@
                 const wasNew = !this.currentId;
                 const isImage = file && (file.type || '').startsWith('image/');
                 const preview = isImage ? URL.createObjectURL(file) : null;
-                this.messages.push({ role: 'user', text: text + (file && !isImage ? '\n📎 ' + file.name : ''), image: preview });
+                this.messages.push(this.tag({ role: 'user', text: text + (file && !isImage ? '\n📎 ' + file.name : ''), image: preview }));
                 this.input = '';
                 this.file = null;
                 if (this.$refs.file) this.$refs.file.value = '';
@@ -335,7 +340,7 @@
                     this.pushAssistant(data.reply || @js(__('Sorry, something went wrong.')));
                     if (wasNew) this.loadConversations();
                 } catch (e) {
-                    this.messages.push({ role: 'assistant', text: @js(__('Sorry, I could not reach the assistant. Please try again.')) });
+                    this.messages.push(this.tag({ role: 'assistant', text: @js(__('Sorry, I could not reach the assistant. Please try again.')) }));
                 } finally {
                     this.loading = false;
                     this.$nextTick(() => this.scrollToEnd());
@@ -366,63 +371,64 @@
                 }
             },
 
-            // Extract a ```chart ...``` block (if any) from assistant text and parse it.
+            // Pull a chart spec out of the assistant text so its JSON never shows to the user.
+            // Handles a ```chart / ```json fenced block, or a bare chart-shaped JSON object
+            // (models sometimes forget the fence). Accepts single-series (data) or multi-series (series).
             parseChart(text) {
-                const match = (text || '').match(/```chart\s*([\s\S]*?)```/i);
-                if (!match) return { text: text || '', chart: null };
-                let chart = null;
-                try { const c = JSON.parse(match[1].trim()); if (c && Array.isArray(c.data)) chart = c; } catch (e) { /* ignore */ }
-                return { text: (text.replace(match[0], '').trim()), chart };
+                text = text || '';
+                const fence = text.match(/```(?:chart|json)?\s*([\s\S]*?)```/i);
+                if (fence) {
+                    const chart = this.tryChart(fence[1]);
+                    if (chart) return { text: text.replace(fence[0], '').trim(), chart };
+                }
+                for (let i = 0; i < text.length; i++) {
+                    if (text[i] !== '{') continue;
+                    const block = this.balancedObject(text, i);
+                    if (!block) break;
+                    const chart = this.tryChart(block);
+                    if (chart) return { text: (text.slice(0, i) + text.slice(i + block.length)).trim(), chart };
+                }
+                return { text: text.trim(), chart: null };
+            },
+            // Parse a candidate string; return it only if it has a chart shape.
+            tryChart(raw) {
+                try {
+                    const c = JSON.parse((raw || '').trim());
+                    if (c && c.type && (Array.isArray(c.data) || Array.isArray(c.series))) return c;
+                } catch (e) { /* not a chart */ }
+                return null;
+            },
+            // Return the balanced {...} substring beginning at `start` (brace-aware, string-aware).
+            balancedObject(text, start) {
+                let depth = 0, inStr = false, esc = false;
+                for (let i = start; i < text.length; i++) {
+                    const ch = text[i];
+                    if (inStr) {
+                        if (esc) esc = false;
+                        else if (ch === '\\') esc = true;
+                        else if (ch === '"') inStr = false;
+                    } else if (ch === '"') inStr = true;
+                    else if (ch === '{') depth++;
+                    else if (ch === '}' && --depth === 0) return text.slice(start, i + 1);
+                }
+                return null;
             },
             pushAssistant(text) {
                 const p = this.parseChart(text || '');
-                this.messages.push({ role: 'assistant', text: p.text, chart: p.chart });
+                this.messages.push(this.tag({ role: 'assistant', text: p.text, chart: p.chart }));
             },
             hydrate(messages) {
                 return (messages || []).map((m) => {
-                    if (m.role === 'assistant') { const p = this.parseChart(m.text || ''); return { role: 'assistant', text: p.text, chart: p.chart }; }
-                    return { role: m.role, text: m.text };
+                    if (m.role === 'assistant') { const p = this.parseChart(m.text || ''); return this.tag({ role: 'assistant', text: p.text, chart: p.chart }); }
+                    return this.tag({ role: m.role, text: m.text });
                 });
             },
-            barPct(chart, d) {
-                const max = Math.max(...chart.data.map((x) => Number(x.value) || 0), 1);
-                return Math.round(((Number(d.value) || 0) / max) * 100);
-            },
-            chartColors() {
-                return ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6', '#a855f7', '#ec4899', '#14b8a6'];
-            },
-            // Pie legend rows (label + color + percentage of total).
-            pieSlices(chart) {
-                const data = chart.data || [];
-                const total = data.reduce((s, x) => s + (Number(x.value) || 0), 0) || 1;
-                const colors = this.chartColors();
-                return data.map((d, i) => ({
-                    label: d.label, value: d.value,
-                    pct: Math.round(((Number(d.value) || 0) / total) * 100),
-                    color: colors[i % colors.length],
-                }));
-            },
-            // CSS conic-gradient string drawing each slice as a wedge.
-            pieGradient(chart) {
-                const data = chart.data || [];
-                const total = data.reduce((s, x) => s + (Number(x.value) || 0), 0) || 1;
-                const colors = this.chartColors();
-                let acc = 0;
-                const stops = data.map((d, i) => {
-                    const start = acc;
-                    acc += ((Number(d.value) || 0) / total) * 100;
-                    return `${colors[i % colors.length]} ${start}% ${acc}%`;
-                });
-                return `conic-gradient(${stops.join(', ')})`;
-            },
-            linePoints(chart) {
-                const data = chart.data || [];
-                const n = data.length;
-                const max = Math.max(...data.map((x) => Number(x.value) || 0), 1);
-                return data
-                    .map((d, i) => `${n <= 1 ? 50 : (i / (n - 1)) * 100},${38 - ((Number(d.value) || 0) / max) * 34}`)
-                    .join(' ');
-            },
+            // Markdown + chart rendering via the shared window.NexusChat helpers.
+            md(t) { return window.NexusChat ? window.NexusChat.renderMarkdown(t) : (t || ''); },
+            chartH(c) { return window.NexusChat ? window.NexusChat.chartHeight(c) : 220; },
+            renderChart(el, c) { if (window.NexusChat) window.NexusChat.renderApexChart(el, c); },
+            // Stable per-message id so Alpine recreates chart nodes when switching conversations.
+            tag(m) { m.uid = ++this._uidSeq; return m; },
 
             startResize(e, axis = 'x') {
                 this.resizing = true;

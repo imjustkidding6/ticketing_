@@ -17,6 +17,23 @@ class OpenAiService
     }
 
     /**
+     * Whether the given model is a reasoning model (gpt-5 family or o-series),
+     * which uses a different request-parameter contract. The non-reasoning chat
+     * variant `gpt-5-chat-latest` is intentionally excluded.
+     */
+    private function isReasoningModel(string $model): bool
+    {
+        $model = strtolower($model);
+
+        if (str_starts_with($model, 'gpt-5-chat')) {
+            return false;
+        }
+
+        return str_starts_with($model, 'gpt-5')
+            || (bool) preg_match('/^o[1-9]/', $model);
+    }
+
+    /**
      * Call /chat/completions and return the decoded response.
      *
      * @param  array<int, array<string, mixed>>  $messages
@@ -32,11 +49,29 @@ class OpenAiService
             throw new OpenAiException('OpenAI API key is not configured.');
         }
 
+        $model = (string) ($options['model'] ?? config('services.openai.model', 'gpt-4o-mini'));
+
         $payload = array_merge([
-            'model' => config('services.openai.model', 'gpt-4o-mini'),
+            'model' => $model,
             'temperature' => 0.3,
             'max_tokens' => 800,
         ], $options, ['messages' => $messages]);
+
+        // Reasoning models (gpt-5 family, o-series) have a different parameter contract:
+        // they reject `temperature` (only the default is allowed) and use
+        // `max_completion_tokens` instead of `max_tokens`. They also spend hidden
+        // reasoning tokens against that budget, so give them generous headroom.
+        if ($this->isReasoningModel($model)) {
+            $requested = (int) ($payload['max_tokens'] ?? 0);
+            $floor = (int) config('services.openai.max_output_tokens', 6000);
+            $payload['max_completion_tokens'] = max($requested, $floor);
+            unset($payload['max_tokens'], $payload['temperature']);
+
+            $effort = config('services.openai.reasoning_effort');
+            if (filled($effort)) {
+                $payload['reasoning_effort'] = $effort;
+            }
+        }
 
         if ($tools !== []) {
             $payload['tools'] = $tools;

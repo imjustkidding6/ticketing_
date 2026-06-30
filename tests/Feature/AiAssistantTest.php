@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\PlanFeature;
 use App\Models\AppSetting;
+use App\Models\BugReport;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\Client;
@@ -15,12 +16,14 @@ use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Notifications\BugReportFiled;
 use App\Services\PageContextResolver;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class AiAssistantTest extends TestCase
@@ -296,6 +299,147 @@ class AiAssistantTest extends TestCase
         $this->postJson($this->tenantUrl('/assistant/learn'), [
             'question' => 'q', 'answer' => 'a',
         ])->assertNotFound();
+    }
+
+    public function test_report_bug_tool_files_a_bug_and_notifies_staff(): void
+    {
+        Notification::fake();
+
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $user = $this->setupTenantContext($tenant);
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->fakeOpenAi([
+            $this->toolCall('report_bug', [
+                'title' => 'Saving a ticket throws a 500',
+                'description' => 'Clicking Save on the ticket form returns a 500 error.',
+                'severity' => 'high',
+            ]),
+            $this->assistantText('Thanks — I logged that as BUG-1 and the team has been notified.'),
+        ]);
+
+        $this->postJson($this->tenantUrl('/assistant/message'), [
+            'message' => 'There is a bug: saving a ticket throws a 500.',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('bug_reports', [
+            'tenant_id' => $tenant->id,
+            'reported_by' => $user->id,
+            'title' => 'Saving a ticket throws a 500',
+            'severity' => 'high',
+            'status' => 'new',
+        ]);
+        Notification::assertSentTo($admin, BugReportFiled::class);
+    }
+
+    public function test_admin_can_send_bug_to_ai_programmer(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $tenant = $this->enterpriseTenant();
+        $bug = BugReport::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'title' => 'x', 'description' => 'y', 'severity' => 'medium', 'status' => 'new',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.bugs.fix', $bug->id))->assertRedirect();
+
+        $this->assertEquals('escalated', $bug->fresh()->status);
+    }
+
+    public function test_non_admin_cannot_access_bug_queue(): void
+    {
+        $user = User::factory()->create(['is_admin' => false]);
+
+        $this->actingAs($user)->get('/admin/bugs')->assertForbidden();
+    }
+
+    public function test_admin_fix_files_a_github_issue_when_configured(): void
+    {
+        config(['services.github.token' => 'gh-test', 'services.github.repo' => 'CliqueHA-Information-Services/ticketing']);
+        Http::fake(['api.github.com/*' => Http::response(['number' => 77, 'html_url' => 'https://github.com/x/y/issues/77'], 201)]);
+
+        $admin = User::factory()->create(['is_admin' => true]);
+        $tenant = $this->enterpriseTenant();
+        $bug = BugReport::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'title' => 'x', 'description' => 'y', 'severity' => 'high', 'status' => 'new',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.bugs.fix', $bug->id))->assertRedirect();
+
+        $bug->refresh();
+        $this->assertEquals('escalated', $bug->status);
+        $this->assertEquals(77, $bug->github_issue_number);
+        Http::assertSent(fn ($r) => str_contains($r->url(), 'api.github.com') && str_contains($r->url(), '/issues'));
+    }
+
+    public function test_github_webhook_moves_bug_to_pr_opened_then_merged(): void
+    {
+        config(['services.github.webhook_secret' => 'whsec']);
+        $tenant = $this->enterpriseTenant();
+        $bug = BugReport::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'title' => 'x', 'description' => 'y', 'severity' => 'medium',
+            'status' => 'escalated', 'github_issue_number' => 42,
+        ]);
+
+        // PR opened referencing the issue.
+        $opened = json_encode(['action' => 'opened', 'pull_request' => [
+            'title' => 'Fix export bug', 'body' => 'Closes #42', 'html_url' => 'https://github.com/x/y/pull/9', 'merged' => false,
+        ]]);
+        $this->postWebhook($opened)->assertOk();
+        $this->assertEquals('pr_opened', $bug->fresh()->status);
+        $this->assertEquals('https://github.com/x/y/pull/9', $bug->fresh()->github_pr_url);
+
+        // PR merged.
+        $merged = json_encode(['action' => 'closed', 'pull_request' => [
+            'title' => 'Fix export bug', 'body' => 'Closes #42', 'html_url' => 'https://github.com/x/y/pull/9', 'merged' => true,
+        ]]);
+        $this->postWebhook($merged)->assertOk();
+        $this->assertEquals('merged', $bug->fresh()->status);
+    }
+
+    public function test_github_webhook_rejects_a_bad_signature(): void
+    {
+        config(['services.github.webhook_secret' => 'whsec']);
+
+        $payload = json_encode(['action' => 'opened', 'pull_request' => ['body' => 'Closes #1', 'merged' => false]]);
+        $this->call('POST', '/webhooks/github', [], [], [], [
+            'HTTP_X_GITHUB_EVENT' => 'pull_request',
+            'HTTP_X_HUB_SIGNATURE_256' => 'sha256=deadbeef',
+            'CONTENT_TYPE' => 'application/json',
+        ], $payload)->assertForbidden();
+    }
+
+    /** POST a signed pull_request webhook payload. */
+    private function postWebhook(string $payload): TestResponse
+    {
+        $sig = 'sha256='.hash_hmac('sha256', $payload, 'whsec');
+
+        return $this->call('POST', '/webhooks/github', [], [], [], [
+            'HTTP_X_GITHUB_EVENT' => 'pull_request',
+            'HTTP_X_HUB_SIGNATURE_256' => $sig,
+            'CONTENT_TYPE' => 'application/json',
+        ], $payload);
+    }
+
+    public function test_bug_status_updates_surface_to_the_reporter(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $user = $this->setupTenantContext($tenant);
+        $bug = BugReport::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'reported_by' => $user->id,
+            'title' => 'x', 'description' => 'y', 'severity' => 'medium', 'status' => 'pr_opened',
+        ]);
+
+        $this->getJson($this->tenantUrl('/assistant/bug-updates'))
+            ->assertOk()
+            ->assertJsonFragment(['reference' => 'BUG-'.$bug->id, 'status' => 'pr_opened']);
+
+        $this->postJson($this->tenantUrl('/assistant/bug-updates/ack'))->assertOk();
+        $this->assertEquals('pr_opened', $bug->fresh()->user_notified_status);
+
+        // Already acknowledged → no longer surfaced.
+        $this->getJson($this->tenantUrl('/assistant/bug-updates'))->assertOk()->assertJsonCount(0, 'updates');
     }
 
     public function test_page_context_resolver_reads_the_current_page(): void

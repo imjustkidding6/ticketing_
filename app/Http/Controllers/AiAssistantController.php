@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\OpenAiException;
 use App\Models\AppSetting;
+use App\Models\BugReport;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\LearnedSnippet;
@@ -173,6 +174,47 @@ class AiAssistantController extends Controller
         $snippet->delete(); // tenant-scoped by the global scope
 
         return back()->with('success', 'Learned answer removed.');
+    }
+
+    /**
+     * Status updates on bugs THIS user reported, to surface inside the assistant.
+     * Non-consuming: returns updates whose status hasn't been acknowledged yet.
+     */
+    public function bugUpdates(Request $request): JsonResponse
+    {
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+
+        $bugs = BugReport::where('tenant_id', $tenant->id)
+            ->where('reported_by', $request->user()->id)
+            ->whereIn('status', BugReport::USER_FACING_STATUSES)
+            ->where(fn ($q) => $q->whereNull('user_notified_status')->orWhereColumn('user_notified_status', '!=', 'status'))
+            ->latest('updated_at')
+            ->limit(10)
+            ->get();
+
+        return response()->json([
+            'updates' => $bugs->map(fn (BugReport $b) => [
+                'reference' => $b->reference(),
+                'status' => $b->status,
+                'message' => $b->userFacingMessage(),
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * Acknowledge the surfaced bug updates so they aren't shown again.
+     */
+    public function ackBugUpdates(Request $request): JsonResponse
+    {
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+
+        BugReport::where('tenant_id', $tenant->id)
+            ->where('reported_by', $request->user()->id)
+            ->whereIn('status', BugReport::USER_FACING_STATUSES)
+            ->get()
+            ->each(fn (BugReport $b) => $b->update(['user_notified_status' => $b->status]));
+
+        return response()->json(['ok' => true]);
     }
 
     /**

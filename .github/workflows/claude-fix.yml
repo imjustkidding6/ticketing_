@@ -1,0 +1,108 @@
+name: AI Programmer (Claude Code)
+
+# When the app files a bug as an issue labelled "ai-fix", Claude Code reads the
+# issue, implements a fix on a branch, runs the test suite, and opens a PR.
+# A human reviews + merges; the normal deploy.yml then ships it. Never auto-deploys.
+#
+# Requires repo secret ANTHROPIC_API_KEY. Inputs follow anthropics/claude-code-action;
+# check that action's README if its interface has changed.
+
+on:
+  issues:
+    types: [labeled]
+  # Allow follow-up nudges by mentioning @claude in an issue/PR comment.
+  issue_comment:
+    types: [created]
+
+jobs:
+  claude-fix:
+    # Only run for the ai-fix label, or an @claude mention on an ai-fix issue.
+    if: >-
+      (github.event_name == 'issues' && github.event.label.name == 'ai-fix') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: ticketing_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Prepare a test-ready environment so the AI Programmer can verify its fix.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, redis, mbstring, xml, zip, bcmath, gd
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies & build
+        run: npm ci && npm run build
+
+      - name: Prepare app env
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: ticketing_test
+          DB_USERNAME: root
+          DB_PASSWORD: password
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan migrate --force
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: ticketing_test
+          DB_USERNAME: root
+          DB_PASSWORD: password
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Claude is allowed to run the project's checks while fixing.
+          claude_args: '--allowedTools "Bash(php artisan test:*),Bash(vendor/bin/pint:*),Edit,Write,Read,Grep,Glob"'
+          prompt: |
+            A bug was reported in issue #${{ github.event.issue.number }} of this repository.
+
+            Please:
+            1. Read the issue to understand the bug.
+            2. Investigate the Laravel codebase and implement a minimal, correct fix that follows the conventions in CLAUDE.md.
+            3. Add or update a test that covers the fix where reasonable.
+            4. Run `php artisan test --compact` and `vendor/bin/pint --dirty` and make sure they pass.
+            5. Open a pull request that references and closes issue #${{ github.event.issue.number }} (use "Closes #${{ github.event.issue.number }}" in the PR body), with a clear summary of the root cause and the fix.
+
+            Do not modify deployment workflows or secrets. Keep the change focused on the reported bug.

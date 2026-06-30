@@ -53,6 +53,9 @@
                                 <a href="{{ route('admin.feedback.index') }}" class="@if(request()->routeIs('admin.feedback.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center gap-1.5 px-1 pt-1 border-b-2 text-sm font-medium">
                                     Feedback
                                 </a>
+                                <a href="{{ route('admin.bugs.index') }}" class="@if(request()->routeIs('admin.bugs.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center gap-1.5 px-1 pt-1 border-b-2 text-sm font-medium">
+                                    AI Bugs
+                                </a>
                                 <a href="{{ route('admin.settings.index') }}" class="@if(request()->routeIs('admin.settings.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                                     Settings
                                 </a>
@@ -89,6 +92,7 @@
                         <a href="{{ route('admin.users.index') }}" class="@if(request()->routeIs('admin.users.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Users</a>
                         <a href="{{ route('admin.announcements.index') }}" class="@if(request()->routeIs('admin.announcements.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Announcements</a>
                         <a href="{{ route('admin.feedback.index') }}" class="@if(request()->routeIs('admin.feedback.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Feedback</a>
+                        <a href="{{ route('admin.bugs.index') }}" class="@if(request()->routeIs('admin.bugs.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">AI Bugs</a>
                         <a href="{{ route('admin.settings.index') }}" class="@if(request()->routeIs('admin.settings.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Settings</a>
                     </div>
                     <div class="border-t border-gray-700 px-4 py-3">

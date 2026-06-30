@@ -162,6 +162,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     // In-app AI assistant (per-user memory) — feature-gated
     Route::post('assistant/message', [AiAssistantController::class, 'message'])->name('assistant.message')->middleware('feature:ai_chatbot');
     Route::post('assistant/learn', [AiAssistantController::class, 'learn'])->name('assistant.learn')->middleware('feature:ai_chatbot');
+    Route::get('assistant/bug-updates', [AiAssistantController::class, 'bugUpdates'])->name('assistant.bug-updates')->middleware('feature:ai_chatbot');
+    Route::post('assistant/bug-updates/ack', [AiAssistantController::class, 'ackBugUpdates'])->name('assistant.bug-updates.ack')->middleware('feature:ai_chatbot');
     Route::get('assistant/conversations', [AiAssistantController::class, 'myConversations'])->name('assistant.conversations')->middleware('feature:ai_chatbot');
     Route::get('assistant/conversation/{conversation}', [AiAssistantController::class, 'myConversationMessages'])->name('assistant.conversation')->middleware('feature:ai_chatbot');
 
