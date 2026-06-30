@@ -427,10 +427,13 @@ class ClientPortalController extends Controller
 
         $catParam = $request->query('category', $request->query('category_id'));
         if (filled($catParam)) {
-            $pool = $prefill['department_id']
-                ? $categories->where('department_id', $prefill['department_id'])
-                : $categories;
-            $cat = $this->matchByIdOrName($pool, $catParam);
+            // Prefer a match within the resolved department, but fall back to any
+            // category with that name so a category that isn't linked to (or is
+            // linked to a different) department still fills from the link.
+            $cat = $prefill['department_id']
+                ? $this->matchByIdOrName($categories->where('department_id', $prefill['department_id']), $catParam)
+                : null;
+            $cat ??= $this->matchByIdOrName($categories, $catParam);
             if ($cat) {
                 $prefill['category_id'] = $cat->id;
                 $locked['category_id'] = true;
@@ -477,7 +480,7 @@ class ClientPortalController extends Controller
 
         $needle = mb_strtolower($value);
 
-        return $collection->first(fn ($item) => mb_strtolower((string) $item->name) === $needle);
+        return $collection->first(fn ($item) => mb_strtolower(trim((string) $item->name)) === $needle);
     }
 
     /**
