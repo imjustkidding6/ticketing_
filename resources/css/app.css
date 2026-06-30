@@ -17,3 +17,20 @@
 .apexcharts-canvas {
     max-width: 100% !important;
 }
+
+/* Rendered Markdown inside AI assistant replies (window.NexusChat.renderMarkdown). */
+.nx-prose { line-height: 1.5; }
+.nx-prose p { margin: 0 0 0.5rem; }
+.nx-prose p:last-child { margin-bottom: 0; }
+.nx-prose .nx-h { font-weight: 600; margin: 0.35rem 0 0.25rem; }
+.nx-prose .nx-h1 { font-size: 0.95rem; }
+.nx-prose .nx-h2, .nx-prose .nx-h3 { font-size: 0.875rem; }
+.nx-prose .nx-ul, .nx-prose .nx-ol { margin: 0.25rem 0 0.5rem 1.15rem; }
+.nx-prose .nx-ul { list-style: disc; }
+.nx-prose .nx-ol { list-style: decimal; }
+.nx-prose li { margin: 0.1rem 0; }
+.nx-prose .nx-inline { background: rgba(99, 102, 241, 0.1); padding: 0.05rem 0.3rem; border-radius: 0.25rem; font-size: 0.8em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.nx-prose .nx-code { background: #0f172a; color: #e2e8f0; padding: 0.6rem 0.7rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.78rem; margin: 0.4rem 0; }
+.nx-prose .nx-code code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; background: none; padding: 0; color: inherit; }
+.nx-prose .nx-link { color: #4f46e5; text-decoration: underline; }
+.nx-prose .nx-link:hover { color: #4338ca; }

@@ -40,7 +40,14 @@
                 <div :class="m.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
                     <div :class="m.role === 'user' ? 'rounded-2xl rounded-br-sm px-3 py-2 text-sm text-white' : 'rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-gray-800 ring-1 ring-gray-200'"
                          :style="m.role === 'user' ? 'background-color: var(--portal-primary)' : ''"
-                         class="max-w-[85%] whitespace-pre-line break-words" x-text="m.text"></div>
+                         class="max-w-[85%] break-words">
+                        <template x-if="m.role === 'user'">
+                            <div class="whitespace-pre-line" x-text="m.text"></div>
+                        </template>
+                        <template x-if="m.role !== 'user'">
+                            <div class="nx-prose" x-html="md(m.text)"></div>
+                        </template>
+                    </div>
                 </div>
             </template>
             {{-- Typing indicator --}}
@@ -160,6 +167,9 @@
                     this.$nextTick(() => this.scrollToEnd());
                 }
             },
+
+            // Render an assistant reply as safe Markdown HTML (shared helper).
+            md(t) { return window.NexusChat ? window.NexusChat.renderMarkdown(t) : (t || ''); },
 
             scrollToEnd() {
                 const el = this.$refs.scroll;

@@ -29,7 +29,7 @@ use Illuminate\Support\Str;
  */
 class AiAssistantService
 {
-    private const MAX_TOOL_ITERATIONS = 4;
+    private const MAX_TOOL_ITERATIONS = 8;
 
     public function __construct(
         private OpenAiService $openAi,
@@ -826,10 +826,11 @@ class AiAssistantService
             ."- For general questions (comparisons, concepts, definitions, industry knowledge — e.g. how this differs from another tool), answer directly and confidently from your own knowledge. Do NOT tell the user something is 'not in the knowledge base' — the knowledge base only holds the company's own help articles, not general knowledge.\n"
             ."- For any question about tickets (mine, by status or priority, for a client, searching, or recent), call query_tickets with just the filters you need.\n"
             ."- For ticket counts or workload (\"how many open tickets\", \"my closed this week\"), call ticket_stats. For questions about clients, call query_clients.\n"
-            ."- When the user asks for a chart, graph, or any visualization, first gather the numbers (e.g. via ticket_stats or query_tickets), then append a chart to your reply as a fenced block exactly like:\n"
-            ."```chart\n{\"type\":\"bar\",\"title\":\"Tickets by status\",\"data\":[{\"label\":\"Open\",\"value\":4},{\"label\":\"Closed\",\"value\":10}]}\n```\n"
-            ."Set \"type\" to \"bar\" for comparing categories, \"pie\" for parts of a whole (a breakdown or share of totals), or \"line\" for a trend over time (ordered points). Pick the type that best fits the data.\n"
-            ."Write a one-line summary before the block, and only include a chart block when a visualization is asked for.\n"
+            ."- When the user asks for a chart, graph, or any visualization, first gather the real numbers (e.g. via ticket_stats or query_tickets), then append ONE chart to your reply as a fenced ```chart block containing strict JSON. Two shapes are allowed:\n"
+            ."  Single series — ```chart\n{\"type\":\"bar\",\"title\":\"Tickets by status\",\"data\":[{\"label\":\"Open\",\"value\":4},{\"label\":\"Closed\",\"value\":10}]}\n```\n"
+            ."  Multi series  — ```chart\n{\"type\":\"line\",\"title\":\"Tickets per day\",\"labels\":[\"Mon\",\"Tue\",\"Wed\"],\"series\":[{\"name\":\"Opened\",\"data\":[5,3,8]},{\"name\":\"Closed\",\"data\":[2,6,4]}]}\n```\n"
+            ."Choose \"type\" from: \"bar\" (horizontal categories), \"column\" (vertical categories), \"line\" or \"area\" (a trend over ordered points), \"pie\" or \"donut\" (parts of a whole). Pick the type that best fits the data; use multi-series only when comparing two or more measures. Optionally add \"stacked\":true for stacked bars/columns.\n"
+            ."Write a one-line summary before the block. Put the chart data ONLY inside the fenced ```chart block — never print the raw JSON as visible text and never use a ```json block for it. Use real values only — never fabricate data to fill a chart — and include a chart only when a visualization helps.\n"
             ."- Use create_ticket to open a ticket on a client's behalf; confirm the client's name, email, subject, and description first.\n"
             ."- If the user reports that something in THIS system is broken or erroring (a defect/bug in the app itself — not a how-to question and not their own customers' tickets), gather a clear title, description, reproduction steps, and the affected area, confirm with the user, then call report_bug and tell them the bug reference. Let them know the team has been notified and they'll get an update here when it's addressed.\n"
             .($this->webSearchConfigured() ? "- For general questions that are NOT about this system or the company's products, use search_web and cite the source link.\n" : '')
