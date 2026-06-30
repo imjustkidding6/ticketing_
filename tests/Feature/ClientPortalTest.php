@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\Department;
 use App\Models\License;
 use App\Models\Plan;
+use App\Models\Product;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
@@ -54,6 +55,32 @@ class ClientPortalTest extends TestCase
         $tenant = $this->createTenant('business');
 
         $this->get("/{$tenant->slug}/submit-ticket")->assertOk();
+    }
+
+    public function test_submit_ticket_prefills_and_locks_fields_from_query_params(): void
+    {
+        $tenant = $this->createTenant('business');
+        $dept = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Technical Software']);
+        // Category linked to a *different* department to exercise the name fallback.
+        $otherDept = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Billing']);
+        $cat = TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'department_id' => $otherDept->id, 'name' => 'Software Application']);
+        $product = Product::factory()->create(['tenant_id' => $tenant->id, 'category_id' => $cat->id, 'name' => 'Inventory Management System', 'is_active' => true]);
+
+        $response = $this->get("/{$tenant->slug}/submit-ticket?".http_build_query([
+            'name' => 'Superior Packaging Corporation',
+            'email' => 'misit1.superior@gmail.com',
+            'department' => 'Technical Software',
+            'category' => 'software application', // case-insensitive match
+            'Product and services' => 'Inventory Management System',
+        ]))->assertOk();
+
+        // Each provided field is locked via a hidden input carrying the resolved id/value.
+        $response->assertSee('value="Superior Packaging Corporation"', false);
+        $response->assertSee('name="department_id" value="'.$dept->id.'"', false);
+        $response->assertSee('name="category_id" value="'.$cat->id.'"', false);
+        $response->assertSee('name="product_ids[]" value="'.$product->id.'"', false);
+        // And the category name is shown read-only even though its department differs.
+        $response->assertSee('Software Application');
     }
 
     public function test_submit_ticket_stores_ticket_and_client(): void

@@ -1,6 +1,12 @@
 @php
     $lock = fn ($k) => ($locked[$k] ?? false);
     $lockedInputClass = 'bg-gray-100 cursor-not-allowed text-gray-500';
+    $lockedDepartmentName = ($locked['department_id'] ?? false)
+        ? optional($departments->firstWhere('id', $prefill['department_id']))->name
+        : null;
+    $lockedCategoryName = ($locked['category_id'] ?? false)
+        ? optional($categories->firstWhere('id', $prefill['category_id']))->name
+        : null;
     $lockedProductNames = ($locked['product_ids'] ?? false)
         ? $products->whereIn('id', $prefill['product_ids'])->pluck('name')->all()
         : [];
@@ -59,27 +65,31 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label for="department_id" class="block text-sm font-medium text-gray-700">{{ __('Department') }} <span class="text-red-500">*</span></label>
-                            <select name="department_id" id="department_id" x-model="departmentId" @change="onDepartmentChange()" @if($lock('department_id')) disabled @else required @endif class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm @if($lock('department_id')) {{ $lockedInputClass }} @endif">
-                                <option value="">{{ __('Select department') }}</option>
-                                @foreach($departments as $department)
-                                    <option value="{{ $department->id }}">{{ $department->name }}</option>
-                                @endforeach
-                            </select>
                             @if($lock('department_id'))
+                                <div class="mt-1 w-full rounded-md border border-gray-300 {{ $lockedInputClass }} py-2 px-3 text-sm">{{ $lockedDepartmentName }}</div>
                                 <input type="hidden" name="department_id" value="{{ $prefill['department_id'] }}">
+                            @else
+                                <select name="department_id" id="department_id" x-model="departmentId" @change="onDepartmentChange()" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    <option value="">{{ __('Select department') }}</option>
+                                    @foreach($departments as $department)
+                                        <option value="{{ $department->id }}">{{ $department->name }}</option>
+                                    @endforeach
+                                </select>
                             @endif
                             @error('department_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
                         <div>
                             <label for="category_id" class="block text-sm font-medium text-gray-700">{{ __('Category') }}</label>
-                            <select name="category_id" id="category_id" x-model="categoryId" @change="onCategoryChange()" @if($lock('category_id')) disabled @endif class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm @if($lock('category_id')) {{ $lockedInputClass }} @endif">
-                                <option value="">{{ __('Select category') }}</option>
-                                <template x-for="cat in categories" :key="cat.id">
-                                    <option :value="cat.id" x-text="cat.name"></option>
-                                </template>
-                            </select>
                             @if($lock('category_id'))
+                                <div class="mt-1 w-full rounded-md border border-gray-300 {{ $lockedInputClass }} py-2 px-3 text-sm">{{ $lockedCategoryName }}</div>
                                 <input type="hidden" name="category_id" value="{{ $prefill['category_id'] }}">
+                            @else
+                                <select name="category_id" id="category_id" x-model="categoryId" @change="onCategoryChange()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    <option value="">{{ __('Select category') }}</option>
+                                    <template x-for="cat in categories" :key="cat.id">
+                                        <option :value="cat.id" x-text="cat.name"></option>
+                                    </template>
+                                </select>
                             @endif
                             @error('category_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
