@@ -64,6 +64,42 @@ class ClientControllerTest extends TestCase
         $this->get($this->tenantUrl("/clients/{$client->id}"))->assertOk();
     }
 
+    public function test_show_client_includes_autofill_link_and_qr(): void
+    {
+        [$tenant] = $this->setupContext();
+        $client = Client::factory()->create(['tenant_id' => $tenant->id, 'email' => 'misit1@example.com']);
+
+        $response = $this->get($this->tenantUrl("/clients/{$client->id}"))->assertOk();
+        $response->assertSee('Quick-submit link');
+        $response->assertSee('submit-ticket', false);           // base URL in the builder config
+        $response->assertSee('misit1@example.com');             // email carried into the config
+        $response->assertSee('autofill-qr', false);             // QR endpoint referenced
+    }
+
+    public function test_autofill_qr_returns_png(): void
+    {
+        [$tenant] = $this->setupContext();
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+
+        $response = $this->get($this->tenantUrl("/clients/{$client->id}/autofill-qr"));
+
+        $response->assertOk();
+        $this->assertSame('image/png', $response->headers->get('Content-Type'));
+        $this->assertStringStartsWith("\x89PNG", $response->getContent());
+    }
+
+    public function test_autofill_qr_accepts_department_category_product_params(): void
+    {
+        [$tenant] = $this->setupContext();
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+
+        $response = $this->get($this->tenantUrl("/clients/{$client->id}/autofill-qr")
+            .'?'.http_build_query(['department' => 'Technical Software', 'category' => 'Software Application', 'products' => 'Inventory Management System']));
+
+        $response->assertOk();
+        $this->assertSame('image/png', $response->headers->get('Content-Type'));
+    }
+
     public function test_update_client(): void
     {
         [$tenant] = $this->setupContext();
