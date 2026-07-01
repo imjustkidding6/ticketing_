@@ -103,6 +103,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::resource('products', ProductController::class)->except(['show']);
     Route::resource('clients', ClientController::class);
     Route::post('clients/{client}/assign-agent', [ClientController::class, 'assignAgent'])->name('clients.assign-agent');
+    Route::get('clients/{client}/autofill-qr', [ClientController::class, 'autofillQr'])->name('clients.autofill-qr');
 
     // User Management (all plans)
     Route::resource('members', MemberController::class);
