@@ -59,6 +59,56 @@ class AiAssistantController extends Controller
     }
 
     /**
+     * Polish a single rough task/checklist line on the ticket view into one
+     * clean, actionable resolution task.
+     */
+    public function polishTask(Request $request, Ticket $ticket): JsonResponse
+    {
+        $this->checkPermission('view tickets');
+        abort_unless((bool) AppSetting::get('ai_enabled', false), 404);
+
+        $validated = $request->validate([
+            'description' => ['required', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $text = $this->assistant->polishTask($ticket, $validated['description']);
+        } catch (OpenAiException $e) {
+            report($e);
+
+            return response()->json(['error' => 'The AI assistant is unavailable right now.'], 503);
+        }
+
+        return response()->json(['text' => $text]);
+    }
+
+    /**
+     * Preview an AI-refined version of a ticket's OPEN task checklist (reworded,
+     * with missing steps added and redundant ones dropped). Read-only — nothing
+     * is saved; the agent reviews/edits and applies via TicketTaskController.
+     */
+    public function polishTaskList(Ticket $ticket): JsonResponse
+    {
+        $this->checkPermission('view tickets');
+        abort_unless((bool) AppSetting::get('ai_enabled', false), 404);
+
+        $open = $ticket->tasks()->whereIn('status', ['pending', 'in_progress'])
+            ->orderBy('sort_order')->pluck('description')->all();
+        $done = $ticket->tasks()->whereIn('status', ['completed', 'cancelled'])
+            ->orderBy('sort_order')->pluck('description')->all();
+
+        try {
+            $tasks = $this->assistant->polishTaskList($ticket, $open, $done);
+        } catch (OpenAiException $e) {
+            report($e);
+
+            return response()->json(['error' => 'The AI assistant is unavailable right now.'], 503);
+        }
+
+        return response()->json(['tasks' => $tasks, 'kept' => count($done)]);
+    }
+
+    /**
      * Clean up & structure a rough ticket draft (subject, description, tasks)
      * on the create-ticket form, so the stored data — and the self-learning
      * dataset built from it — stays consistent.

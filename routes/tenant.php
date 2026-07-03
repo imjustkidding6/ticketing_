@@ -157,6 +157,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     // AI agent copilot (draft reply / summarize) — feature-gated
     Route::post('tickets/{ticket}/ai/draft-reply', [AiAssistantController::class, 'draftReply'])->name('tickets.ai.draft-reply')->middleware('feature:ai_chatbot');
     Route::post('tickets/{ticket}/ai/summarize', [AiAssistantController::class, 'summarize'])->name('tickets.ai.summarize')->middleware('feature:ai_chatbot');
+    Route::post('tickets/{ticket}/ai/polish-task', [AiAssistantController::class, 'polishTask'])->name('tickets.ai.polish-task')->middleware('feature:ai_chatbot');
+    Route::post('tickets/{ticket}/ai/polish-tasks', [AiAssistantController::class, 'polishTaskList'])->name('tickets.ai.polish-tasks')->middleware('feature:ai_chatbot');
     // AI clean-up of a rough ticket draft on the create form (subject/description/tasks)
     Route::post('tickets-ai/structure', [AiAssistantController::class, 'structureDraft'])->name('tickets.ai.structure')->middleware('feature:ai_chatbot');
 
@@ -182,6 +184,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::put('tickets/{ticket}/tasks/{task}', [TicketTaskController::class, 'update'])->name('tickets.tasks.update');
     Route::post('tickets/{ticket}/tasks/{task}/status', [TicketTaskController::class, 'updateStatus'])->name('tickets.tasks.status');
     Route::delete('tickets/{ticket}/tasks/{task}', [TicketTaskController::class, 'destroy'])->name('tickets.tasks.destroy');
+    Route::post('tickets/{ticket}/tasks/polish-apply', [TicketTaskController::class, 'applyPolishedTasks'])->name('tickets.tasks.polish-apply')->middleware('feature:ai_chatbot');
     Route::post('tickets/{ticket}/tasks/bulk-update', [TicketTaskController::class, 'bulkUpdate'])->name('tickets.tasks.bulk-update');
     Route::post('tickets/{ticket}/tasks/bulk-status-update', [TicketTaskController::class, 'bulkStatusUpdate'])->name('tickets.tasks.bulk-status-update');
     Route::get('tickets/{ticket}/tasks/{task}/history', [TicketTaskController::class, 'history'])->name('tickets.tasks.history');

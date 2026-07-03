@@ -181,6 +181,70 @@ class AiAssistantTest extends TestCase
             ->assertJsonStructure(['text']);
     }
 
+    public function test_polish_task_returns_text(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $user = $this->setupTenantContext($tenant);
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+
+        $this->fakeOpenAi([$this->assistantText('Reproduce the error on a test account')]);
+
+        $this->postJson($this->tenantUrl("/tickets/{$ticket->id}/ai/polish-task"), ['description' => 'try to make it happen again'])
+            ->assertOk()
+            ->assertJson(['text' => 'Reproduce the error on a test account']);
+    }
+
+    public function test_polish_task_is_not_found_when_ai_disabled(): void
+    {
+        $tenant = $this->enterpriseTenant(); // feature present, but ai_enabled never set
+        $user = $this->setupTenantContext($tenant);
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+
+        $this->postJson($this->tenantUrl("/tickets/{$ticket->id}/ai/polish-task"), ['description' => 'do the thing'])
+            ->assertNotFound();
+    }
+
+    public function test_polish_task_list_returns_refined_suggestions(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $user = $this->setupTenantContext($tenant);
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+        $ticket->tasks()->create(['description' => 'chek vpn', 'status' => 'pending']);
+
+        $this->fakeOpenAi([[
+            'choices' => [['message' => ['role' => 'assistant', 'content' => json_encode([
+                'tasks' => ['Check the VPN server logs for drops', 'Update the VPN client to the latest version'],
+            ])]]],
+            'usage' => ['total_tokens' => 30],
+        ]]);
+
+        $this->postJson($this->tenantUrl("/tickets/{$ticket->id}/ai/polish-tasks"))
+            ->assertOk()
+            ->assertJson(['tasks' => ['Check the VPN server logs for drops', 'Update the VPN client to the latest version']]);
+    }
+
+    public function test_apply_polished_tasks_replaces_open_but_keeps_completed(): void
+    {
+        $tenant = $this->enterpriseTenant();
+        $this->enableAi($tenant);
+        $user = $this->setupTenantContext($tenant);
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+        $done = $ticket->tasks()->create(['description' => 'Already finished step', 'status' => 'completed']);
+        $open = $ticket->tasks()->create(['description' => 'Rough open step', 'status' => 'pending']);
+
+        $this->post($this->tenantUrl("/tickets/{$ticket->id}/tasks/polish-apply"), [
+            'tasks' => ['Reproduce the disconnect on a test account', '', 'Check the VPN server logs'],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertDatabaseHas('ticket_tasks', ['id' => $done->id, 'status' => 'completed']); // kept
+        $this->assertDatabaseMissing('ticket_tasks', ['id' => $open->id]);                       // replaced
+        $this->assertDatabaseHas('ticket_tasks', ['ticket_id' => $ticket->id, 'description' => 'Reproduce the disconnect on a test account']);
+        $this->assertDatabaseHas('ticket_tasks', ['ticket_id' => $ticket->id, 'description' => 'Check the VPN server logs']);
+        $this->assertSame(3, $ticket->tasks()->count()); // 1 kept + 2 new (blank dropped)
+    }
+
     public function test_agent_copilot_blocked_without_feature(): void
     {
         // Business plan lacks ai_chatbot → feature middleware returns 403.

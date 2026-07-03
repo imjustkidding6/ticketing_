@@ -177,6 +177,78 @@ class AiAssistantService
     }
 
     /**
+     * Polish a rough checklist note into ONE clean, actionable resolution task,
+     * using the ticket as context. Never invents work the note doesn't imply.
+     */
+    public function polishTask(Ticket $ticket, string $rough): string
+    {
+        $system = 'You are a support-ticket editor for '.$ticket->tenant->displayName().'. '
+            .'Rewrite the agent\'s rough note into ONE clean, actionable resolution task — a short imperative phrase '
+            .'(e.g. "Reproduce the error on a test account"). Fix grammar and spelling and remove filler. '
+            .'Do NOT invent steps, names, or details not stated or clearly implied by the note or ticket. '
+            .'Do NOT add numbering, quotes, or a trailing period. Return only the single task line.';
+        $user = "TICKET\nSubject: {$ticket->subject}\nDescription: {$ticket->description}\n\n"
+            ."ROUGH TASK NOTE:\n".trim($rough);
+
+        $text = trim(preg_replace('/\s+/', ' ', $this->oneShot($system, $user, 120)));
+        $text = trim($text, " \t\n\r\"'");
+
+        return $text !== '' ? Str::limit($text, 250, '') : trim($rough);
+    }
+
+    /**
+     * Review a ticket's OPEN task checklist against the ticket and return a
+     * refined set of open tasks — reworded, with missing steps added and
+     * redundant/irrelevant ones dropped. Completed/cancelled tasks are passed
+     * only as context (already done) so they are not re-suggested. Never invents
+     * facts the ticket doesn't support.
+     *
+     * @param  array<int, string>  $openTasks
+     * @param  array<int, string>  $doneTasks
+     * @return array<int, string>
+     */
+    public function polishTaskList(Ticket $ticket, array $openTasks, array $doneTasks): array
+    {
+        $system = 'You are a support-ticket editor for '.$ticket->tenant->displayName().'. '
+            .'Review the OPEN resolution checklist for the ticket below and return an improved checklist. '
+            .'Reword unclear steps, fix grammar, merge duplicates, drop steps that are redundant or irrelevant to the ticket, '
+            .'and ADD any clearly missing steps the ticket calls for. Do NOT re-add anything listed under ALREADY DONE. '
+            .'Do NOT invent facts, names, or causes not stated or clearly implied by the ticket. '
+            .'Return STRICT JSON: {"tasks": [ ... ]} where each item is one short, actionable imperative phrase '
+            .'(no numbering, no trailing period). Keep it focused: usually 2 to 8 steps. Respond with JSON only.';
+
+        $format = fn (array $list) => $list === []
+            ? '(none)'
+            : implode("\n", array_map(fn ($t) => '- '.$t, $list));
+
+        $user = "TICKET\nSubject: {$ticket->subject}\nDescription: {$ticket->description}\n\n"
+            ."ALREADY DONE (do not repeat):\n".$format($doneTasks)."\n\n"
+            ."CURRENT OPEN TASKS:\n".$format($openTasks);
+
+        $response = $this->openAi->chat(
+            [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]],
+            [],
+            ['max_tokens' => 700, 'temperature' => 0.2, 'response_format' => ['type' => 'json_object']],
+        );
+
+        $data = json_decode((string) ($response['choices'][0]['message']['content'] ?? ''), true);
+        if (! is_array($data)) {
+            return $openTasks;
+        }
+
+        $tasks = [];
+        foreach ((array) ($data['tasks'] ?? []) as $task) {
+            $task = trim((string) (is_array($task) ? ($task['title'] ?? $task['task'] ?? '') : $task));
+            $task = trim((string) preg_replace('/\s+/', ' ', $task), " \t\n\r\"'");
+            if ($task !== '') {
+                $tasks[] = Str::limit($task, 250, '');
+            }
+        }
+
+        return array_slice($tasks, 0, 12);
+    }
+
+    /**
      * Clean up and structure a rough ticket draft so the saved ticket — and the
      * dataset later used for self-learning (embeddings) — is consistent and tidy.
      * Returns a polished subject, a well-formatted description, and suggested
