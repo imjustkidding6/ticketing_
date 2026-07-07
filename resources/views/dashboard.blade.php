@@ -9,7 +9,7 @@
             {{-- ── Onboarding Checklist ── --}}
             @if(isset($onboarding) && !$onboarding['dismissed'] && !$onboarding['complete'])
                 <div class="mb-6" x-data="onboardingChecklist()" x-cloak>
-                    <div class="rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-white p-6 shadow-sm">
+                    <div class="rounded-xl border border-indigo-200 bg-linear-to-r from-indigo-50 to-white p-6 shadow-sm">
                         <div class="flex items-start justify-between">
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-900">{{ __('Get Started with CliqueHA Nexus') }}</h3>
@@ -165,7 +165,7 @@
                 <div class="mt-4 grid gap-4 sm:grid-cols-3">
                     <div>
                         <div class="text-xs font-medium text-gray-500">{{ __('Total Closed') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-gray-900">{{ $myTicketStats['total_closed'] }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-indigo-600">{{ $myTicketStats['total_closed'] }}</div>
                     </div>
                     <div>
                         <div class="text-xs font-medium text-gray-500">{{ __('Avg. Resolution Time') }}</div>
@@ -350,7 +350,7 @@
         }
 
         new ApexCharts(trendEl, {
-            chart: { type: 'area', height: 240, toolbar: { show: false }, zoom: { enabled: false } },
+            chart: { type: 'area', height: 240, toolbar: { show: false }, zoom: { enabled: false },  foreColor: document.documentElement.classList.contains('dark') ? '#cbd5e1' : '#334155' },
             series: [{ name: 'My Tickets', data: trendCounts }],
             xaxis: { categories: trendDates, labels: { style: { fontSize: '10px' } } },
             yaxis: { min: 0, forceNiceScale: true, labels: { formatter: function(v) { return Math.round(v); } } },
@@ -358,7 +358,8 @@
             stroke: { curve: 'smooth', width: 2 },
             fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05 } },
             dataLabels: { enabled: false },
-            grid: { borderColor: '#f3f4f6' }
+            grid: { borderColor: document.documentElement.classList.contains('dark') ? '#475569' : '#e5e7eb',},
+            tooltip: {theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light'},
         }).render();
 
         // Status donut
@@ -370,7 +371,7 @@
 
         if (statusValues.length > 0) {
             new ApexCharts(document.getElementById('myStatusChart'), {
-                chart: { type: 'donut', height: 180 },
+                chart: { type: 'donut', height: 180, foreColor: document.documentElement.classList.contains('dark') ? '#e5e7eb' : '#334155'  },
                 series: statusValues,
                 labels: statusLabels,
                 colors: sColors,
@@ -390,7 +391,7 @@
 
         if (priorityValues.length > 0) {
             new ApexCharts(document.getElementById('myPriorityChart'), {
-                chart: { type: 'donut', height: 180 },
+                chart: { type: 'donut', height: 180, foreColor: document.documentElement.classList.contains('dark') ? '#e5e7eb' : '#334155' },
                 series: priorityValues,
                 labels: priorityLabels,
                 colors: pColors,
@@ -401,9 +402,22 @@
             document.getElementById('myPriorityChart').innerHTML = '<p class="text-sm text-gray-400 text-center py-8">{{ __("No data") }}</p>';
         }
     }
-    setTimeout(function() {
+    function renderDashboardCharts() {
+        document.getElementById('myTrendChart').innerHTML = '';
+        document.getElementById('myStatusChart').innerHTML = '';
+        document.getElementById('myPriorityChart').innerHTML = '';
+
         _initDashboardCharts();
-        setTimeout(function() { window.dispatchEvent(new Event('resize')); }, 500);
-    }, 200);
+
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 300);
+    }
+
+    setTimeout(renderDashboardCharts, 200);
+
+    window.addEventListener('theme-changed', () => {
+        setTimeout(renderDashboardCharts, 50);
+    });
     </script>
 </x-app-layout>

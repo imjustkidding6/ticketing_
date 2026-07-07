@@ -68,6 +68,57 @@
                 color: #f3f4f6;
             }
             .dark thead.bg-gray-50 { background-color: #1f2937; }
+
+            /* Add your new fixes here */
+            .dark .bg-indigo-50 {
+                background-color: color-mix(in srgb, var(--brand-primary) 16%, #111827) !important;
+            }
+
+            .dark .text-indigo-700,
+            .dark .text-indigo-600,
+            .dark .text-indigo-500 {
+                color: var(--brand-primary) !important;
+            }
+
+            .dark .bg-indigo-100 {
+                background-color: color-mix(in srgb, var(--brand-primary) 20%, #1f2937) !important;
+            }
+
+            .dark .text-indigo-800 {
+                color: #c7d2fe !important;
+            }
+
+            .dark .bg-orange-50 {
+                background-color: #431407 !important;
+            }
+
+            .dark .text-orange-800,
+            .dark .dark\:text-orange-300 {
+                color: #fdba74 !important;
+            }
+
+            .dark .border-orange-400 {
+                border-color: #fb923c !important;
+            }
+
+            .dark ::-webkit-scrollbar {
+                width: 10px;
+                height: 10px;
+            }
+
+            .dark ::-webkit-scrollbar-track {
+                background: #111827;
+            }
+
+            .dark ::-webkit-scrollbar-thumb {
+                background: #475569;
+                border-radius: 999px;
+                border: 2px solid #111827;
+            }
+
+            .dark ::-webkit-scrollbar-thumb:hover {
+                background: #64748b;
+            }
         </style>
         <script>
             // Init dark mode before render to prevent flash
@@ -79,7 +130,7 @@
     </head>
     <body class="font-sans antialiased">
         @if(session('admin_impersonating'))
-            <div class="bg-yellow-500 text-yellow-900 text-center py-2 px-4 text-sm font-medium relative z-[100]">
+            <div class="bg-yellow-500 text-yellow-900 text-center py-2 px-4 text-sm font-medium relative z-100">
                 You are viewing as tenant: <strong>{{ \App\Models\Tenant::find(session('current_tenant_id'))?->name }}</strong>
                 <form action="{{ route('admin.stop-impersonation') }}" method="POST" class="inline ml-3">
                     @csrf
@@ -87,7 +138,7 @@
                 </form>
             </div>
         @endif
-        <div x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true', darkMode: localStorage.getItem('darkMode') === 'true' }" x-init="$watch('sidebarCollapsed', val => { localStorage.setItem('sidebarCollapsed', val); setTimeout(() => window.dispatchEvent(new Event('resize')), 350); }); $watch('darkMode', val => { localStorage.setItem('darkMode', val); val ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark'); })" class="min-h-screen bg-gray-100">
+        <div x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true', darkMode: localStorage.getItem('darkMode') === 'true' }" x-init="$watch('sidebarCollapsed', val => { localStorage.setItem('sidebarCollapsed', val); setTimeout(() => window.dispatchEvent(new Event('resize')), 350); }); $watch('darkMode', val => { localStorage.setItem('darkMode', val); val ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark'); window.dispatchEvent(new CustomEvent('theme-changed')); })" class="min-h-screen bg-gray-100">
 
             <!-- Mobile sidebar overlay -->
             <div x-show="sidebarOpen" x-transition:enter="transition-opacity ease-linear duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition-opacity ease-linear duration-300" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-40 bg-gray-600/75 sm:hidden" @click="sidebarOpen = false" x-cloak></div>
@@ -485,7 +536,7 @@
                     <div class="flex items-center justify-between gap-4 px-4 py-3">
                         <div class="flex items-center gap-3 flex-1 min-w-0">
                             {{-- Hamburger: mobile opens overlay, desktop toggles collapse --}}
-                            <button @click="window.innerWidth < 640 ? (sidebarOpen = !sidebarOpen) : (sidebarCollapsed = !sidebarCollapsed)" class="flex-shrink-0 text-gray-500 hover:text-gray-700 rounded-md p-1 hover:bg-gray-100">
+                            <button @click="window.innerWidth < 640 ? (sidebarOpen = !sidebarOpen) : (sidebarCollapsed = !sidebarCollapsed)" class="shrink-0 text-gray-500 hover:text-gray-700 rounded-md p-1 hover:bg-gray-100">
                                 <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                                 </svg>
@@ -519,7 +570,7 @@
                                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                                 </svg>
-                                <span x-show="unreadCount > 0" x-cloak x-text="unreadCount > 99 ? '99+' : unreadCount" class="absolute -top-0.5 -right-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"></span>
+                                <span x-show="unreadCount > 0" x-cloak x-text="unreadCount > 99 ? '99+' : unreadCount" class="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"></span>
                             </button>
 
                             <div x-show="open" x-cloak @click.outside="open = false" x-transition class="absolute right-0 mt-2 rounded-xl border border-gray-200 bg-white shadow-xl z-50"
@@ -528,7 +579,7 @@
                                     <span class="text-base font-semibold text-gray-900">{{ __('Notifications') }}</span>
                                     <button x-show="unreadCount > 0" @click="markAllRead()" class="text-sm text-indigo-600 hover:text-indigo-800">{{ __('Mark all read') }}</button>
                                 </div>
-                                <div class="max-h-[32rem] overflow-y-auto">
+                                <div class="max-h-128 overflow-y-auto">
                                     <template x-if="notifications.length === 0 && loaded">
                                         <p class="px-6 py-10 text-center text-sm text-gray-500">{{ __('No notifications.') }}</p>
                                     </template>

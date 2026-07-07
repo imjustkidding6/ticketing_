@@ -2,34 +2,39 @@
 @php
     $colors = [
         // Ticket statuses
-        'open' => 'bg-blue-100 text-blue-800',
-        'assigned' => 'bg-blue-100 text-blue-800',
-        'in_progress' => 'bg-purple-100 text-purple-800',
-        'on_hold' => 'bg-yellow-100 text-yellow-800',
-        'closed' => 'bg-gray-100 text-gray-800',
-        'cancelled' => 'bg-red-100 text-red-800',
+        'open' => 'bg-blue-500 text-white dark:bg-blue-500 dark:text-white',
+        'assigned' => 'bg-indigo-500 text-white dark:bg-indigo-500 dark:text-white',
+        'in_progress' => 'bg-purple-500 text-white dark:bg-purple-500 dark:text-white',
+        'on_hold' => 'bg-amber-500 text-white dark:bg-amber-500 dark:text-white',
+        'closed' => 'bg-emerald-500 text-white dark:bg-emerald-500 dark:text-white',
+        'cancelled' => 'bg-red-500 text-white dark:bg-red-500 dark:text-white',
+
         // Priorities
-        'low' => 'bg-green-100 text-green-800',
-        'medium' => 'bg-yellow-100 text-yellow-800',
-        'high' => 'bg-orange-100 text-orange-800',
-        'critical' => 'bg-red-100 text-red-800',
+        'low'      => 'bg-green-500 text-white dark:bg-green-500 dark:text-white',
+        'medium'   => 'bg-yellow-500 text-white dark:bg-yellow-500 dark:text-white',
+        'high' => 'bg-orange-500 text-white dark:bg-orange-500 dark:text-white',
+        'critical' => 'bg-red-500 text-white dark:bg-red-500 dark:text-white',
+
         // Task statuses
-        'pending' => 'bg-gray-100 text-gray-800',
-        'completed' => 'bg-green-100 text-green-800',
+        'pending' => 'bg-gray-500 text-white dark:bg-gray-500 dark:text-white',
+        'completed' => 'bg-green-500 text-white dark:bg-green-500 dark:text-white',
+
         // Boolean states
-        'active' => 'bg-green-100 text-green-800',
-        'inactive' => 'bg-gray-100 text-gray-800',
-        'default_tag' => 'bg-blue-100 text-blue-800',
+        'active' => 'bg-green-500 text-white dark:bg-green-500 dark:text-white',
+        'inactive' => 'bg-gray-500 text-white dark:bg-gray-500 dark:text-white',
+        'default_tag' => 'bg-blue-500 text-white dark:bg-blue-500 dark:text-white',
+
         // Client tiers
-        'basic' => 'bg-gray-100 text-gray-800',
-        'premium' => 'bg-blue-100 text-blue-800',
-        'enterprise' => 'bg-purple-100 text-purple-800',
+        'basic' => 'bg-gray-500 text-white dark:bg-gray-500 dark:text-white',
+        'premium' => 'bg-blue-500 text-white dark:bg-blue-500 dark:text-white',
+        'enterprise' => 'bg-purple-500 text-white dark:bg-purple-500 dark:text-white',
+
         // Severity
-        'overdue' => 'bg-red-100 text-red-800',
-        'success' => 'bg-green-100 text-green-800',
-        'warning' => 'bg-yellow-100 text-yellow-800',
-        'info' => 'bg-blue-100 text-blue-800',
-        'default' => 'bg-gray-100 text-gray-800',
+        'overdue' => 'bg-red-500 text-white dark:bg-red-500 dark:text-white',
+        'success' => 'bg-green-500 text-white dark:bg-green-500 dark:text-white',
+        'warning' => 'bg-yellow-500 text-white dark:bg-yellow-500 dark:text-white',
+        'info' => 'bg-blue-500 text-white dark:bg-blue-500 dark:text-white',
+        'default' => 'bg-gray-500 text-white dark:bg-gray-500 dark:text-white',
     ];
     $colorClass = $colors[$type] ?? $colors['default'];
 @endphp
