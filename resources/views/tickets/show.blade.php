@@ -743,6 +743,39 @@
                                     <p class="mt-2 text-xs text-gray-500">{{ __('Reopening closed tickets requires the Enterprise plan.') }}</p>
                                 @endif
                             @else
+                                {{-- Quick status update (one click; close/cancel stay in the dropdown below) --}}
+                                @php
+                                    $quickStatuses = ['open', 'assigned', 'in_progress'];
+                                    if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement)) {
+                                        $quickStatuses[] = 'on_hold';
+                                    }
+                                    $quickStatusStyles = [
+                                        'open' => 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+                                        'assigned' => 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+                                        'in_progress' => 'bg-amber-100 text-amber-800 hover:bg-amber-200',
+                                        'on_hold' => 'bg-purple-100 text-purple-700 hover:bg-purple-200',
+                                    ];
+                                @endphp
+                                <div class="mb-3">
+                                    <p class="mb-1.5 text-xs font-medium text-gray-500">{{ __('Quick update') }}</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        @foreach($quickStatuses as $qs)
+                                            @if($ticket->status === $qs)
+                                                <span class="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold ring-2 ring-indigo-400 {{ $quickStatusStyles[$qs] }}">
+                                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                                                    {{ ucfirst(str_replace('_', ' ', $qs)) }}
+                                                </span>
+                                            @else
+                                                <form method="POST" action="{{ route('tickets.change-status', $ticket) }}">
+                                                    @csrf
+                                                    <input type="hidden" name="status" value="{{ $qs }}">
+                                                    <button type="submit" class="rounded-md px-2.5 py-1.5 text-xs font-medium {{ $quickStatusStyles[$qs] }}">{{ ucfirst(str_replace('_', ' ', $qs)) }}</button>
+                                                </form>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                </div>
+
                                 <form method="POST" action="{{ route('tickets.change-status', $ticket) }}" x-data="{ status: '{{ $ticket->status }}' }">
                                     @csrf
                                     <select name="status" id="sidebar_status" x-model="status" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
