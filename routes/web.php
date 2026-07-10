@@ -114,6 +114,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('bugs/{bug}', [AdminBugReportController::class, 'show'])->name('bugs.show');
     Route::post('bugs/{bug}/fix', [AdminBugReportController::class, 'fix'])->name('bugs.fix');
     Route::post('bugs/{bug}/status', [AdminBugReportController::class, 'updateStatus'])->name('bugs.status');
-});
 
+     // Admin Reports
+    Route::view('reports', 'admin.reports.index')
+        ->name('reports.index');
+});
 require __DIR__.'/auth.php';

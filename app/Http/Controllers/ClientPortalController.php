@@ -321,7 +321,11 @@ class ClientPortalController extends Controller
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('id', $ticketId)
-            ->with(['category', 'department'])
+            ->with([
+		 'category',
+		 'department',
+		 'comments.user',
+		])
             ->firstOrFail();
 
         return view('client-portal.show-ticket', compact('tenant', 'client', 'ticket'));
