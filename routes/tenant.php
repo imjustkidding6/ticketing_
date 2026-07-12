@@ -96,6 +96,13 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 Route::get('/dashboard/stats', [DashboardController::class, 'stats'])
     ->middleware(['auth', 'verified', 'tenant'])->name('dashboard.stats');
 
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified', 'tenant'])->name('dashboard');
+Route::get('/dashboard/stats', [DashboardController::class, 'stats'])
+    ->middleware(['auth', 'verified', 'tenant'])->name('dashboard.stats');
+Route::get('/my-activity', [DashboardController::class, 'myActivity'])
+    ->middleware(['auth', 'verified', 'tenant'])->name('dashboard.my-activity');
+
 // Tenant-scoped routes
 Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::resource('departments', DepartmentController::class)->except(['show'])->middleware('feature:department_management');

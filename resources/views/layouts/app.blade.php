@@ -250,9 +250,14 @@
                     {{-- ========== MANAGEMENT ========== --}}
                     @php $hasMgmt = $sidebarCan('manage users') || $sidebarCan('manage categories') || $sidebarCan('manage products') || ($planService->currentTenantHasFeature(\App\Enums\PlanFeature::DepartmentManagement) && $sidebarCan('manage departments')); @endphp
                     @if($hasMgmt)
-                    <div class="mt-6">
-                        <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Management') }}</p>
-                        <div class="mt-2 space-y-1">
+                    <div class="mt-6" x-data="{ open: localStorage.getItem('navMgmtOpen') !== 'false' }" x-init="$watch('open', val => localStorage.setItem('navMgmtOpen', val))">
+                        <button type="button" @click="open = !open" class="flex w-full items-center justify-between px-3 text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-600 cursor-pointer">
+                            <span>{{ __('Management') }}</span>
+                            <svg class="h-3.5 w-3.5 shrink-0 transition-transform duration-200" :class="{ '-rotate-90': !open }" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                            </svg>
+                        </button>
+                        <div x-show="open" x-transition class="mt-2 space-y-1">
                             @if($sidebarCan('manage users'))
                             <a href="{{ route('members.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('members.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('members.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -307,9 +312,14 @@
 
                     {{-- ========== REPORTS ========== --}}
                     @if($sidebarCan('view reports'))
-                    <div class="mt-6">
-                        <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Reports') }}</p>
-                        <div class="mt-2 space-y-1">
+                    <div class="mt-6" x-data="{ open: localStorage.getItem('navReportsOpen') !== 'false' }" x-init="$watch('open', val => localStorage.setItem('navReportsOpen', val))">
+                        <button type="button" @click="open = !open" class="flex w-full items-center justify-between px-3 text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-600 cursor-pointer">
+                            <span>{{ __('Reports') }}</span>
+                            <svg class="h-3.5 w-3.5 shrink-0 transition-transform duration-200" :class="{ '-rotate-90': !open }" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                            </svg>
+                        </button>
+                        <div x-show="open" x-transition class="mt-2 space-y-1">
                             <a href="{{ route('reports.overview') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('reports.overview') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('reports.overview') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
