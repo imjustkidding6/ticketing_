@@ -237,10 +237,21 @@ class TicketService
             }
         }
 
+        $status = null;
+
+        if (isset($data['status']) && $data['status'] !== $ticket->status) {
+            $status = $data['status'];
+            unset($data['status']);
+        }
+
         $ticket->update($data);
 
         if ($productIds !== null) {
             $ticket->products()->sync($productIds);
+        }
+
+        if ($status !== null) {
+            $this->changeStatus($ticket->fresh(), $status);
         }
 
         return $ticket->fresh();
