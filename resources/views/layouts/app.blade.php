@@ -253,7 +253,7 @@
                     <div class="mt-6" x-data="{ open: localStorage.getItem('navMgmtOpen') !== 'false' }" x-init="$watch('open', val => localStorage.setItem('navMgmtOpen', val))">
                         <button type="button" @click="open = !open" class="flex w-full items-center justify-between px-3 text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-600 cursor-pointer">
                             <span>{{ __('Management') }}</span>
-                            <svg class="h-3.5 w-3.5 shrink-0 transition-transform duration-200" :class="{ '-rotate-90': !open }" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <svg class="h-3.5 w-3.5 shrink-0 transition-transform duration-200" :class="{ '-rotate-90': open }" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                             </svg>
                         </button>
@@ -315,7 +315,7 @@
                     <div class="mt-6" x-data="{ open: localStorage.getItem('navReportsOpen') !== 'false' }" x-init="$watch('open', val => localStorage.setItem('navReportsOpen', val))">
                         <button type="button" @click="open = !open" class="flex w-full items-center justify-between px-3 text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-600 cursor-pointer">
                             <span>{{ __('Reports') }}</span>
-                            <svg class="h-3.5 w-3.5 shrink-0 transition-transform duration-200" :class="{ '-rotate-90': !open }" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <svg class="h-3.5 w-3.5 shrink-0 transition-transform duration-200" :class="{ '-rotate-90': open }" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                             </svg>
                         </button>
@@ -559,6 +559,11 @@
                         </div>
 
                         <div class="flex items-center gap-1">
+                        {{-- Page-specific header action icons (e.g. Download PDF) --}}
+                        @isset($headerActions)
+                            {{ $headerActions }}
+                        @endisset
+
                         {{-- Theme Toggle --}}
                         <button @click="darkMode = !darkMode" class="rounded-full p-2 text-gray-400 hover:text-gray-600 focus:outline-none" title="Toggle theme">
                             <template x-if="!darkMode">

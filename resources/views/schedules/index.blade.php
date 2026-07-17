@@ -1,23 +1,23 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between w-full">
-            <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                {{ __('Weekly Schedule') }} — <span class="font-normal text-gray-500">{{ $target->name }}</span>
+            <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
+                {{ __('Weekly Schedule') }} — <span class="font-normal text-gray-500 dark:text-gray-400">{{ $target->name }}</span>
             </h2>
-            <a href="{{ route('schedules.team') }}" class="text-sm text-indigo-600 hover:text-indigo-900">{{ __('View team schedule') }} →</a>
+            <a href="{{ route('schedules.team') }}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 transition-colors">{{ __('View team schedule') }} →</a>
         </div>
     </x-slot>
 
     <div class="py-6">
         <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
             @if(session('success'))
-                <div class="mb-4 rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800">{{ session('success') }}</div>
+                <div class="mb-4 rounded-md bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 p-3 text-sm text-green-800 dark:text-green-300">{{ session('success') }}</div>
             @endif
 
             @if($canManageOthers && $manageableAgents->isNotEmpty())
                 <form method="GET" class="mb-4 flex items-center gap-3">
-                    <label for="user_switch" class="text-sm font-medium text-gray-700">{{ __('Editing schedule for:') }}</label>
-                    <select name="user_id" id="user_switch" onchange="this.form.submit()" class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <label for="user_switch" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('Editing schedule for:') }}</label>
+                    <select name="user_id" id="user_switch" onchange="this.form.submit()" class="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                         @foreach($manageableAgents as $agent)
                             <option value="{{ $agent->id }}" {{ $target->id === $agent->id ? 'selected' : '' }}>{{ $agent->name }}</option>
                         @endforeach
@@ -31,31 +31,31 @@
                 $todayIndex = (int) $localNow->dayOfWeek;
             @endphp
 
-            <form method="POST" action="{{ route('schedules.save') }}" class="rounded-xl bg-white p-6 shadow-sm">
+            <form method="POST" action="{{ route('schedules.save') }}" class="rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                 @csrf
                 @if($target->id !== auth()->id())
                     <input type="hidden" name="user_id" value="{{ $target->id }}">
                 @endif
 
-                <p class="mb-4 text-sm text-gray-600">{{ __('Set when this agent is available each day. Toggle the checkbox to mark a day as unavailable.') }}</p>
+                <p class="mb-4 text-sm text-gray-600 dark:text-gray-300">{{ __('Set when this agent is available each day. Toggle the checkbox to mark a day as unavailable.') }}</p>
 
-                <div class="mb-4 flex items-center justify-between rounded-md bg-indigo-50 border border-indigo-200 px-4 py-2 text-xs">
-                    <div class="text-indigo-900">
+                <div class="mb-4 flex items-center justify-between rounded-md bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/60 px-4 py-2 text-xs">
+                    <div class="text-indigo-900 dark:text-indigo-200">
                         <span class="font-semibold">{{ __('Timezone') }}:</span>
                         {{ $tenantTz }}
                         @if($tenantTz === 'UTC')
-                            <span class="ml-1 text-amber-700">({{ __('default — set in Settings → General') }})</span>
+                            <span class="ml-1 text-amber-700 dark:text-amber-400">({{ __('default — set in Settings → General') }})</span>
                         @endif
                     </div>
-                    <div class="text-indigo-900">
+                    <div class="text-indigo-900 dark:text-indigo-200">
                         <span class="font-semibold">{{ __('Now') }}:</span>
                         {{ $localNow->format('D, g:i A') }}
                     </div>
                 </div>
 
-                <div class="overflow-hidden rounded-md border border-gray-200">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50 text-xs font-medium uppercase tracking-wider text-gray-500">
+                <div class="overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                             <tr>
                                 <th class="px-4 py-2 text-left">{{ __('Day') }}</th>
                                 <th class="px-4 py-2 text-center">{{ __('Available') }}</th>
@@ -63,34 +63,34 @@
                                 <th class="px-4 py-2 text-center">{{ __('End') }}</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-100 text-sm">
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-sm">
                             @foreach($days as $dayIndex => $dayName)
                                 @php $row = $week[$dayIndex]; $isToday = $dayIndex === $todayIndex; @endphp
-                                <tr class="{{ $isToday ? 'bg-indigo-50/50' : ($row['available'] ? '' : 'bg-gray-50') }}">
-                                    <td class="px-4 py-3 font-medium text-gray-900">
+                                <tr class="{{ $isToday ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : ($row['available'] ? '' : 'bg-gray-50 dark:bg-gray-800/40') }}">
+                                    <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
                                         {{ $dayName }}
                                         @if($isToday)
-                                            <span class="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">{{ __('Today') }}</span>
+                                            <span class="ml-2 inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900/60 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">{{ __('Today') }}</span>
                                         @endif
                                     </td>
                                     <td class="px-4 py-3 text-center">
                                         <input type="checkbox" name="week[{{ $dayIndex }}][available]" value="1"
                                             {{ $row['available'] ? 'checked' : '' }}
-                                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                            class="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500">
                                     </td>
                                     <td class="px-4 py-3">
                                         <input type="time" required step="60"
                                             name="week[{{ $dayIndex }}][start]"
                                             value="{{ old('week.'.$dayIndex.'.start', $row['start']) }}"
-                                            class="w-full rounded-md border-gray-300 text-sm text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                        @error("week.{$dayIndex}.start") <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                            class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 text-sm text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        @error("week.{$dayIndex}.start") <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p> @enderror
                                     </td>
                                     <td class="px-4 py-3">
                                         <input type="time" required step="60"
                                             name="week[{{ $dayIndex }}][end]"
                                             value="{{ old('week.'.$dayIndex.'.end', $row['end']) }}"
-                                            class="w-full rounded-md border-gray-300 text-sm text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                        @error("week.{$dayIndex}.end") <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                            class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 text-sm text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        @error("week.{$dayIndex}.end") <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p> @enderror
                                     </td>
                                 </tr>
                             @endforeach
@@ -99,7 +99,7 @@
                 </div>
 
                 <div class="mt-6 flex items-center justify-end">
-                    <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                    <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 transition-colors">
                         {{ __('Save Schedule') }}
                     </button>
                 </div>

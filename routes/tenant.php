@@ -292,6 +292,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
 
     // Tutorials
     Route::get('tutorials', [TutorialController::class, 'index'])->name('tutorials.index');
+    Route::get('tutorials/download', [TutorialController::class, 'downloadPdf'])->name('tutorials.download');
     Route::get('tutorials/{tutorial}', [TutorialController::class, 'show'])->name('tutorials.show');
 
     // Tenant Feedback

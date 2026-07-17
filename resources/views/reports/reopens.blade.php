@@ -1,10 +1,10 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between w-full">
-            <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('Reopen Report') }}</h2>
+            <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">{{ __('Reopen Report') }}</h2>
             @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::DetailedReporting))
-                <a href="{{ route('reports.export.reopens', $filters) }}" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
-                    <svg class="h-4 w-4 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                <a href="{{ route('reports.export.reopens', $filters) }}" class="inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                    <svg class="h-4 w-4 mr-1 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
                     {{ __('Export CSV') }}
                 </a>
             @endif
@@ -14,31 +14,31 @@
     <div class="py-6">
         <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6">
             <!-- Date Filter -->
-            <div class="mb-6 overflow-hidden rounded-xl bg-white p-6 shadow-sm">
+            <div class="mb-6 overflow-hidden rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                 <form method="GET" class="flex flex-wrap items-end gap-4">
                     <div>
-                        <label for="from" class="block text-sm font-medium text-gray-700">{{ __('From') }}</label>
-                        <input type="date" name="from" id="from" value="{{ $filters['from'] ?? '' }}" class="mt-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <label for="from" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('From') }}</label>
+                        <input type="date" name="from" id="from" value="{{ $filters['from'] ?? '' }}" class="mt-1 block rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     </div>
                     <div>
-                        <label for="to" class="block text-sm font-medium text-gray-700">{{ __('To') }}</label>
-                        <input type="date" name="to" id="to" value="{{ $filters['to'] ?? '' }}" class="mt-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <label for="to" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('To') }}</label>
+                        <input type="date" name="to" id="to" value="{{ $filters['to'] ?? '' }}" class="mt-1 block rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     </div>
-                    <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Filter') }}</button>
+                    <button type="submit" class="rounded-md bg-indigo-600 dark:bg-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:hover:bg-indigo-400 transition">{{ __('Filter') }}</button>
                 </form>
             </div>
 
             {{-- Headline metrics --}}
             <div class="grid gap-6 sm:grid-cols-2 mb-6">
-                <div class="overflow-hidden rounded-xl bg-white p-6 shadow-sm">
-                    <p class="text-sm font-medium text-gray-500">{{ __('Reopened Tickets') }}</p>
-                    <p class="mt-2 text-3xl font-bold text-amber-600">{{ $report['total'] }}</p>
-                    <p class="mt-1 text-xs text-gray-500">{{ __('With at least one reopen in range') }}</p>
+                <div class="overflow-hidden rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('Reopened Tickets') }}</p>
+                    <p class="mt-2 text-3xl font-bold text-amber-600 dark:text-amber-400">{{ $report['total'] }}</p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ __('With at least one reopen in range') }}</p>
                 </div>
-                <div class="overflow-hidden rounded-xl bg-white p-6 shadow-sm">
-                    <p class="text-sm font-medium text-gray-500">{{ __('Avg Reopen Count') }}</p>
-                    <p class="mt-2 text-3xl font-bold text-gray-900">{{ $report['avg_reopen_count'] }}</p>
-                    <p class="mt-1 text-xs text-gray-500">{{ __('Per reopened ticket') }}</p>
+                <div class="overflow-hidden rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('Avg Reopen Count') }}</p>
+                    <p class="mt-2 text-3xl font-bold text-gray-900 dark:text-gray-100">{{ $report['avg_reopen_count'] }}</p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ __('Per reopened ticket') }}</p>
                 </div>
             </div>
 
@@ -50,16 +50,16 @@
                     ['title' => __('By Agent'), 'data' => $report['by_agent']],
                     ['title' => __('By Client'), 'data' => $report['by_client']],
                 ] as $section)
-                    <div class="overflow-hidden rounded-xl bg-white p-6 shadow-sm">
-                        <h3 class="text-base font-semibold text-gray-900">{{ $section['title'] }}</h3>
+                    <div class="overflow-hidden rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">{{ $section['title'] }}</h3>
                         @if($section['data']->isEmpty())
-                            <p class="mt-3 text-sm text-gray-500">{{ __('No data.') }}</p>
+                            <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">{{ __('No data.') }}</p>
                         @else
-                            <ul class="mt-3 divide-y divide-gray-100 text-sm">
+                            <ul class="mt-3 divide-y divide-gray-100 dark:divide-gray-700 text-sm">
                                 @foreach($section['data']->take(10) as $name => $count)
                                     <li class="flex items-center justify-between py-2">
-                                        <span class="text-gray-700">{{ $name }}</span>
-                                        <span class="font-medium text-gray-900">{{ $count }}</span>
+                                        <span class="text-gray-700 dark:text-gray-300">{{ $name }}</span>
+                                        <span class="font-medium text-gray-900 dark:text-gray-100">{{ $count }}</span>
                                     </li>
                                 @endforeach
                             </ul>
@@ -69,14 +69,14 @@
             </div>
 
             {{-- Per-ticket detail --}}
-            <div class="overflow-hidden rounded-xl bg-white shadow-sm mb-6">
-                <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                    <h3 class="text-base font-semibold text-gray-900">{{ __('Reopened Tickets') }}</h3>
-                    <span class="text-xs text-gray-500">{{ $report['tickets']->count() }} {{ __('tickets') }}</span>
+            <div class="overflow-hidden rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+                <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">{{ __('Reopened Tickets') }}</h3>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ $report['tickets']->count() }} {{ __('tickets') }}</span>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead class="bg-gray-50 text-xs font-medium uppercase text-gray-500">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50 text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
                             <tr>
                                 <th class="px-4 py-2 text-left">{{ __('Ticket') }}</th>
                                 <th class="px-4 py-2 text-left">{{ __('Client') }}</th>
@@ -88,25 +88,25 @@
                                 <th class="px-4 py-2 text-left">{{ __('Status') }}</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-100">
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
                             @forelse($report['tickets'] as $t)
-                                <tr>
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                     <td class="px-4 py-2">
-                                        <a href="{{ route('tickets.show', $t) }}" class="font-medium text-indigo-600 hover:text-indigo-500">{{ $t->ticket_number }}</a>
-                                        <div class="text-xs text-gray-500 truncate max-w-[200px]">{{ $t->subject }}</div>
+                                        <a href="{{ route('tickets.show', $t) }}" class="font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300">{{ $t->ticket_number }}</a>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-50">{{ $t->subject }}</div>
                                     </td>
-                                    <td class="px-4 py-2 text-gray-700">{{ $t->client?->name ?? '—' }}</td>
-                                    <td class="px-4 py-2 text-gray-700">{{ $t->assignee?->name ?? __('Unassigned') }}</td>
+                                    <td class="px-4 py-2 text-gray-700 dark:text-gray-300">{{ $t->client?->name ?? '—' }}</td>
+                                    <td class="px-4 py-2 text-gray-700 dark:text-gray-300">{{ $t->assignee?->name ?? __('Unassigned') }}</td>
                                     <td class="px-4 py-2 text-center">
-                                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">× {{ $t->reopened_count }}</span>
+                                        <span class="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">× {{ $t->reopened_count }}</span>
                                     </td>
-                                    <td class="px-4 py-2 text-xs text-gray-600">{{ $t->first_closed_at ? \App\Support\TenantTime::format($t->first_closed_at, 'M j, Y') : '—' }}</td>
-                                    <td class="px-4 py-2 text-xs text-gray-600">{{ $t->last_reopened_at ? \App\Support\TenantTime::format($t->last_reopened_at, 'M j, Y') : '—' }}</td>
-                                    <td class="px-4 py-2 text-xs text-gray-700 max-w-[220px] truncate">{{ $t->last_reopen_reason ?? '—' }}</td>
+                                    <td class="px-4 py-2 text-xs text-gray-600 dark:text-gray-400">{{ $t->first_closed_at ? \App\Support\TenantTime::format($t->first_closed_at, 'M j, Y') : '—' }}</td>
+                                    <td class="px-4 py-2 text-xs text-gray-600 dark:text-gray-400">{{ $t->last_reopened_at ? \App\Support\TenantTime::format($t->last_reopened_at, 'M j, Y') : '—' }}</td>
+                                    <td class="px-4 py-2 text-xs text-gray-700 dark:text-gray-300 max-w-55 truncate">{{ $t->last_reopen_reason ?? '—' }}</td>
                                     <td class="px-4 py-2"><x-badge :type="$t->status">{{ ucfirst(str_replace('_', ' ', $t->status)) }}</x-badge></td>
                                 </tr>
                             @empty
-                                <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">{{ __('No reopened tickets in range.') }}</td></tr>
+                                <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">{{ __('No reopened tickets in range.') }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>
