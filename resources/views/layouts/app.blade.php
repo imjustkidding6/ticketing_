@@ -239,10 +239,10 @@
                     </div>
                     @endif
 
-                    {{-- ========== SLA (Business+) ========== --}}
+                    {{-- ========== ADMINISTRATION (Business+) ========== --}}
                     @if($sidebarCan('manage sla') && $planService->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement))
                     <div class="mt-6">
-                        <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('SLA') }}</p>
+                        <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Administration') }}</p>
                         <div class="mt-2 space-y-1">
                             <a href="{{ route('sla.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('sla.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('sla.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">

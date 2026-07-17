@@ -1,0 +1,384 @@
+<?php
+
+return [
+    'getting-started' => [
+        'intro' => 'Welcome to the CliqueHA Admin Console. This guide will walk you through the essential onboarding steps to set up your multi-tenant workspace, define operational parameters, configure categories, and invite your support agents.',
+        'tip' => 'Always verify your branding colors and system email settings before sending core tenant invitations.',
+        'screenshot' => 'getting-started.png',
+        'steps' => [
+            [
+                'title' => 'Creating Tenant Profile',
+                'desc' => 'A tenant represents an isolated corporate workspace inside CliqueHA. Navigate to Management > Tenants, click "Create Tenant", and enter the company name, unique subdomain slug (e.g. acme), custom branding colors, and select their starting license plan.',
+                'code' => 'php artisan tenant:create --name="Acme Corp" --slug="acme"',
+                'note' => 'Tenant slugs are immutable once registered.'
+            ],
+            [
+                'title' => 'Creating Departments',
+                'desc' => 'Departments represent queues that tickets can be routed into. Go to System > Settings > Departments and configure default queues such as Technical Support, Billing, Customer Success, and Hardware Ops.',
+                'code' => null,
+                'note' => 'Every department must have at least one assigned administrator.'
+            ],
+            [
+                'title' => 'Configuring Ticket Categories',
+                'desc' => 'Categories help segment tickets for automatic assignment. Create categories like Network Issue, Software Bug, Payment Dispute, and associate them with their respective parent departments.',
+                'code' => null,
+                'note' => 'Correct categorization drastically reduces response times.'
+            ],
+            [
+                'title' => 'Setting Up Products',
+                'desc' => 'Define the hardware or software products your company supports. Associate each product with a category so customers can select them on public portal submit forms.',
+                'code' => null,
+                'note' => 'Products are visible to end-clients during ticket submission.'
+            ],
+            [
+                'title' => 'Creating Users & Assigning Permissions',
+                'desc' => 'Go to System > Admin Users and select Create User. Assign them to a role (e.g. Agent, Manager, Administrator) which determines their permission sets, allowed queues, and page access privileges.',
+                'code' => 'php artisan user:invite user@company.com --role=Agent',
+                'note' => 'Permissions can be customized per user if standard roles are insufficient.'
+            ],
+            [
+                'title' => 'Inviting the Team',
+                'desc' => 'Send automatic email invitation links to your newly created users. The system generates a temporary secure password link for their initial onboarding login.',
+                'code' => null,
+                'note' => 'Invitation links expire automatically after 24 hours.'
+            ],
+            [
+                'title' => 'Admin Dashboard Overview',
+                'desc' => 'The Admin Dashboard provides real-time statistics including open ticket counts, active tenants, license expirations, and average resolution times.',
+                'code' => null,
+                'note' => 'Use the search console to quickly jump to any user or tenant record.'
+            ],
+            [
+                'title' => 'Best Practices for Onboarding',
+                'desc' => 'We recommend starting with a soft-launch of a pilot tenant department to test SLA configurations, response notification emails, and AI response patterns before importing historical customer accounts.',
+                'code' => null,
+                'note' => 'Read our system optimization guide for advanced configurations.'
+            ]
+        ],
+        'notes' => 'Ensure your SMTP server is configured under System Settings to send registration emails.'
+    ],
+    'managing-tickets' => [
+        'intro' => ' CliqueHA provides a robust ticket management interface to ingest, organize, route, and resolve client inquiries efficiently.',
+        'tip' => 'Use internal notes to communicate with other technicians on a ticket without alerting the client.',
+        'screenshot' => 'managing-tickets.png',
+        'steps' => [
+            [
+                'title' => 'Ingestion & Creating Tickets',
+                'desc' => 'Tickets are ingested via customer email parsing, the public client web portal, or created manually by support technicians on behalf of users.',
+                'code' => null,
+                'note' => 'Manual tickets immediately trigger an email confirmation to the client.'
+            ],
+            [
+                'title' => 'Understanding Ticket Statuses',
+                'desc' => 'Track progress using standard statuses: Open (new/unassigned), In Progress (assigned/under investigation), Pending (awaiting client feedback), and Closed (resolved).',
+                'code' => null,
+                'note' => 'Pending status pauses the SLA resolution countdown timer.'
+            ],
+            [
+                'title' => 'Defining Priorities',
+                'desc' => 'Prioritize tickets as Low, Medium, High, or Urgent. These priority tags map directly to SLA response window targets.',
+                'code' => null,
+                'note' => 'Urgent priority triggers immediate push alerts to managers.'
+            ],
+            [
+                'title' => 'Assigning Technicians',
+                'desc' => 'Delegate tickets to specific support agents or departments. Use the "Self-Assign" option to claim a ticket quickly from the queue.',
+                'code' => null,
+                'note' => 'Unassigned tickets will trigger notification reminders after 15 minutes.'
+            ],
+            [
+                'title' => 'Adding Internal Notes',
+                'desc' => 'Add notes to collaborate with colleagues. Internal notes are highlighted in yellow and are completely hidden from client views.',
+                'code' => null,
+                'note' => 'Use @mentions to pull specific colleagues into a discussion.'
+            ],
+            [
+                'title' => 'Closing & Reopening Tickets',
+                'desc' => 'Once resolved, set status to Closed. If a client replies to a closed ticket, the system automatically transitions it back to Open.',
+                'code' => null,
+                'note' => 'Reopening tickets preserves all historical logs and comments.'
+            ],
+            [
+                'title' => 'Handling Attachments',
+                'desc' => 'Upload log files, screenshots, or PDF invoices. Allowed file types: PNG, JPG, PDF, ZIP, TXT. File size limit is 10MB.',
+                'code' => null,
+                'note' => 'Attachments are automatically scanned for malware upon upload.'
+            ],
+            [
+                'title' => 'Filtering the Queue',
+                'desc' => 'Filter tickets by status, assignee, priority, category, or date range. Save your most common configurations as quick filters.',
+                'code' => null,
+                'note' => 'Quick filters can be set as default views on login.'
+            ]
+        ],
+        'notes' => 'Ticket logs contain immutable audit trails tracking status updates and assignees.'
+    ],
+    'ai-assistant' => [
+        'intro' => 'CliqueHA integrates an advanced AI Assistant designed to serve as a copilot for your support technicians. The assistant accelerates resolution speeds by generating drafts, summarizing ticket history, and predicting categories.',
+        'tip' => 'Review and modify all AI-generated drafts before sending them to clients to maintain a human tone.',
+        'screenshot' => 'ai-assistant.png',
+        'steps' => [
+            [
+                'title' => 'AI Copilot Overview',
+                'desc' => 'The AI Copilot is embedded directly into the ticket detail page. It continuously parses the ticket text and historical data to offer real-time suggestions.',
+                'code' => null,
+                'note' => 'AI is powered by a secure enterprise LLM model.'
+            ],
+            [
+                'title' => 'Generating Suggested Replies',
+                'desc' => 'Click "Suggest Reply" to generate a contextual, professional draft response. The AI analyzes historical ticket logs and knowledge base articles to build answers.',
+                'code' => null,
+                'note' => 'Technicians can edit the draft in the text editor before submission.'
+            ],
+            [
+                'title' => 'Summarizing Ticket Threads',
+                'desc' => 'For complex tickets with extensive back-and-forth threads, click "Summarize" to generate a bulleted summary of key issues, historical attempts, and current roadblocks.',
+                'code' => null,
+                'note' => 'Summaries are saved in the internal notes tab for future agent reference.'
+            ],
+            [
+                'title' => 'Auto-Categorization & Routing',
+                'desc' => 'When a new ticket is submitted, the AI analyzes the subject and description to recommend the best category and assign the ticket to the right department queue.',
+                'code' => null,
+                'note' => 'Confidence scores determine if automated routing takes action.'
+            ],
+            [
+                'title' => 'AI-Powered Analytics',
+                'desc' => 'The AI scans ticket trends to identify emerging product bugs, payment outages, or seasonal support load spikes, notifying managers immediately.',
+                'code' => null,
+                'note' => 'Outage alerts are triggered when similar category volumes double.'
+            ],
+            [
+                'title' => 'Assistant Limitations',
+                'desc' => 'AI cannot execute system commands, modify user billing plans, or close tickets independently. It acts strictly as an advisory assistant.',
+                'code' => null,
+                'note' => 'Ensure the AI does not expose internal system details.'
+            ],
+            [
+                'title' => 'Optimization Tips',
+                'desc' => 'Regularly update your Knowledge Base articles. The AI relies heavily on these articles to draft answers to customer questions.',
+                'code' => null,
+                'note' => 'AI indexing runs automatically every night at midnight.'
+            ]
+        ],
+        'notes' => 'You can configure the AI response temperature and model under System Settings.'
+    ],
+    'client-management' => [
+        'intro' => 'Managing your client accounts, organizational structures, and access rules is crucial to providing excellent multi-tenant customer service.',
+        'tip' => 'Group clients into organizational accounts to share ticket visibility among team members.',
+        'screenshot' => 'client-management.png',
+        'steps' => [
+            [
+                'title' => 'Adding Clients',
+                'desc' => 'Go to Management > Clients. Click "Add Client". Enter the name, primary corporate domain list, account owner, and contact email.',
+                'code' => null,
+                'note' => 'Domains list automatically associates incoming emails with the client record.'
+            ],
+            [
+                'title' => 'Configuring Client Tiers',
+                'desc' => 'Assign clients to Bronze, Silver, Gold, or Platinum tiers. Client tiers dictate the SLA policies and priority queues applied to their tickets.',
+                'code' => null,
+                'note' => 'Tier changes take effect immediately on all new tickets.'
+            ],
+            [
+                'title' => 'Enabling Portal Access',
+                'desc' => 'Provide clients with secure logins to view their ticket history, check status updates, and search the public knowledge base.',
+                'code' => null,
+                'note' => 'Select "Restrict View" to prevent clients from viewing colleagues\' tickets.'
+            ],
+            [
+                'title' => 'Triggering Password Resets',
+                'desc' => 'If a client is locked out of their portal, navigate to their client profile, click "Reset Password", and the system dispatches a secure reset link.',
+                'code' => null,
+                'note' => 'Reset tokens expire after 60 minutes for security.'
+            ],
+            [
+                'title' => 'Reviewing Client History',
+                'desc' => 'The client profile page compiles historical metrics, active tickets, closed logs, total billable hours, and SLA compliance ratings.',
+                'code' => null,
+                'note' => 'Export client logs as CSV for corporate client review.'
+            ],
+            [
+                'title' => 'Managing Client Contacts',
+                'desc' => 'Add individual contact profiles under the main corporate account. Assign contact roles (e.g. Technical Admin, Billing Agent).',
+                'code' => null,
+                'note' => 'Only authorized contacts can submit billing change requests.'
+            ],
+            [
+                'title' => 'Adding Administrative Notes',
+                'desc' => 'Add notes to client files to document special support agreements, business hour variations, or specialized service preferences.',
+                'code' => null,
+                'note' => 'Client profile notes are strictly confidential to technicians.'
+            ]
+        ],
+        'notes' => 'Clients can be temporarily suspended to block portal logins and ticket submissions.'
+    ],
+    'reports-analytics' => [
+        'intro' => 'CliqueHA Analytics compiles ticket queues, agent performance data, department compliance levels, and SLA breaches into interactive reports.',
+        'tip' => 'Schedule reports to run on a recurring basis and receive them via email at the end of the month.',
+        'screenshot' => 'reports-analytics.png',
+        'steps' => [
+            [
+                'title' => 'Dashboard Metric Overview',
+                'desc' => 'Open the Reports dashboard to review key indicators: Average Response Time, First Contact Resolution (FCR), and overall SLA compliance percentage.',
+                'code' => null,
+                'note' => 'Filters allow you to drill down by department or tenant.'
+            ],
+            [
+                'title' => 'Exporting PDF Summaries',
+                'desc' => 'Generate executive PDF summaries of your support team\'s weekly performance, featuring volume trends, SLA compliance graphs, and category statistics.',
+                'code' => null,
+                'note' => 'PDF exports are optimized for printing and presentation.'
+            ],
+            [
+                'title' => 'Exporting Raw Data (Excel)',
+                'desc' => 'Download raw ticket logs, time stamps, feedback ratings, and agent details in Excel format for offline pivot table analysis.',
+                'code' => null,
+                'note' => 'Excel exports are capped at 50,000 records per download.'
+            ],
+            [
+                'title' => 'Analyzing Ticket Volumes',
+                'desc' => 'Review volume distribution charts to identify peak submission days, times, and category distributions to optimize agent staffing levels.',
+                'code' => null,
+                'note' => 'Peak times are calculated based on a rolling 30-day average.'
+            ],
+            [
+                'title' => 'Tracking Technician Performance',
+                'desc' => 'Track individual agent performance: total tickets closed, average resolution times, customer satisfaction ratings, and SLA compliance rankings.',
+                'code' => null,
+                'note' => 'Use performance data for team reviews and workload adjustments.'
+            ],
+            [
+                'title' => 'Monitoring SLA Compliance',
+                'desc' => 'Review SLA breach logs. Identify which priorities or departments suffer the most breaches to adjust policy parameters or staffing.',
+                'code' => null,
+                'note' => 'Breach details specify time elapsed beyond targets.'
+            ],
+            [
+                'title' => 'Generating Monthly Reports',
+                'desc' => 'Compile and lock comprehensive monthly operations reviews. Review monthly trends to track improvement in customer satisfaction.',
+                'code' => null,
+                'note' => 'Monthly reports are archived in the database for 3 years.'
+            ]
+        ],
+        'notes' => 'Export features require Excel/PDF generation PHP extension packages.'
+    ],
+    'settings-configuration' => [
+        'intro' => 'Configure global workspace settings, system-wide admin variables, branding options, notifications, and integration tokens.',
+        'tip' => 'Backup your current branding logo file before uploading an replacement image.',
+        'screenshot' => 'settings-configuration.png',
+        'steps' => [
+            [
+                'title' => 'Updating Company Profile',
+                'desc' => 'Go to System > Settings. Fill in your official company name, support email, phone numbers, postal addresses, and local time zone values.',
+                'code' => null,
+                'note' => 'Support email acts as the default sender for client alerts.'
+            ],
+            [
+                'title' => 'Custom Branding Settings',
+                'desc' => 'Customize the admin interface and public customer portal by setting custom navigation styles, button background colors, and body typography.',
+                'code' => null,
+                'note' => 'Branding overrides apply to all client-facing pages.'
+            ],
+            [
+                'title' => 'Uploading Logos',
+                'desc' => 'Upload high-resolution logos for light and dark layouts. Allowed file types: PNG, SVG. Dimensions should be 120x40px.',
+                'code' => null,
+                'note' => 'Logos are automatically resized to fit header blocks.'
+            ],
+            [
+                'title' => 'Configuring Theme Variables',
+                'desc' => 'Choose between Dark Mode, Light Mode, or system default. Administrators can lock a default theme style for all support agents.',
+                'code' => null,
+                'note' => 'Users can override theme preferences on their profile pages.'
+            ],
+            [
+                'title' => 'SMTP Email Configuration',
+                'desc' => 'Define SMTP server hosts, ports, encryption settings (SSL/TLS), and credentials to route transactional notification emails securely.',
+                'code' => 'MAIL_MAILER=smtp\nMAIL_HOST=smtp.mailtrap.io\nMAIL_PORT=2525',
+                'note' => 'Always click "Test Connection" to verify connection settings.'
+            ],
+            [
+                'title' => 'Notification Rules',
+                'desc' => 'Select which actions trigger emails: ticket assignment, client updates, administrative notes, or SLA warnings.',
+                'code' => null,
+                'note' => 'Excessive alerts can lead to email spam flags.'
+            ],
+            [
+                'title' => 'Role Management',
+                'desc' => 'Define agent roles and edit permissions: read-only agents, department managers, security managers, or full administrators.',
+                'code' => null,
+                'note' => 'Standard roles cannot be deleted, but permissions can be edited.'
+            ],
+            [
+                'title' => 'Assigning User Permissions',
+                'desc' => 'Map roles to agent profiles. Administrators can temporarily elevate agent permissions to troubleshoot critical incidents.',
+                'code' => null,
+                'note' => 'Elevations are recorded in the security logs.'
+            ],
+            [
+                'title' => 'Enabling Maintenance Mode',
+                'desc' => 'During system updates, enable maintenance mode to display a clean offline splash page on the public client portal, blocking submissions.',
+                'code' => 'php artisan down --secret="bypass-token"',
+                'note' => 'Admin users can still log in using the bypass token URL.'
+            ]
+        ],
+        'notes' => 'Ensure configuration cache is cleared after updating SMTP credentials.'
+    ],
+    'sla-management' => [
+        'intro' => 'Service Level Agreements (SLAs) are commitment rules defining target timelines for ticket updates and closures. CliqueHA applies these rules to guarantee standard service response windows.',
+        'tip' => 'Map Gold and Platinum tiers to prioritize enterprise accounts during volume spikes.',
+        'screenshot' => 'sla-management.png',
+        'steps' => [
+            [
+                'title' => 'What is an SLA Policy?',
+                'desc' => 'An SLA specifies targets for initial response and final resolution. CliqueHA matches new tickets with active SLA rules on creation.',
+                'code' => null,
+                'note' => 'Policies consist of response thresholds and resolution thresholds.'
+            ],
+            [
+                'title' => 'Defining Client Tiers',
+                'desc' => 'SLA targets are matched against client tiers. Bronze accounts might have a 24-hour response target, while Platinum requires a 30-minute response.',
+                'code' => null,
+                'note' => 'Assign client tiers in the Client Management settings page.'
+            ],
+            [
+                'title' => 'Setting Response Time Targets',
+                'desc' => 'Configure maximum allowable time for initial agent contact. The timer starts on submission and stops once the first public comment is sent.',
+                'code' => null,
+                'note' => 'Automated AI replies do not satisfy the initial response contact SLA.'
+            ],
+            [
+                'title' => 'Setting Resolution Time Targets',
+                'desc' => 'Configure targets for final ticket closure. The resolution timer is running while in Open or In Progress, and pauses when Pending.',
+                'code' => null,
+                'note' => 'Closing a ticket successfully completes the SLA resolution timer.'
+            ],
+            [
+                'title' => 'Priorities Matrix mapping',
+                'desc' => 'Build a grid mapping SLA targets against priority levels (Urgent, High, Medium, Low). Urgent tickets should have shorter response times.',
+                'code' => null,
+                'note' => 'Priorities matrix values override general client tier SLA defaults.'
+            ],
+            [
+                'title' => 'Editing SLA Policies',
+                'desc' => 'Go to System > SLA Settings, select a tier policy, edit response/resolution hour targets, and save changes.',
+                'code' => null,
+                'note' => 'Policy updates only apply to new tickets.'
+            ],
+            [
+                'title' => 'Industry Best Practices',
+                'desc' => 'We recommend aligning SLA windows with your team\'s active support shifts. Use 8x5 (business hours) or 24x7 targets depending on staffing.',
+                'code' => null,
+                'note' => 'Business hour targets exclude weekends and holidays.'
+            ],
+            [
+                'title' => 'Monitoring SLA Breaches',
+                'desc' => 'Review breach logs. CliqueHA tags breached tickets in red on the dashboard, listing hours elapsed beyond targets, and alerts managers.',
+                'code' => null,
+                'note' => 'Breaches automatically escalate tickets to managers.'
+            ]
+        ],
+        'notes' => 'SLA tracking is calculated using the system timezone value.'
+    ]
+];

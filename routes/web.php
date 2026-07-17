@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\TenantFeedbackController as AdminTenantFeedbackCo
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\GitHubWebhookController;
 use App\Http\Controllers\HealthCheckController;
+use App\Http\Controllers\TutorialController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\TenantController;
@@ -118,5 +119,22 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
      // Admin Reports
     Route::view('reports', 'admin.reports.index')
         ->name('reports.index');
+
+    // Admin Help & Tutorials
+    Route::get('help', [TutorialController::class, 'index'])
+        ->name('help.index');
+
+    Route::get('help/{tutorial}', [TutorialController::class, 'show'])
+        ->name('help.show');
+
+    // Admin Notifications
+    Route::get('notifications', function () {
+        return view('admin.notifications.index');
+    })->name('notifications.index');
+
+    Route::get('notifications/recent', [\App\Http\Controllers\NotificationController::class, 'recent'])->name('notifications.recent');
+    Route::post('notifications/mark-all-read', [\App\Http\Controllers\NotificationController::class, 'markAllRead'])->name('notifications.markAllRead');
+    Route::post('notifications/{id}/read', [\App\Http\Controllers\NotificationController::class, 'markRead'])->name('notifications.read');
+    Route::get('notifications/unread-count', [\App\Http\Controllers\NotificationController::class, 'unreadCount'])->name('notifications.unreadCount');
 });
 require __DIR__.'/auth.php';

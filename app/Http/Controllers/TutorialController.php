@@ -8,7 +8,7 @@ use Illuminate\View\View;
 
 class TutorialController extends Controller
 {
-    private const TUTORIALS = [
+    public const TUTORIALS = [
         'getting-started' => [
             'title' => 'Getting Started',
             'description' => 'Set up your workspace, departments, categories, and invite your team.',
@@ -48,10 +48,18 @@ class TutorialController extends Controller
 
     public function index(OnboardingService $onboardingService): View
     {
-        $tenant = Auth::user()->currentTenant();
-        $onboardingDismissed = $onboardingService->isDismissed($tenant);
+        $user = Auth::user();
+        $onboardingDismissed = false;
+        if ($user && method_exists($user, 'currentTenant')) {
+            $tenant = $user->currentTenant();
+            if ($tenant) {
+                $onboardingDismissed = $onboardingService->isDismissed($tenant);
+            }
+        }
 
-        return view('tutorials.index', [
+        $viewName = request()->routeIs('admin.*') ? 'admin.help.index' : 'tutorials.index';
+
+        return view($viewName, [
             'tutorials' => self::TUTORIALS,
             'onboardingDismissed' => $onboardingDismissed,
         ]);
@@ -63,7 +71,9 @@ class TutorialController extends Controller
             abort(404);
         }
 
-        return view('tutorials.show', [
+        $viewName = request()->routeIs('admin.*') ? 'admin.help.show' : 'tutorials.show';
+
+        return view($viewName, [
             'slug' => $tutorial,
             'tutorial' => self::TUTORIALS[$tutorial],
             'tutorials' => self::TUTORIALS,
