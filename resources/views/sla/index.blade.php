@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between w-full">
-            <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('SLA Policies') }}</h2>
+            <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-100">{{ __('SLA Policies') }}</h2>
             @if(!$hasAny)
                 <form method="POST" action="{{ route('sla.seed-defaults') }}">
                     @csrf
@@ -15,7 +15,7 @@
             @else
                 <form method="POST" action="{{ route('sla.seed-defaults') }}">
                     @csrf
-                    <button type="submit" class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                    <button type="submit" class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
                         {{ __('Fill missing with defaults') }}
                     </button>
                 </form>
@@ -26,10 +26,10 @@
     <div class="py-6">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
             @if(session('success'))
-                <div class="rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800">{{ session('success') }}</div>
+                <div class="rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800 dark:bg-green-500/10 dark:border-green-500/30 dark:text-green-400">{{ session('success') }}</div>
             @endif
 
-            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900 space-y-1">
+            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900 space-y-1 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300">
                 <p>{{ __('Policies are grouped by client tier. Each tier has one row per priority.') }}</p>
                 <p><span class="font-semibold">{{ __('Response hours') }}:</span> {{ __('target time from ticket creation until it is first moved to In Progress.') }}</p>
                 <p><span class="font-semibold">{{ __('Resolution hours') }}:</span> {{ __('target time from ticket creation until it is Closed.') }}</p>
@@ -37,14 +37,14 @@
 
             @foreach($tiers as $tier)
                 @php $tierRows = $grouped[$tier]; $hasRows = collect($tierRows)->filter()->isNotEmpty(); @endphp
-                <div class="rounded-xl bg-white shadow-sm overflow-hidden">
-                    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <div class="rounded-xl bg-white shadow-sm overflow-hidden dark:bg-gray-800">
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
                         <div>
-                            <h3 class="text-base font-semibold text-gray-900">{{ ucfirst($tier) }}</h3>
-                            <p class="text-xs text-gray-500">{{ __('Applies to clients tagged as :tier.', ['tier' => $tier]) }}</p>
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">{{ ucfirst($tier) }}</h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('Applies to clients tagged as :tier.', ['tier' => $tier]) }}</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <a href="{{ route('sla.edit-tier', $tier) }}" class="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">
+                            <a href="{{ route('sla.edit-tier', $tier) }}" class="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20">
                                 @if($hasRows)
                                     {{ __('Edit policy') }}
                                 @else
@@ -54,7 +54,7 @@
                             @if($hasRows)
                                 <form method="POST" action="{{ route('sla.destroy-tier', $tier) }}" onsubmit="return confirm('{{ __('Remove all :tier policies?', ['tier' => ucfirst($tier)]) }}')">
                                     @csrf @method('DELETE')
-                                    <button type="submit" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
+                                    <button type="submit" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
                                         {{ __('Remove') }}
                                     </button>
                                 </form>
@@ -63,12 +63,12 @@
                     </div>
 
                     @if(!$hasRows)
-                        <div class="px-6 py-8 text-center text-sm text-gray-500">
+                        <div class="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                             {{ __('No policy yet for :tier. Create one to define response + resolution times per priority.', ['tier' => $tier]) }}
                         </div>
                     @else
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50 text-xs font-medium uppercase tracking-wider text-gray-500">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                                 <tr>
                                     <th class="px-6 py-2 text-left">{{ __('Priority') }}</th>
                                     <th class="px-6 py-2 text-right">{{ __('Response') }}</th>
@@ -76,26 +76,26 @@
                                     <th class="px-6 py-2 text-center">{{ __('Active') }}</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-100 text-sm">
+                            <tbody class="divide-y divide-gray-100 text-sm dark:divide-gray-700">
                                 @foreach($priorities as $priority)
                                     @php $p = $tierRows[$priority]; @endphp
                                     <tr>
                                         <td class="px-6 py-2">
                                             <x-badge :type="$priority">{{ ucfirst($priority) }}</x-badge>
                                         </td>
-                                        <td class="px-6 py-2 text-right {{ $p ? 'text-gray-900' : 'text-gray-400' }}">
+                                        <td class="px-6 py-2 text-right {{ $p ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-600' }}">
                                             {{ $p ? $p->response_time_hours.'h' : '—' }}
                                         </td>
-                                        <td class="px-6 py-2 text-right {{ $p ? 'text-gray-900' : 'text-gray-400' }}">
+                                        <td class="px-6 py-2 text-right {{ $p ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-600' }}">
                                             {{ $p ? $p->resolution_time_hours.'h' : '—' }}
                                         </td>
                                         <td class="px-6 py-2 text-center">
                                             @if($p && $p->is_active)
-                                                <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-800">{{ __('Active') }}</span>
+                                                <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-800 dark:bg-green-500/10 dark:text-green-400">{{ __('Active') }}</span>
                                             @elseif($p)
-                                                <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ __('Paused') }}</span>
+                                                <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">{{ __('Paused') }}</span>
                                             @else
-                                                <span class="text-[10px] text-gray-400">{{ __('Not set') }}</span>
+                                                <span class="text-[10px] text-gray-400 dark:text-gray-600">{{ __('Not set') }}</span>
                                             @endif
                                         </td>
                                     </tr>

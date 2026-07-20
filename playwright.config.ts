@@ -4,9 +4,11 @@ export default defineConfig({
     testDir: './tests/e2e',
     timeout: 30000,
     use: {
-        baseURL: 'http://localhost:8008',
+        baseURL: 'http://localhost:8005',
         headless: false,
-        slowMo: 500,
+        launchOptions: {
+            slowMo: 500,
+        },
         screenshot: 'only-on-failure',
         video: 'retain-on-failure',
     },

@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class DashboardController extends Controller
 {
@@ -44,6 +45,25 @@ class DashboardController extends Controller
     public function stats(): JsonResponse
     {
         return response()->json($this->getDashboardData());
+    }
+
+    /**
+     * Display the full, paginated "My Recent Activity" list.
+     */
+    public function myActivity(): View
+    {
+        $userId = Auth::id();
+
+        /** @var LengthAwarePaginator $activity */
+        $activity = TicketHistory::query()
+            ->with(['ticket:id,ticket_number,subject', 'user:id,name'])
+            ->where('user_id', $userId)
+            ->latest()
+            ->paginate(20);
+
+        return view('dashboard.my-activity', [
+            'myActivity' => $activity,
+        ]);
     }
 
     /**
@@ -122,7 +142,7 @@ class DashboardController extends Controller
             ->with(['ticket:id,ticket_number', 'user:id,name'])
             ->where('user_id', $userId)
             ->latest()
-            ->take(10)
+            ->take(5)
             ->get();
 
         // ── My Ticket Trend (last 14 days — tickets assigned to me) ──

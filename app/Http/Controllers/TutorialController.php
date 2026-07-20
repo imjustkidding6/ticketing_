@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Services\OnboardingService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response;
 
 class TutorialController extends Controller
 {
@@ -68,5 +70,20 @@ class TutorialController extends Controller
             'tutorial' => self::TUTORIALS[$tutorial],
             'tutorials' => self::TUTORIALS,
         ]);
+    }
+
+    /**
+     * Download the full Help & Tutorials guide as a single PDF.
+     */
+    public function downloadPdf(): Response
+    {
+        $tenant = Auth::user()->currentTenant();
+
+        $pdf = Pdf::loadView('tutorials.pdf', [
+            'tutorials' => self::TUTORIALS,
+            'tenant' => $tenant,
+        ])->setPaper('a4');
+
+        return $pdf->download('CliqueHA-Nexus-Help-and-Tutorials.pdf');
     }
 }

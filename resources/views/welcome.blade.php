@@ -45,7 +45,7 @@
         </header>
 
         {{-- Hero --}}
-        <section class="bg-gradient-to-br from-indigo-700 via-indigo-800 to-indigo-900 py-20 sm:py-28">
+        <section class="bg-linear-to-br from-indigo-700 via-indigo-800 to-indigo-900 py-20 sm:py-28">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
                 <h1 class="text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl">
                     {{ __('Streamline Your Support') }}

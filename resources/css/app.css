@@ -1,5 +1,5 @@
 @import "tailwindcss";
-
+@custom-variant dark (&:where(.dark, .dark *));
 @plugin "@tailwindcss/forms";
 
 @source "../../resources/views/**/*.blade.php";
@@ -34,3 +34,46 @@
 .nx-prose .nx-code code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; background: none; padding: 0; color: inherit; }
 .nx-prose .nx-link { color: #4f46e5; text-decoration: underline; }
 .nx-prose .nx-link:hover { color: #4338ca; }
+
+:root {
+    --chart-text: #334155;
+    --chart-grid: #cbd5e1;
+    --chart-border: #ffffff;
+}
+
+.dark {
+    --chart-text: #e5e7eb;
+    --chart-grid: #475569;
+    --chart-border: #1f2937;
+}
+
+.dark .apexcharts-gridline {
+    stroke: #475569 !important;
+}
+
+.dark .apexcharts-tooltip {
+    background: #111827 !important;
+    border: 1px solid #475569 !important;
+    color: #f8fafc !important;
+}
+
+.dark .apexcharts-tooltip-title {
+    background: #1f2937 !important;
+    border-bottom: 1px solid #475569 !important;
+    color: #f8fafc !important;
+}
+
+.dark .apexcharts-text,
+.dark .apexcharts-xaxis text,
+.dark .apexcharts-yaxis text,
+.dark .apexcharts-legend-text,
+.dark .apexcharts-title-text,
+.dark .apexcharts-subtitle-text,
+.dark .apexcharts-datalabel {
+    fill: #e5e7eb !important;
+    color: #e5e7eb !important;
+}
+
+.dark .apexcharts-gridline {
+    stroke: #475569 !important;
+}

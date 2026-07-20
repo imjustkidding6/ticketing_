@@ -23,40 +23,90 @@
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div class="flex justify-between h-16">
                         <div class="flex">
-                            <div class="flex-shrink-0 flex items-center">
+                            <div class="shrink-0 flex items-center">
                                 <a href="{{ route('admin.dashboard') }}" class="text-white font-bold text-xl">
                                     Admin Panel
                                 </a>
                             </div>
                             <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-                                <a href="{{ route('admin.dashboard') }}" class="@if(request()->routeIs('admin.dashboard')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                <a href="{{ route('admin.dashboard') }}"
+                                   @class([
+                                       'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
+                                       'border-indigo-400 text-white' => request()->routeIs('admin.dashboard'),
+                                       'border-transparent text-gray-300 hover:border-gray-300 hover:text-white' => ! request()->routeIs('admin.dashboard'),
+                                   ])>
                                     Dashboard
                                 </a>
-                                <a href="{{ route('admin.distributors.index') }}" class="@if(request()->routeIs('admin.distributors.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                <a href="{{ route('admin.distributors.index') }}"
+                                   @class([
+                                       'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
+                                       'border-indigo-400 text-white' => request()->routeIs('admin.distributors.*'),
+                                       'border-transparent text-gray-300 hover:border-gray-300 hover:text-white' => ! request()->routeIs('admin.distributors.*'),
+                                   ])>
                                     Distributors
                                 </a>
-                                <a href="{{ route('admin.licenses.index') }}" class="@if(request()->routeIs('admin.licenses.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                <a href="{{ route('admin.licenses.index') }}"
+                                   @class([
+                                       'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
+                                       'border-indigo-400 text-white' => request()->routeIs('admin.licenses.*'),
+                                       'border-transparent text-gray-300 hover:border-gray-300 hover:text-white' => ! request()->routeIs('admin.licenses.*'),
+                                   ])>
                                     Licenses
                                 </a>
-                                <a href="{{ route('admin.plans.index') }}" class="@if(request()->routeIs('admin.plans.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                <a href="{{ route('admin.plans.index') }}"
+                                   @class([
+                                       'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
+                                       'border-indigo-400 text-white' => request()->routeIs('admin.plans.*'),
+                                       'border-transparent text-gray-300 hover:border-gray-300 hover:text-white' => ! request()->routeIs('admin.plans.*'),
+                                   ])>
                                     Plans
                                 </a>
-                                <a href="{{ route('admin.tenants.index') }}" class="@if(request()->routeIs('admin.tenants.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                <a href="{{ route('admin.tenants.index') }}"
+                                   @class([
+                                       'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
+                                       'border-indigo-400 text-white' => request()->routeIs('admin.tenants.*'),
+                                       'border-transparent text-gray-300 hover:border-gray-300 hover:text-white' => ! request()->routeIs('admin.tenants.*'),
+                                   ])>
                                     Tenants
                                 </a>
-                                <a href="{{ route('admin.users.index') }}" class="@if(request()->routeIs('admin.users.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                <a href="{{ route('admin.users.index') }}"
+                                   @class([
+                                       'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
+                                       'border-indigo-400 text-white' => request()->routeIs('admin.users.*'),
+                                       'border-transparent text-gray-300 hover:border-gray-300 hover:text-white' => ! request()->routeIs('admin.users.*'),
+                                   ])>
                                     Users
                                 </a>
-                                <a href="{{ route('admin.announcements.index') }}" class="@if(request()->routeIs('admin.announcements.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                <a href="{{ route('admin.announcements.index') }}"
+                                   @class([
+                                       'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
+                                       'border-indigo-400 text-white' => request()->routeIs('admin.announcements.*'),
+                                       'border-transparent text-gray-300 hover:border-gray-300 hover:text-white' => ! request()->routeIs('admin.announcements.*'),
+                                   ])>
                                     Announcements
                                 </a>
-                                <a href="{{ route('admin.feedback.index') }}" class="@if(request()->routeIs('admin.feedback.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center gap-1.5 px-1 pt-1 border-b-2 text-sm font-medium">
+                                <a href="{{ route('admin.feedback.index') }}"
+                                   @class([
+                                       'inline-flex items-center gap-1.5 px-1 pt-1 border-b-2 text-sm font-medium',
+                                       'border-indigo-400 text-white' => request()->routeIs('admin.feedback.*'),
+                                       'border-transparent text-gray-300 hover:border-gray-300 hover:text-white' => ! request()->routeIs('admin.feedback.*'),
+                                   ])>
                                     Feedback
                                 </a>
-                                <a href="{{ route('admin.bugs.index') }}" class="@if(request()->routeIs('admin.bugs.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center gap-1.5 px-1 pt-1 border-b-2 text-sm font-medium">
+                                <a href="{{ route('admin.bugs.index') }}"
+                                   @class([
+                                       'inline-flex items-center gap-1.5 px-1 pt-1 border-b-2 text-sm font-medium',
+                                       'border-indigo-400 text-white' => request()->routeIs('admin.bugs.*'),
+                                       'border-transparent text-gray-300 hover:border-gray-300 hover:text-white' => ! request()->routeIs('admin.bugs.*'),
+                                   ])>
                                     AI Bugs
                                 </a>
-                                <a href="{{ route('admin.settings.index') }}" class="@if(request()->routeIs('admin.settings.*')) border-indigo-400 text-white @else border-transparent text-gray-300 hover:border-gray-300 hover:text-white @endif inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                <a href="{{ route('admin.settings.index') }}"
+                                   @class([
+                                       'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
+                                       'border-indigo-400 text-white' => request()->routeIs('admin.settings.*'),
+                                       'border-transparent text-gray-300 hover:border-gray-300 hover:text-white' => ! request()->routeIs('admin.settings.*'),
+                                   ])>
                                     Settings
                                 </a>
                             </div>
@@ -84,16 +134,66 @@
 
                 <div id="admin-mobile-menu" x-show="mobileOpen" x-cloak x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" class="sm:hidden border-t border-gray-700 bg-gray-800">
                     <div class="space-y-1 px-2 pt-2 pb-3">
-                        <a href="{{ route('admin.dashboard') }}" class="@if(request()->routeIs('admin.dashboard')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Dashboard</a>
-                        <a href="{{ route('admin.distributors.index') }}" class="@if(request()->routeIs('admin.distributors.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Distributors</a>
-                        <a href="{{ route('admin.licenses.index') }}" class="@if(request()->routeIs('admin.licenses.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Licenses</a>
-                        <a href="{{ route('admin.plans.index') }}" class="@if(request()->routeIs('admin.plans.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Plans</a>
-                        <a href="{{ route('admin.tenants.index') }}" class="@if(request()->routeIs('admin.tenants.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Tenants</a>
-                        <a href="{{ route('admin.users.index') }}" class="@if(request()->routeIs('admin.users.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Users</a>
-                        <a href="{{ route('admin.announcements.index') }}" class="@if(request()->routeIs('admin.announcements.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Announcements</a>
-                        <a href="{{ route('admin.feedback.index') }}" class="@if(request()->routeIs('admin.feedback.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Feedback</a>
-                        <a href="{{ route('admin.bugs.index') }}" class="@if(request()->routeIs('admin.bugs.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">AI Bugs</a>
-                        <a href="{{ route('admin.settings.index') }}" class="@if(request()->routeIs('admin.settings.*')) bg-gray-900 text-white @else text-gray-300 hover:bg-gray-700 hover:text-white @endif block rounded-md px-3 py-2 text-base font-medium">Settings</a>
+                        <a href="{{ route('admin.dashboard') }}"
+                           @class([
+                               'block rounded-md px-3 py-2 text-base font-medium',
+                               'bg-gray-900 text-white' => request()->routeIs('admin.dashboard'),
+                               'text-gray-300 hover:bg-gray-700 hover:text-white' => ! request()->routeIs('admin.dashboard'),
+                           ])>Dashboard</a>
+                        <a href="{{ route('admin.distributors.index') }}"
+                           @class([
+                               'block rounded-md px-3 py-2 text-base font-medium',
+                               'bg-gray-900 text-white' => request()->routeIs('admin.distributors.*'),
+                               'text-gray-300 hover:bg-gray-700 hover:text-white' => ! request()->routeIs('admin.distributors.*'),
+                           ])>Distributors</a>
+                        <a href="{{ route('admin.licenses.index') }}"
+                           @class([
+                               'block rounded-md px-3 py-2 text-base font-medium',
+                               'bg-gray-900 text-white' => request()->routeIs('admin.licenses.*'),
+                               'text-gray-300 hover:bg-gray-700 hover:text-white' => ! request()->routeIs('admin.licenses.*'),
+                           ])>Licenses</a>
+                        <a href="{{ route('admin.plans.index') }}"
+                           @class([
+                               'block rounded-md px-3 py-2 text-base font-medium',
+                               'bg-gray-900 text-white' => request()->routeIs('admin.plans.*'),
+                               'text-gray-300 hover:bg-gray-700 hover:text-white' => ! request()->routeIs('admin.plans.*'),
+                           ])>Plans</a>
+                        <a href="{{ route('admin.tenants.index') }}"
+                           @class([
+                               'block rounded-md px-3 py-2 text-base font-medium',
+                               'bg-gray-900 text-white' => request()->routeIs('admin.tenants.*'),
+                               'text-gray-300 hover:bg-gray-700 hover:text-white' => ! request()->routeIs('admin.tenants.*'),
+                           ])>Tenants</a>
+                        <a href="{{ route('admin.users.index') }}"
+                           @class([
+                               'block rounded-md px-3 py-2 text-base font-medium',
+                               'bg-gray-900 text-white' => request()->routeIs('admin.users.*'),
+                               'text-gray-300 hover:bg-gray-700 hover:text-white' => ! request()->routeIs('admin.users.*'),
+                           ])>Users</a>
+                        <a href="{{ route('admin.announcements.index') }}"
+                           @class([
+                               'block rounded-md px-3 py-2 text-base font-medium',
+                               'bg-gray-900 text-white' => request()->routeIs('admin.announcements.*'),
+                               'text-gray-300 hover:bg-gray-700 hover:text-white' => ! request()->routeIs('admin.announcements.*'),
+                           ])>Announcements</a>
+                        <a href="{{ route('admin.feedback.index') }}"
+                           @class([
+                               'block rounded-md px-3 py-2 text-base font-medium',
+                               'bg-gray-900 text-white' => request()->routeIs('admin.feedback.*'),
+                               'text-gray-300 hover:bg-gray-700 hover:text-white' => ! request()->routeIs('admin.feedback.*'),
+                           ])>Feedback</a>
+                        <a href="{{ route('admin.bugs.index') }}"
+                           @class([
+                               'block rounded-md px-3 py-2 text-base font-medium',
+                               'bg-gray-900 text-white' => request()->routeIs('admin.bugs.*'),
+                               'text-gray-300 hover:bg-gray-700 hover:text-white' => ! request()->routeIs('admin.bugs.*'),
+                           ])>AI Bugs</a>
+                        <a href="{{ route('admin.settings.index') }}"
+                           @class([
+                               'block rounded-md px-3 py-2 text-base font-medium',
+                               'bg-gray-900 text-white' => request()->routeIs('admin.settings.*'),
+                               'text-gray-300 hover:bg-gray-700 hover:text-white' => ! request()->routeIs('admin.settings.*'),
+                           ])>Settings</a>
                     </div>
                     <div class="border-t border-gray-700 px-4 py-3">
                         <div class="text-sm font-medium text-white">{{ auth()->user()->name }}</div>
