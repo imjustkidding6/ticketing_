@@ -19,15 +19,15 @@ class TenantFeedbackController extends Controller
             ->when($request->status, fn ($q) => $q->where('status', $request->status))
             ->when($request->search, fn ($q) => $q->where(function ($q) use ($request) {
                 $q->where('subject', 'like', "%{$request->search}%")
-                  ->orWhere('body', 'like', "%{$request->search}%");
+                    ->orWhere('body', 'like', "%{$request->search}%");
             }))
             ->latest()
             ->paginate(20)
             ->withQueryString();
 
         $counts = [
-            'new'      => TenantFeedback::withoutGlobalScopes()->where('status', 'new')->count(),
-            'read'     => TenantFeedback::withoutGlobalScopes()->where('status', 'read')->count(),
+            'new' => TenantFeedback::withoutGlobalScopes()->where('status', 'new')->count(),
+            'read' => TenantFeedback::withoutGlobalScopes()->where('status', 'read')->count(),
             'resolved' => TenantFeedback::withoutGlobalScopes()->where('status', 'resolved')->count(),
         ];
 

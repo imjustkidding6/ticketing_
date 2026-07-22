@@ -156,7 +156,7 @@ return [
     |
     */
 
-    'domain' => env('SESSION_DOMAIN'),
+    'domain' => in_array(env('SESSION_DOMAIN'), [null, '', 'null'], true) ? null : env('SESSION_DOMAIN'),
 
     /*
     |--------------------------------------------------------------------------
@@ -169,7 +169,9 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => env('SESSION_SECURE_COOKIE') === 'null' || env('SESSION_SECURE_COOKIE') === null
+        ? false
+        : (bool) env('SESSION_SECURE_COOKIE'),
 
     /*
     |--------------------------------------------------------------------------

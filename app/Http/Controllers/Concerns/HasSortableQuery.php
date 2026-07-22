@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 
 trait HasSortableQuery
@@ -12,7 +13,7 @@ trait HasSortableQuery
      * Only columns in the whitelist are honored; anything else silently
      * falls through to the provided default ORDER BY.
      *
-     * @param  Builder<\Illuminate\Database\Eloquent\Model>  $query
+     * @param  Builder<Model>  $query
      * @param  array<string, string>  $columns  Map of request-param name => DB column expression
      * @param  string|array<int, array{0: string, 1: string}>  $default  Default order applied when no sort or invalid sort
      */

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -50,7 +51,7 @@ class ActivityLogController extends Controller
             ->sort()
             ->values();
 
-        $users = \App\Models\User::query()
+        $users = User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
             ->orderBy('name')
             ->get(['id', 'name']);

@@ -1,40 +1,86 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Models\Traits\BelongsToTenant;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
- * A bug in the product itself, reported by a user through the AI Assistant.
- * Internal staff (is_admin) review these at /admin/bugs and can escalate one to
- * the "AI Programmer" (Claude Code) which opens a fix PR. Status then flows back
- * and the reporting user is notified inside the assistant.
+ * Model representing a bug report filed directly or via the AI Assistant.
+ *
+ * @property int $id
+ * @property int $tenant_id
+ * @property int|null $reported_by
+ * @property int|null $chat_conversation_id
+ * @property string $title
+ * @property string $description
+ * @property string|null $steps_to_reproduce
+ * @property string|null $area
+ * @property string $severity
+ * @property string $status
+ * @property int|null $github_issue_number
+ * @property string|null $github_pr_url
+ * @property array<string, mixed>|null $ai_triage
+ * @property string|null $user_notified_status
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ * @property-read Tenant $tenant
+ * @property-read User|null $user
+ * @property-read User|null $reporter
+ * @property-read ChatConversation|null $conversation
+ * @property-read ChatConversation|null $chatConversation
  */
 class BugReport extends Model
 {
-    use BelongsToTenant;
+    use BelongsToTenant, HasFactory;
 
     public const STATUS_NEW = 'new';
 
-    public const STATUS_TRIAGED = 'triaged';
+    public const STATUS_ACKNOWLEDGED = 'acknowledged';
 
-    public const STATUS_ESCALATED = 'escalated';   // sent to the AI Programmer (GitHub issue created)
+    public const STATUS_IN_PROGRESS = 'in_progress';
 
-    public const STATUS_PR_OPENED = 'pr_opened';    // Claude Code opened a fix PR
-
-    public const STATUS_MERGED = 'merged';          // fix merged (shipping)
+    public const STATUS_RESOLVED = 'resolved';
 
     public const STATUS_CLOSED = 'closed';
 
+    public const STATUS_TRIAGED = 'triaged';
+
+    public const STATUS_ESCALATED = 'escalated';
+
+    public const STATUS_PR_OPENED = 'pr_opened';
+
+    public const STATUS_MERGED = 'merged';
+
     public const STATUS_REJECTED = 'rejected';
+
+    public const SEVERITY_LOW = 'low';
+
+    public const SEVERITY_MEDIUM = 'medium';
+
+    public const SEVERITY_HIGH = 'high';
+
+    public const SEVERITY_CRITICAL = 'critical';
+
+    public const LOW = 'low';
+
+    public const MEDIUM = 'medium';
+
+    public const HIGH = 'high';
+
+    public const CRITICAL = 'critical';
 
     /** Statuses worth surfacing to the reporter inside the assistant. */
     public const USER_FACING_STATUSES = [self::STATUS_PR_OPENED, self::STATUS_MERGED, self::STATUS_REJECTED];
 
-    public const SEVERITIES = ['low', 'medium', 'high', 'critical'];
+    public const SEVERITIES = [self::SEVERITY_LOW, self::SEVERITY_MEDIUM, self::SEVERITY_HIGH, self::SEVERITY_CRITICAL];
 
+    /** @var list<string> */
     protected $fillable = [
         'tenant_id',
         'reported_by',
@@ -51,33 +97,72 @@ class BugReport extends Model
         'user_notified_status',
     ];
 
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
-        return ['ai_triage' => 'array'];
+        return [
+            'ai_triage' => 'array',
+        ];
     }
 
+    /**
+     * @return BelongsTo<Tenant, $this>
+     */
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
     }
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reported_by');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function reporter(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reported_by');
     }
 
+    /**
+     * @return BelongsTo<ChatConversation, $this>
+     */
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(ChatConversation::class, 'chat_conversation_id');
     }
 
-    /** A short human label like "BUG-123". */
-    public function reference(): string
+    /**
+     * @return BelongsTo<ChatConversation, $this>
+     */
+    public function chatConversation(): BelongsTo
     {
-        return 'BUG-'.$this->id;
+        return $this->belongsTo(ChatConversation::class, 'chat_conversation_id');
     }
 
-    /** A one-line, user-friendly description of the current status. */
+    /**
+     * Generate formatted bug reference such as BUG-2026-000001.
+     */
+    public function reference(): string
+    {
+        $year = $this->created_at ? $this->created_at->format('Y') : date('Y');
+        $id = $this->id ?? 0;
+
+        return sprintf('BUG-%s-%06d', $year, $id);
+    }
+
+    /**
+     * A one-line, user-friendly description of the current status.
+     */
     public function userFacingMessage(): string
     {
         return match ($this->status) {

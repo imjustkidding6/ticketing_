@@ -13,6 +13,7 @@ class TenantFeedback extends Model
     protected $table = 'tenant_feedbacks';
 
     public const TYPES = ['bug', 'suggestion', 'compliment', 'other'];
+
     public const STATUSES = ['new', 'read', 'resolved'];
 
     protected $fillable = [

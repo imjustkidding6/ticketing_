@@ -1,5 +1,8 @@
+name: ticketing
+
 services:
   app:
+    image: ticketing-app:dev
     build:
       context: .
       target: development
@@ -76,7 +79,7 @@ services:
   # Optional: Node for Vite dev server
   # Uncomment if you prefer running Vite in Docker
   # node:
-  #   image: node:20-alpine
+  #   image: node:22-alpine
   #   container_name: ticketing-node
   #   working_dir: /var/www/html
   #   ports:

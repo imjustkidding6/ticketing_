@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Plan;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -99,6 +100,6 @@ class PlanTest extends TestCase
     {
         $plan = Plan::factory()->create();
 
-        $this->assertInstanceOf(\Illuminate\Database\Eloquent\Relations\HasMany::class, $plan->licenses());
+        $this->assertInstanceOf(HasMany::class, $plan->licenses());
     }
 }

@@ -1,8 +1,8 @@
-# Production-like environment for local testing
-# Usage: docker compose -f docker-compose.prod.yml up --build
+name: ticketing-prod
 
 services:
   app:
+    image: ticketing-app:prod
     build:
       context: .
       target: production

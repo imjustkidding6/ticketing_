@@ -3,6 +3,10 @@
 namespace App\Services;
 
 use App\Enums\PlanFeature;
+use App\Models\AppSetting;
+use App\Models\Client;
+use App\Models\SlaPolicy;
+use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketAssignment;
 use App\Models\TicketHistory;
@@ -33,7 +37,7 @@ class TicketService
      * Block a priority assignment if the tenant requires an SLA policy
      * and none exists for the given (client_tier, priority) pair.
      */
-    private function guardSlaPolicy(int $tenantId, ?string $clientTier, ?string $priority, \App\Models\Tenant $tenant): void
+    private function guardSlaPolicy(int $tenantId, ?string $clientTier, ?string $priority, Tenant $tenant): void
     {
         if (! $priority) {
             return;
@@ -43,7 +47,7 @@ class TicketService
             return;
         }
 
-        if (! \App\Models\SlaPolicy::hasPolicyFor($tenantId, $clientTier, $priority)) {
+        if (! SlaPolicy::hasPolicyFor($tenantId, $clientTier, $priority)) {
             $tierLabel = $clientTier ? " for {$clientTier} clients" : '';
             throw new \InvalidArgumentException(
                 "Cannot set priority to '{$priority}'{$tierLabel}: no SLA policy defined. ".
@@ -119,11 +123,11 @@ class TicketService
         $data['status'] = 'open';
 
         if (! empty($data['priority']) && ! empty($data['tenant_id'])) {
-            $tenant = \App\Models\Tenant::find($data['tenant_id']);
+            $tenant = Tenant::find($data['tenant_id']);
             if ($tenant) {
                 $clientTier = null;
                 if (! empty($data['client_id'])) {
-                    $clientTier = \App\Models\Client::withoutGlobalScopes()->find($data['client_id'])?->tier;
+                    $clientTier = Client::withoutGlobalScopes()->find($data['client_id'])?->tier;
                 }
                 $this->guardSlaPolicy($data['tenant_id'], $clientTier, $data['priority'], $tenant);
             }
@@ -167,7 +171,7 @@ class TicketService
 
             $this->afterResponse(function () use ($ticketId, $tenantId, $creatorId) {
                 TenantMailService::configure($tenantId);
-                $ticket = \App\Models\Ticket::with(['client', 'department'])->find($ticketId);
+                $ticket = Ticket::with(['client', 'department'])->find($ticketId);
 
                 if (! $ticket) {
                     return;
@@ -184,7 +188,7 @@ class TicketService
 
                 // Notify department members (internal template)
                 if ($ticket->department_id) {
-                    $deptUsers = \App\Models\User::query()
+                    $deptUsers = User::query()
                         ->whereHas('departments', fn ($q) => $q->where('departments.id', $ticket->department_id))
                         ->whereHas('tenants', fn ($q) => $q->where('tenant_id', $tenantId))
                         ->where('id', '!=', $creatorId)
@@ -277,8 +281,8 @@ class TicketService
 
             $this->afterResponse(function () use ($ticketId, $tenantId, $agentId) {
                 TenantMailService::configure($tenantId);
-                $ticket = \App\Models\Ticket::with('client')->find($ticketId);
-                $agent = \App\Models\User::find($agentId);
+                $ticket = Ticket::with('client')->find($ticketId);
+                $agent = User::find($agentId);
 
                 if (! $ticket || ! $agent) {
                     return;
@@ -355,7 +359,7 @@ class TicketService
         if ($status === 'closed'
             && $oldStatus !== 'closed'
             && $this->planService->tenantHasFeature($ticket->tenant, PlanFeature::ServiceReports)
-            && (\App\Models\AppSetting::get('auto_generate_on_close', '1') === '1')
+            && (AppSetting::get('auto_generate_on_close', '1') === '1')
         ) {
             $this->serviceReportService->generate($ticket->fresh());
         }
@@ -366,7 +370,7 @@ class TicketService
 
             $this->afterResponse(function () use ($ticketId, $tenantId, $oldStatus, $status) {
                 TenantMailService::configure($tenantId);
-                $ticket = \App\Models\Ticket::with('client')->find($ticketId);
+                $ticket = Ticket::with('client')->find($ticketId);
 
                 if (! $ticket) {
                     return;
@@ -496,7 +500,7 @@ class TicketService
      */
     private function notifyAdminEmail(int $tenantId, \Illuminate\Notifications\Notification $notification): void
     {
-        $adminEmail = \App\Models\AppSetting::withoutGlobalScopes()
+        $adminEmail = AppSetting::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->where('key', 'admin_notification_email')
             ->first()?->getTypedValue();

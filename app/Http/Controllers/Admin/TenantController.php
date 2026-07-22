@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\Ticket;
+use App\Services\PlanService;
 use App\Services\TenantUrlHelper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -87,7 +88,7 @@ class TenantController extends Controller
         $plan = Plan::findOrFail($validated['plan_id']);
         $tenant->changePlan($plan);
 
-        app(\App\Services\PlanService::class)->clearCache($tenant);
+        app(PlanService::class)->clearCache($tenant);
 
         return redirect()->route('admin.tenants.show', $tenant)
             ->with('success', "Subscription changed to {$plan->name} plan.");

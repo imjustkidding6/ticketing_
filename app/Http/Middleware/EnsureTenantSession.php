@@ -94,6 +94,4 @@ class EnsureTenantSession
 
         return redirect()->route('dashboard.no-tenant');
     }
-
-
 }

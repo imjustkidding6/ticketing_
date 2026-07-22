@@ -260,7 +260,7 @@
             if (this.leaveTarget) {
                 window.location.href = this.leaveTarget;
             } else {
-                window.location.href = '{{ route("sla.index") }}';
+                window.location.href = '{{ request()->routeIs("admin.*") ? route("admin.sla.index") : route("sla.index") }}';
             }
         },
 
@@ -278,8 +278,8 @@
             <!-- Breadcrumbs / Top Navigation -->
             <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-800">
                 <div class="space-y-1">
-                    <a href="{{ route('sla.index') }}" 
-                       @click.prevent="if (isDirty) { leaveTarget = '{{ route('sla.index') }}'; showDiscardModal = true; } else { window.location.href = '{{ route('sla.index') }}'; }" 
+                    <a href="{{ request()->routeIs('admin.*') ? route('admin.sla.index') : route('sla.index') }}" 
+                       @click.prevent="if (isDirty) { leaveTarget = '{{ request()->routeIs('admin.*') ? route('admin.sla.index') : route('sla.index') }}'; showDiscardModal = true; } else { window.location.href = '{{ request()->routeIs('admin.*') ? route('admin.sla.index') : route('sla.index') }}'; }" 
                        class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center gap-1.5 transition">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
                         <span>Back to SLA Registry</span>
@@ -292,7 +292,7 @@
             </div>
 
             <!-- Main Workstation Layout -->
-            <form method="POST" action="{{ route('sla.update-tier', $tier) }}" @submit="submitForm($event)" class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start pb-24">
+            <form method="POST" action="{{ request()->routeIs('admin.*') ? route('admin.sla.update-tier', $tier) : route('sla.update-tier', $tier) }}" @submit="submitForm($event)" class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start pb-24">
                 @csrf
 
                 <!-- LEFT SIDE: Priority configuration cards (2/3 width) -->

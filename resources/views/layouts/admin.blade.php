@@ -1191,7 +1191,8 @@
                  <span x-text="t.message"></span>
             </div>
         </template>
-    </div>
+    <!-- AI Admin Copilot Component -->
+    @include('partials.admin-ai-copilot')
 
 </body>
 </html>

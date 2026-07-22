@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Distributor;
 use App\Models\Plan;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -109,6 +110,6 @@ class DistributorTest extends TestCase
     {
         $distributor = Distributor::factory()->create();
 
-        $this->assertInstanceOf(\Illuminate\Database\Eloquent\Relations\HasMany::class, $distributor->licenses());
+        $this->assertInstanceOf(HasMany::class, $distributor->licenses());
     }
 }

@@ -244,6 +244,12 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     // SLA Policies (Business+ via feature gate)
     Route::middleware('feature:sla_management')->group(function () {
         Route::get('sla', [SlaPolicyController::class, 'index'])->name('sla.index');
+        Route::post('sla', [SlaPolicyController::class, 'store'])->name('sla.store');
+        Route::put('sla/{policy}', [SlaPolicyController::class, 'update'])->name('sla.update');
+        Route::post('sla/{policy}/toggle', [SlaPolicyController::class, 'toggle'])->name('sla.toggle');
+        Route::delete('sla/{policy}', [SlaPolicyController::class, 'destroy'])->name('sla.destroy');
+        Route::post('sla/bulk-action', [SlaPolicyController::class, 'bulkAction'])->name('sla.bulk-action');
+        Route::get('sla/export', [SlaPolicyController::class, 'export'])->name('sla.export');
         Route::post('sla/seed-defaults', [SlaPolicyController::class, 'seedDefaults'])->name('sla.seed-defaults');
         Route::get('sla/tier/{tier}/edit', [SlaPolicyController::class, 'editTier'])->name('sla.edit-tier');
         Route::post('sla/tier/{tier}', [SlaPolicyController::class, 'updateTier'])->name('sla.update-tier');

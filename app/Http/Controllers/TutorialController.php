@@ -79,4 +79,20 @@ class TutorialController extends Controller
             'tutorials' => self::TUTORIALS,
         ]);
     }
+
+    /**
+     * Download the complete System Administrator User Manual as a PDF document.
+     */
+    public function downloadManual()
+    {
+        $path = public_path('docs/Admin-User-Manual.pdf');
+        if (! file_exists($path) || filesize($path) < 1000) {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('admin.help.manual-pdf');
+            file_put_contents($path, $pdf->output());
+        }
+
+        return response()->download($path, 'Admin-User-Manual.pdf', [
+            'Content-Type' => 'application/pdf',
+        ]);
+    }
 }

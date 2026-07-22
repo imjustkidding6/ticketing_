@@ -4,6 +4,9 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Traits\HasTenants;
+use App\Support\TenantTime;
+use Carbon\Carbon;
+use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,7 +18,7 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
+    /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, HasTenants, Notifiable, SoftDeletes;
 
     /**
@@ -29,6 +32,7 @@ class User extends Authenticatable
         'google_id',
         'password',
         'is_admin',
+        'email_verified_at',
         'support_tier',
         'is_available',
     ];
@@ -85,11 +89,11 @@ class User extends Authenticatable
      * Returns false when the row for today's day_of_week is unavailable
      * or the time is outside the configured window.
      */
-    public function isOnScheduleAt(?\Carbon\Carbon $at = null): bool
+    public function isOnScheduleAt(?Carbon $at = null): bool
     {
         // Convert to the tenant's local timezone so day-of-week and time-of-day
         // line up with how the agent entered their schedule.
-        $local = ($at ?? now())->copy()->setTimezone(\App\Support\TenantTime::timezone());
+        $local = ($at ?? now())->copy()->setTimezone(TenantTime::timezone());
 
         // No schedule rows at all → schedule not configured, don't block.
         if (! $this->schedules()->exists()) {
