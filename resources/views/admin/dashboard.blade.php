@@ -4,7 +4,7 @@
 
 @section('content')
     <!-- Stats Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
         <!-- Active Tenants Card -->
         <div class="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:shadow-indigo-50/10">
             <div>
@@ -16,7 +16,7 @@
                         </svg>
                     </div>
                 </div>
-                <div class="mt-4 flex items-baseline gap-2">
+                <div class="mt-4 flex items-baseline gap-2 flex-wrap">
                     <span class="text-3xl font-bold text-slate-900 tracking-tight">{{ $stats['active_tenants'] }}</span>
                     <span class="inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">+2 new</span>
                 </div>
@@ -40,7 +40,7 @@
                         </svg>
                     </div>
                 </div>
-                <div class="mt-4 flex items-baseline gap-2">
+                <div class="mt-4 flex items-baseline gap-2 flex-wrap">
                     <span class="text-3xl font-bold text-slate-900 tracking-tight">{{ $stats['active_licenses'] }}</span>
                     <span class="inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">+3 this mo</span>
                 </div>
@@ -64,7 +64,7 @@
                         </svg>
                     </div>
                 </div>
-                <div class="mt-4 flex items-baseline gap-2">
+                <div class="mt-4 flex items-baseline gap-2 flex-wrap">
                     <span class="text-3xl font-bold text-slate-900 tracking-tight">{{ $stats['distributors'] }}</span>
                     <span class="inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">Active</span>
                 </div>
@@ -85,7 +85,7 @@
                         </svg>
                     </div>
                 </div>
-                <div class="mt-4 flex items-baseline gap-2">
+                <div class="mt-4 flex items-baseline gap-2 flex-wrap">
                     <span class="text-3xl font-bold text-slate-900 tracking-tight">{{ $stats['plans'] }}</span>
                     <span class="inline-flex items-center rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">3 subscription tiers</span>
                 </div>
@@ -106,7 +106,7 @@
                         </svg>
                     </div>
                 </div>
-                <div class="mt-4 flex items-baseline gap-2">
+                <div class="mt-4 flex items-baseline gap-2 flex-wrap">
                     <span class="text-3xl font-bold text-slate-900 tracking-tight">{{ $stats['tickets_this_month'] }}</span>
                     <span class="inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">+12% vs last</span>
                 </div>
@@ -355,15 +355,15 @@
     <!-- Quick Actions -->
     <div class="mt-8 bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
         <h3 class="text-sm font-bold text-slate-900 tracking-tight pb-4 border-b border-slate-50 mb-6">Quick Actions</h3>
-        <div class="flex flex-wrap gap-4">
-            <a href="{{ route('admin.licenses.create') }}" class="inline-flex items-center px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 transition duration-150">
-                <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+        <div class="flex flex-col md:flex-row gap-4">
+            <a href="{{ route('admin.licenses.create') }}" class="inline-flex items-center justify-center px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 transition duration-150 w-full md:w-48 h-11">
+                <svg class="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
                 Create License
             </a>
-            <a href="{{ route('admin.distributors.create') }}" class="inline-flex items-center px-4 py-2.5 border border-slate-200 bg-white text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 transition duration-150">
-                <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <a href="{{ route('admin.distributors.create') }}" class="inline-flex items-center justify-center px-5 py-2.5 border border-slate-200 bg-white text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 transition duration-150 w-full md:w-48 h-11">
+                <svg class="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
                 Add Distributor

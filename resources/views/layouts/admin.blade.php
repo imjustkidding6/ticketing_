@@ -336,6 +336,16 @@
             gap: 24px !important;
         }
 
+        @media (max-width: 767px) {
+            main {
+                padding: 16px !important;
+            }
+
+            main .grid, main .flex-col {
+                gap: 16px !important;
+            }
+        }
+
         /* Tables overrides matching the ticketing dashboard (no borders, rounded floating rows) */
         table, .min-w-full {
             background-color: transparent !important;
@@ -423,9 +433,12 @@
         /* Secondary Button */
         .border-gray-300,
         .border-slate-300,
+        .border-slate-200,
         .bg-white.border.border-gray-300,
         .bg-white.border.border-slate-300,
-        a.border-gray-300 {
+        .bg-white.border.border-slate-200,
+        a.border-gray-300,
+        a.border-slate-200 {
             background-color: var(--bg-card) !important;
             border: 1px solid var(--border-soft) !important;
             color: var(--text-primary) !important;
@@ -438,8 +451,10 @@
         }
         .border-gray-300:hover,
         .border-slate-300:hover,
+        .border-slate-200:hover,
         .bg-white.border.border-gray-300:hover,
-        a.border-gray-300:hover {
+        a.border-gray-300:hover,
+        a.border-slate-200:hover {
             background-color: var(--bg-hover) !important;
             transform: translateY(-1px) !important;
         }
