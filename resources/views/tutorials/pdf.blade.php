@@ -13,11 +13,14 @@
     }
 
     body {
-        font-family: 'Helvetica', 'Arial', sans-serif;
+        font-family: 'DejaVu Sans', 'Helvetica', 'Arial', sans-serif;
         font-size: 11px;
         color: #1f2937;
         line-height: 1.55;
+        text-align: justify;
     }
+
+    h1, h2, h3 { text-align: left; }
 
     h1 { font-size: 22px; margin: 0 0 6px 0; color: #111827; }
     h2 { font-size: 16px; margin: 0 0 10px 0; color: #4338ca; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
@@ -46,6 +49,16 @@
         text-align: center;
         padding-top: 160px;
     }
+    .cover h1,
+    .cover h2,
+    .cover h3 {
+        text-align: center;
+    }
+    .cover img.logo {
+        max-height: 70px;
+        max-width: 220px;
+        margin-bottom: 18px;
+    }
     .cover .brand {
         font-size: 13px;
         letter-spacing: 2px;
@@ -63,7 +76,7 @@
     }
 
     /* ── Table of contents ── */
-    .toc { page-break-after: always; }
+    .toc { }
     .toc ol { list-style: decimal; margin-left: 22px; }
     .toc li { font-size: 12px; margin-bottom: 8px; color: #1f2937; }
     .toc li span.desc { display: block; font-size: 10px; color: #6b7280; margin-top: 2px; }
@@ -106,7 +119,25 @@
 <footer>{{ __('Generated on') }} {{ now()->format('F j, Y') }} — {{ __('CliqueHA Nexus') }}</footer>
 
 {{-- Cover page --}}
+@php
+    $logoPath = null;
+    if (!empty($tenant?->logo_path)) {
+        $candidate = storage_path('app/public/' . $tenant->logo_path);
+        if (file_exists($candidate)) {
+            $logoPath = $candidate;
+        }
+    }
+    if (!$logoPath) {
+        $fallback = public_path('cliqueha-logo.png');
+        if (file_exists($fallback)) {
+            $logoPath = $fallback;
+        }
+    }
+@endphp
 <div class="cover">
+    @if($logoPath)
+        <img class="logo" src="{{ $logoPath }}" alt="{{ $tenant->name ?? 'CliqueHA Nexus' }}">
+    @endif
     <div class="brand">{{ $tenant->name ?? 'CliqueHA Nexus' }}</div>
     <h1>{{ __('Help & Tutorials') }}</h1>
     <p>{{ __('Everything you need to get the most out of CliqueHA Nexus, on one page.') }}</p>
@@ -129,7 +160,6 @@
 {{-- Sections --}}
 @foreach($tutorials as $slug => $tutorial)
     <div class="tutorial-section">
-        <h2>{{ __($tutorial['title']) }}</h2>
         @include('tutorials.partials.' . $slug)
     </div>
 @endforeach
