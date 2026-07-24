@@ -15,7 +15,7 @@
 
             <div class="rounded-xl bg-white shadow-sm">
                 @if($myActivity->count() > 0)
-                    <ul class="divide-y divide-gray-200">
+                    <ul class="divide-y divide-gray-200 dark:divide-gray-700">
                         @foreach($myActivity as $entry)
                             <li class="p-4 sm:px-6">
                                 <div class="flex items-start justify-between gap-2">
@@ -35,7 +35,7 @@
                         @endforeach
                     </ul>
 
-                    <div class="border-t border-gray-200 p-4 sm:px-6">
+                    <div class="border-t border-gray-200 p-4 sm:px-6 dark:border-gray-700">
                         {{ $myActivity->links() }}
                     </div>
                 @else
