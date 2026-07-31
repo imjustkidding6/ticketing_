@@ -25,7 +25,7 @@ class AiChatbotService
      */
     public function startConversation(User $user, ?string $title = null): ChatConversation
     {
-        $tenantId = $user->tenant_id;
+        $tenantId = session('current_tenant_id') ?? $user->tenant_id;
         if (! $tenantId) {
             $tenant = Tenant::first();
             $tenantId = $tenant ? $tenant->id : Tenant::create(['name' => 'Demo Company', 'slug' => 'demo-company'])->id;
@@ -109,10 +109,13 @@ class AiChatbotService
     {
         if ($this->openAi->isConfigured()) {
             try {
-                // Build conversation history for LLM
+                // Build conversation history for LLM (latest 10 messages in chronological order)
                 $history = $conversation->messages()
+                    ->latest('id')
                     ->take(10)
                     ->get()
+                    ->reverse()
+                    ->values()
                     ->map(fn (ChatMessage $m) => [
                         'role' => $m->role,
                         'content' => (string) $m->content,

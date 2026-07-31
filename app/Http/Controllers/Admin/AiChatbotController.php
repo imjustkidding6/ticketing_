@@ -36,7 +36,8 @@ class AiChatbotController extends Controller
         /** @var \App\Models\User $user */
         $user = $request->user();
 
-        $conversations = ChatConversation::where('user_id', $user->id)
+        $conversations = ChatConversation::withoutGlobalScopes()
+            ->where('user_id', $user->id)
             ->with(['messages' => fn ($q) => $q->latest('id')->limit(1)])
             ->latest('updated_at')
             ->paginate(20);

@@ -197,13 +197,12 @@
     </div>
 
     <!-- Alpine Search bar -->
-    <div x-data="{ query: '' }" @input.debounce.50ms="window.dispatchEvent(new CustomEvent('filter-tutorials', { detail: query }))" class="relative w-full">
-        <div class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
-            <svg class="h-[20px] w-[20px] text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-        </div>
-        <input type="text" x-model="query" placeholder="Search tutorials... e.g. SLA, Tickets, Users..." class="w-full search-bar-input pl-12 pr-4">
+    <div x-data="{ query: '' }" @input.debounce.50ms="window.dispatchEvent(new CustomEvent('filter-tutorials', { detail: query }))" class="w-full">
+        <x-search-input 
+            model="query" 
+            placeholder="Search tutorials... e.g. SLA, Tickets, Users..." 
+            wrapperClass="w-full" 
+        />
     </div>
 
     <!-- Responsive Layout Columns Grid -->

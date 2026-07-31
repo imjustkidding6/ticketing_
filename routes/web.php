@@ -103,6 +103,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('tenants', [AdminTenantController::class, 'index'])->name('tenants.index');
     Route::get('tenants/{tenant}', [AdminTenantController::class, 'show'])->name('tenants.show');
+    Route::get('tenants/{tenant}/edit', [AdminTenantController::class, 'edit'])->name('tenants.edit');
+    Route::put('tenants/{tenant}', [AdminTenantController::class, 'update'])->name('tenants.update');
+    Route::delete('tenants/{tenant}', [AdminTenantController::class, 'destroy'])->name('tenants.destroy');
     Route::post('tenants/{tenant}/suspend', [AdminTenantController::class, 'suspend'])->name('tenants.suspend');
     Route::post('tenants/{tenant}/unsuspend', [AdminTenantController::class, 'unsuspend'])->name('tenants.unsuspend');
     Route::post('tenants/{tenant}/change-plan', [AdminTenantController::class, 'changePlan'])->name('tenants.change-plan');

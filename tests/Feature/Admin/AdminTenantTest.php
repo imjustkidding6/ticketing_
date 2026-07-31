@@ -3,9 +3,12 @@
 namespace Tests\Feature\Admin;
 
 use App\Enums\PlanFeature;
+use App\Models\AppSetting;
+use App\Models\Distributor;
 use App\Models\License;
 use App\Models\Plan;
 use App\Models\Tenant;
+use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -31,7 +34,12 @@ class AdminTenantTest extends TestCase
         $admin = $this->adminUser();
         Tenant::factory()->count(3)->create();
 
-        $this->actingAs($admin)->get('/admin/tenants')->assertOk();
+        $this->actingAs($admin)->get('/admin/tenants')
+            ->assertOk()
+            ->assertSee('Actions')
+            ->assertSee('View')
+            ->assertSee('Edit')
+            ->assertSee('Delete');
     }
 
     public function test_show_tenant(): void
@@ -40,6 +48,90 @@ class AdminTenantTest extends TestCase
         $tenant = Tenant::factory()->create();
 
         $this->actingAs($admin)->get("/admin/tenants/{$tenant->id}")->assertOk();
+    }
+
+    public function test_edit_tenant_view(): void
+    {
+        $admin = $this->adminUser();
+        $tenant = Tenant::factory()->create();
+
+        $this->actingAs($admin)->get("/admin/tenants/{$tenant->id}/edit")
+            ->assertOk()
+            ->assertSee('Edit Tenant')
+            ->assertSee($tenant->name);
+    }
+
+    public function test_update_tenant_details(): void
+    {
+        $admin = $this->adminUser();
+        $starterPlan = Plan::factory()->start()->create(['features' => PlanFeature::forPlan('start')]);
+        $businessPlan = Plan::factory()->create(['slug' => 'business', 'features' => PlanFeature::forPlan('business')]);
+        $distributor = Distributor::factory()->create(['is_active' => true]);
+        $license = License::factory()->active()->forPlan($starterPlan)->create(['seats' => 5]);
+        $tenant = Tenant::factory()->create(['license_id' => $license->id, 'name' => 'Old Name']);
+
+        $response = $this->actingAs($admin)->put("/admin/tenants/{$tenant->id}", [
+            'name' => 'New Tenant Name',
+            'company_name' => 'Acme Corporation',
+            'contact_email' => 'contact@acme.com',
+            'status' => 'suspended',
+            'plan_id' => $businessPlan->id,
+            'seats' => 25,
+            'distributor_id' => $distributor->id,
+        ]);
+
+        $response->assertRedirect('/admin/tenants');
+
+        $tenant->refresh();
+        $license->refresh();
+
+        $this->assertEquals('New Tenant Name', $tenant->name);
+        $this->assertTrue($tenant->isSuspended());
+        $this->assertEquals($businessPlan->id, $license->plan_id);
+        $this->assertEquals(25, $license->seats);
+        $this->assertEquals($distributor->id, $license->distributor_id);
+
+        $this->assertDatabaseHas('app_settings', [
+            'tenant_id' => $tenant->id,
+            'key' => 'company_name',
+            'value' => 'Acme Corporation',
+        ]);
+
+        $this->assertDatabaseHas('app_settings', [
+            'tenant_id' => $tenant->id,
+            'key' => 'company_email',
+            'value' => 'contact@acme.com',
+        ]);
+    }
+
+    public function test_delete_tenant(): void
+    {
+        $admin = $this->adminUser();
+        $tenant = Tenant::factory()->create();
+
+        $response = $this->actingAs($admin)->delete("/admin/tenants/{$tenant->id}");
+
+        $response->assertRedirect('/admin/tenants');
+        $this->assertDatabaseMissing('tenants', ['id' => $tenant->id]);
+    }
+
+    public function test_delete_tenant_cleans_up_records(): void
+    {
+        $admin = $this->adminUser();
+        $plan = Plan::factory()->start()->create();
+        $license = License::factory()->active()->forPlan($plan)->create();
+        $tenant = Tenant::factory()->create(['license_id' => $license->id]);
+        $user = User::factory()->create();
+        $tenant->addUser($user, 'admin');
+
+        $response = $this->actingAs($admin)->delete("/admin/tenants/{$tenant->id}");
+
+        $response->assertRedirect('/admin/tenants');
+        $this->assertDatabaseMissing('tenants', ['id' => $tenant->id]);
+        $this->assertDatabaseMissing('tenant_user', ['tenant_id' => $tenant->id]);
+        
+        $license->refresh();
+        $this->assertNull($license->tenant_id);
     }
 
     public function test_suspend_tenant(): void

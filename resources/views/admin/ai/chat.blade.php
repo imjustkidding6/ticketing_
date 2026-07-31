@@ -153,7 +153,7 @@
             </template>
 
             <!-- Messages Loop -->
-            <template x-for="msg in messages" :key="msg.id || msg.timestamp">
+            <template x-for="msg in messages" :key="msg.id || msg.timestamp || Math.random()">
                 <div class="space-y-1">
                     <!-- User Message -->
                     <template x-if="msg.role === 'user'">
@@ -280,9 +280,11 @@ function aiChatbotApp() {
 
         async fetchConversations() {
             try {
-                const res = await fetch('{{ route('admin.ai.chatbot.conversations') }}');
+                const res = await fetch('{{ route('admin.ai.chatbot.conversations') }}', {
+                    headers: { 'Accept': 'application/json' }
+                });
                 const data = await res.json();
-                if (data.success) {
+                if (data.success && Array.isArray(data.data)) {
                     this.conversations = data.data;
                     if (this.conversations.length > 0 && !this.activeConversation) {
                         this.selectConversation(this.conversations[0]);
@@ -294,12 +296,15 @@ function aiChatbotApp() {
         },
 
         async selectConversation(conv) {
+            if (!conv) return;
             this.activeConversation = conv;
             this.messages = [];
             try {
-                const res = await fetch('/admin/ai/chatbot/conversations/' + conv.id);
+                const res = await fetch('/admin/ai/chatbot/conversations/' + conv.id, {
+                    headers: { 'Accept': 'application/json' }
+                });
                 const data = await res.json();
-                if (data.success) {
+                if (data.success && Array.isArray(data.messages)) {
                     this.messages = data.messages;
                     this.$nextTick(() => this.scrollToBottom());
                 }
@@ -320,13 +325,17 @@ function aiChatbotApp() {
                     body: JSON.stringify({ title: 'New AI Conversation' })
                 });
                 const data = await res.json();
-                if (data.success) {
+                if (data.success && data.conversation) {
                     this.conversations.unshift(data.conversation);
-                    this.selectConversation(data.conversation);
+                    this.activeConversation = data.conversation;
+                    this.messages = [];
+                    this.$nextTick(() => this.scrollToBottom());
+                    return data.conversation;
                 }
             } catch (e) {
                 console.error('Failed to create new chat:', e);
             }
+            return null;
         },
 
         sendSuggestedMessage(text) {
@@ -339,12 +348,16 @@ function aiChatbotApp() {
             if (!text || this.isTyping) return;
 
             if (!this.activeConversation) {
-                await this.createNewChat();
+                const newConv = await this.createNewChat();
+                if (!newConv) {
+                    alert('Could not start a new conversation. Please try again.');
+                    return;
+                }
             }
 
             const currentConvId = this.activeConversation.id;
 
-            // Push User message locally
+            // Push User message locally to UI immediately
             const userMsg = { role: 'user', content: text, created_at: new Date().toISOString() };
             this.messages.push(userMsg);
             this.input = '';
@@ -363,18 +376,32 @@ function aiChatbotApp() {
                 });
 
                 const data = await res.json();
-                if (data.success) {
+                if (res.ok && data.success && data.assistantMessage) {
                     this.messages.push(data.assistantMessage);
                     if (data.conversation) {
                         const idx = this.conversations.findIndex(c => c.id === data.conversation.id);
                         if (idx !== -1) {
                             this.conversations[idx] = data.conversation;
+                        } else {
+                            this.conversations.unshift(data.conversation);
                         }
                         this.activeConversation = data.conversation;
                     }
+                } else {
+                    const errorMsg = data.message || data.error || 'Failed to generate AI response.';
+                    this.messages.push({
+                        role: 'assistant',
+                        content: '⚠️ **Error:** ' + errorMsg,
+                        created_at: new Date().toISOString()
+                    });
                 }
             } catch (e) {
                 console.error('Send message failed:', e);
+                this.messages.push({
+                    role: 'assistant',
+                    content: '⚠️ **Network Error:** Unable to reach the server. Please try again.',
+                    created_at: new Date().toISOString()
+                });
             } finally {
                 this.isTyping = false;
                 this.$nextTick(() => this.scrollToBottom());
@@ -382,6 +409,7 @@ function aiChatbotApp() {
         },
 
         async promptRename(conv) {
+            if (!conv) return;
             const newTitle = prompt('Enter new conversation title:', conv.title || '');
             if (!newTitle || newTitle.trim() === '') return;
 
@@ -408,6 +436,7 @@ function aiChatbotApp() {
         },
 
         async confirmDelete(conv) {
+            if (!conv) return;
             if (!confirm('Are you sure you want to delete this conversation?')) return;
 
             try {

@@ -142,4 +142,18 @@ class ChatConversation extends Model
 
         return $this;
     }
+
+    /**
+     * Retrieve the model for a bound value without global scopes.
+     *
+     * @param  mixed  $value
+     * @param  string|null  $field
+     * @return \Illuminate\Database\Eloquent\Model
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        return $this->withoutGlobalScopes()
+            ->where($field ?? $this->getRouteKeyName(), $value)
+            ->firstOrFail();
+    }
 }

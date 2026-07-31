@@ -533,10 +533,28 @@ class SlaPolicyController extends Controller
     }
 
     /**
+     * Normalize tier name to standard SLA tiers (basic, premium, enterprise).
+     */
+    private function normalizeTier(string $tier): string
+    {
+        $tier = strtolower($tier);
+        $map = [
+            'starter' => 'basic',
+            'standard' => 'basic',
+            'business' => 'premium',
+            'pro' => 'premium',
+            'growth' => 'premium',
+        ];
+
+        return $map[$tier] ?? $tier;
+    }
+
+    /**
      * Create/Update all 4 priority rows for a single tier.
      */
     public function editTier(string $tier): View
     {
+        $tier = $this->normalizeTier($tier);
         abort_unless(in_array($tier, SlaPolicy::TIERS, true), 404);
 
         $policies = SlaPolicy::query()
@@ -563,6 +581,7 @@ class SlaPolicyController extends Controller
      */
     public function updateTier(Request $request, string $tier): RedirectResponse
     {
+        $tier = $this->normalizeTier($tier);
         abort_unless(in_array($tier, SlaPolicy::TIERS, true), 404);
 
         $rules = [];
@@ -626,6 +645,7 @@ class SlaPolicyController extends Controller
      */
     public function destroyTier(string $tier): RedirectResponse
     {
+        $tier = $this->normalizeTier($tier);
         abort_unless(in_array($tier, SlaPolicy::TIERS, true), 404);
 
         $policies = SlaPolicy::where('client_tier', $tier)->get();

@@ -381,19 +381,33 @@
             border-bottom-right-radius: 12px !important;
         }
 
-        /* Forms, inputs, textareas, selects, search box */
-        input[type="text"],
+        /* Forms, inputs, textareas, selects */
+        input[type="text"]:not(.global-search-input):not(.search-input-sla):not(.search-input-notify):not(.search-input-ann):not(.search-bar-input):not([placeholder*="Search"]):not([placeholder*="search"]),
         input[type="email"],
         input[type="password"],
         select,
         textarea,
         .w-full.bg-slate-50\/50 {
-            background-color: var(--bg-app) !important;
-            color: var(--text-primary) !important;
-            border: 1px solid var(--border-soft) !important;
-            border-radius: 12px !important;
-            padding: 10px 14px !important;
-            outline: none !important;
+            background-color: var(--bg-app);
+            color: var(--text-primary);
+            border: 1px solid var(--border-soft);
+            border-radius: 12px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            padding-right: 14px;
+            padding-left: 14px;
+            outline: none;
+        }
+
+        /* Shared Search Input Component Styling - System Wide Fix */
+        .global-search-input,
+        .search-input-sla,
+        .search-input-notify,
+        .search-input-ann,
+        .search-bar-input,
+        .relative input[type="text"][placeholder*="Search"],
+        .relative input[type="text"][placeholder*="search"] {
+            padding-left: 42px !important;
         }
         input[type="text"]:focus,
         input[type="email"]:focus,
@@ -726,13 +740,13 @@
                 <div class="flex items-center gap-4">
                     
                     <!-- Search Bar -->
-                    <div class="relative hidden sm:block w-64">
-                        <div class="pointer-events-none absolute left-[16px] top-1/2 -translate-y-1/2 flex items-center justify-center">
-                            <svg class="h-[20px] w-[20px] text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                        </div>
-                        <input type="text" @click="searchOpen = true" readonly placeholder="Search (Ctrl + K)" style="height: 44px; border-radius: 14px; padding-left: 44px; padding-right: 16px; font-size: 14px; font-weight: 400;" class="w-full bg-[var(--bg-input)] border border-[var(--border-soft)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] transition-all cursor-pointer">
+                    <div class="hidden sm:block w-64">
+                        <x-search-input 
+                            @click="searchOpen = true" 
+                            :readonly="true" 
+                            placeholder="Search (Ctrl + K)" 
+                            inputClass="h-11 cursor-pointer" 
+                        />
                     </div>
 
                     <!-- Theme Toggle -->
@@ -1120,21 +1134,20 @@
                 }
              }">
              
-             <!-- Search header input -->
-             <div class="relative flex items-center border-b border-[var(--border-soft)]">
-                 <div class="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                     <svg class="h-[20px] w-[20px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                 </div>
-                 <input type="text" 
-                        x-model="searchQuery" 
-                        @keydown.arrow-down.prevent="selectedIndex = (selectedIndex + 1) % results.length"
-                        @keydown.arrow-up.prevent="selectedIndex = (selectedIndex - 1 + results.length) % results.length"
-                        @keydown.enter.prevent="navigateSelected()"
-                        placeholder="Search users, tenants, announcements, help guides..." 
-                        class="w-full bg-transparent border-0 text-[var(--text-primary)] placeholder-[var(--text-secondary)] text-sm focus:outline-none py-4 pl-12 pr-4"
-                        x-init="$watch('searchOpen', value => { if(value) { setTimeout(() => $el.focus(), 50); } })"
-                        id="global-search-input">
-             </div>
+              <!-- Search header input -->
+              <div class="border-b border-[var(--border-soft)]">
+                  <x-search-input 
+                      model="searchQuery" 
+                      id="global-search-input"
+                      placeholder="Search users, tenants, announcements, help guides..." 
+                      wrapperClass="w-full" 
+                      inputClass="bg-transparent border-0 py-4 focus:ring-0 rounded-none" 
+                      @keydown.arrow-down.prevent="selectedIndex = (selectedIndex + 1) % results.length"
+                      @keydown.arrow-up.prevent="selectedIndex = (selectedIndex - 1 + results.length) % results.length"
+                      @keydown.enter.prevent="navigateSelected()"
+                      x-init="$watch('searchOpen', value => { if(value) { setTimeout(() => $el.focus(), 50); } })"
+                  />
+              </div>
 
              <!-- Search body results -->
              <div class="overflow-y-auto p-2 divide-y divide-[var(--border-soft)]">

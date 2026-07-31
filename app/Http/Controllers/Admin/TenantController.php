@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppSetting;
+use App\Models\Client;
+use App\Models\Distributor;
 use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\Ticket;
@@ -16,10 +19,15 @@ class TenantController extends Controller
 {
     public function index(): View
     {
-        $tenants = Tenant::with(['license.plan'])
+        $tenants = Tenant::with(['license.plan', 'license.distributor'])
             ->withCount('users')
             ->latest()
             ->paginate(15);
+
+        foreach ($tenants as $tenant) {
+            $tenant->tickets_count = Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count();
+            $tenant->clients_count = Client::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count();
+        }
 
         return view('admin.tenants.index', compact('tenants'));
     }
@@ -42,6 +50,118 @@ class TenantController extends Controller
         $maxTicketsPerMonth = $tenant->license?->plan?->max_tickets_per_month;
 
         return view('admin.tenants.show', compact('tenant', 'plans', 'ticketStats', 'maxTicketsPerMonth'));
+    }
+
+    public function edit(Tenant $tenant): View
+    {
+        $tenant->load(['license.plan', 'license.distributor']);
+        $plans = Plan::active()->get();
+        $distributors = Distributor::where('is_active', true)->get();
+
+        $companyName = AppSetting::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('key', 'company_name')
+            ->value('value') ?: $tenant->name;
+
+        $contactEmail = AppSetting::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('key', 'company_email')
+            ->value('value') ?: ($tenant->owners()->first()?->email ?? $tenant->users()->first()?->email);
+
+        return view('admin.tenants.edit', compact(
+            'tenant',
+            'plans',
+            'distributors',
+            'companyName',
+            'contactEmail'
+        ));
+    }
+
+    public function update(Request $request, Tenant $tenant): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'company_name' => ['nullable', 'string', 'max:255'],
+            'plan_id' => ['nullable', 'integer', 'exists:plans,id'],
+            'seats' => ['nullable', 'integer', 'min:1'],
+            'status' => ['required', 'string', 'in:active,inactive,suspended'],
+            'distributor_id' => ['nullable', 'integer', 'exists:distributors,id'],
+            'contact_email' => ['nullable', 'email', 'max:255'],
+        ]);
+
+        $tenant->name = $validated['name'];
+
+        if ($validated['status'] === 'suspended') {
+            $tenant->is_active = false;
+            if (! $tenant->isSuspended()) {
+                $tenant->suspended_at = now();
+            }
+        } elseif ($validated['status'] === 'active') {
+            $tenant->is_active = true;
+            $tenant->suspended_at = null;
+        } else {
+            $tenant->is_active = false;
+            $tenant->suspended_at = null;
+        }
+
+        $tenant->save();
+
+        if (array_key_exists('company_name', $validated)) {
+            AppSetting::withoutGlobalScopes()->updateOrCreate(
+                ['tenant_id' => $tenant->id, 'key' => 'company_name'],
+                ['value' => $validated['company_name'] ?? '', 'type' => 'string', 'group' => 'general']
+            );
+        }
+
+        if (array_key_exists('contact_email', $validated)) {
+            AppSetting::withoutGlobalScopes()->updateOrCreate(
+                ['tenant_id' => $tenant->id, 'key' => 'company_email'],
+                ['value' => $validated['contact_email'] ?? '', 'type' => 'string', 'group' => 'general']
+            );
+        }
+
+        if ($tenant->license) {
+            if (! empty($validated['plan_id']) && $tenant->license->plan_id != $validated['plan_id']) {
+                $plan = Plan::find($validated['plan_id']);
+                if ($plan) {
+                    $tenant->changePlan($plan);
+                    app(PlanService::class)->clearCache($tenant);
+                }
+            }
+
+            $licenseUpdates = [];
+            if (! empty($validated['seats'])) {
+                $licenseUpdates['seats'] = (int) $validated['seats'];
+            }
+            if (array_key_exists('distributor_id', $validated)) {
+                $licenseUpdates['distributor_id'] = $validated['distributor_id'] ? (int) $validated['distributor_id'] : null;
+            }
+
+            if (! empty($licenseUpdates)) {
+                $tenant->license->update($licenseUpdates);
+            }
+        }
+
+        return redirect()->route('admin.tenants.index')
+            ->with('success', "Tenant '{$tenant->name}' updated successfully.");
+    }
+
+    public function destroy(Tenant $tenant): RedirectResponse
+    {
+        if (session('current_tenant_id') === $tenant->id) {
+            session()->forget('current_tenant_id');
+            session()->forget('admin_impersonating');
+        }
+
+        if ($tenant->license) {
+            $tenant->license->update(['tenant_id' => null]);
+        }
+
+        $tenantName = $tenant->name;
+        $tenant->delete();
+
+        return redirect()->route('admin.tenants.index')
+            ->with('success', "Tenant '{$tenantName}' deleted successfully.");
     }
 
     /**

@@ -335,14 +335,11 @@
     <div class="flex flex-col gap-6">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <!-- Search bar -->
-            <div class="relative w-full max-w-[420px]">
-                <div class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                    <svg class="h-[18px] w-[18px] text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                </div>
-                <input type="text" x-model="query" placeholder="Search notifications..." class="w-full search-input-notify pl-11 pr-4">
-            </div>
+            <x-search-input 
+                model="query" 
+                placeholder="Search notifications..." 
+                wrapperClass="w-full max-w-[420px]" 
+            />
 
             <!-- Custom Filters and sorting Dropdowns -->
             <div class="flex flex-wrap items-center gap-3">
