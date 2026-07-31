@@ -3,10 +3,10 @@
 @section('title', 'AI Assistant Chat')
 
 @section('content')
-<div x-data="aiChatbotApp()" class="h-[calc(100vh-140px)] min-h-[550px] rounded-2xl border border-[var(--border-soft)] bg-[var(--bg-card)] shadow-xl flex flex-col md:flex-row overflow-hidden" x-cloak>
+<div x-data="aiChatbotApp()" class="h-[calc(100vh-140px)] min-h-[550px] rounded-2xl border border-[var(--border-soft)] bg-[var(--bg-card)] shadow-xl flex flex-row overflow-hidden" style="display: flex; flex-direction: row;" x-cloak>
     
     <!-- Left Conversations Sidebar -->
-    <div class="w-full md:w-80 bg-[var(--bg-sidebar)] border-r border-[var(--border-soft)] flex flex-col flex-shrink-0">
+    <div class="bg-[var(--bg-sidebar)] border-r border-[var(--border-soft)] flex flex-col flex-shrink-0" style="width: 320px; flex-shrink: 0;">
         
         <!-- Sidebar Top Bar: New Chat & Search -->
         <div class="p-4 border-b border-[var(--border-soft)] space-y-3">
@@ -35,10 +35,10 @@
             <template x-for="conv in filteredConversations" :key="conv.id">
                 <div @click="selectConversation(conv)"
                      class="group p-3 rounded-xl cursor-pointer transition-all flex items-center justify-between"
-                     :class="activeConversation && activeConversation.id === conv.id ? 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-500/20' : 'hover:bg-[var(--bg-hover)] text-[var(--text-primary)]'">
+                     :class="activeConversation && activeConversation.id == conv.id ? 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-500/20' : 'hover:bg-[var(--bg-hover)] text-[var(--text-primary)]'">
                     
                     <div class="flex items-center gap-3 overflow-hidden min-w-0">
-                        <svg class="w-4 h-4 flex-shrink-0" :class="activeConversation && activeConversation.id === conv.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-[var(--text-secondary)]'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <svg class="w-4 h-4 flex-shrink-0" :class="activeConversation && activeConversation.id == conv.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-[var(--text-secondary)]'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
                         </svg>
 
@@ -296,9 +296,11 @@ function aiChatbotApp() {
         },
 
         async selectConversation(conv) {
-            if (!conv) return;
+            if (!conv || !conv.id) return;
             this.activeConversation = conv;
             this.messages = [];
+            this.input = '';
+            this.isTyping = false;
             try {
                 const res = await fetch('/admin/ai/chatbot/conversations/' + conv.id, {
                     headers: { 'Accept': 'application/json' }
@@ -306,10 +308,16 @@ function aiChatbotApp() {
                 const data = await res.json();
                 if (data.success && Array.isArray(data.messages)) {
                     this.messages = data.messages;
-                    this.$nextTick(() => this.scrollToBottom());
                 }
             } catch (e) {
                 console.error('Failed to fetch messages:', e);
+            } finally {
+                this.$nextTick(() => {
+                    this.scrollToBottom();
+                    if (this.$refs.inputTextarea) {
+                        this.$refs.inputTextarea.focus();
+                    }
+                });
             }
         },
 
@@ -326,10 +334,20 @@ function aiChatbotApp() {
                 });
                 const data = await res.json();
                 if (data.success && data.conversation) {
-                    this.conversations.unshift(data.conversation);
+                    const existingIdx = this.conversations.findIndex(c => c.id == data.conversation.id);
+                    if (existingIdx === -1) {
+                        this.conversations.unshift(data.conversation);
+                    }
                     this.activeConversation = data.conversation;
                     this.messages = [];
-                    this.$nextTick(() => this.scrollToBottom());
+                    this.input = '';
+                    this.isTyping = false;
+                    this.$nextTick(() => {
+                        this.scrollToBottom();
+                        if (this.$refs.inputTextarea) {
+                            this.$refs.inputTextarea.focus();
+                        }
+                    });
                     return data.conversation;
                 }
             } catch (e) {

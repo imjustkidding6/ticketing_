@@ -1,7 +1,7 @@
 @php
 $sidebarGroups = [
     [
-        'header' => '📊 Dashboard',
+        'header' => 'Dashboard',
         'items' => [
             [
                 'title' => 'Dashboard',
@@ -12,7 +12,7 @@ $sidebarGroups = [
         ],
     ],
     [
-        'header' => '👥 Workspace',
+        'header' => 'Workspace',
         'items' => [
             [
                 'title' => 'Tenants',
@@ -29,7 +29,7 @@ $sidebarGroups = [
         ],
     ],
     [
-        'header' => '💼 Business',
+        'header' => 'Business',
         'items' => [
             [
                 'title' => 'Licenses',
@@ -52,7 +52,7 @@ $sidebarGroups = [
         ],
     ],
     [
-        'header' => '🎫 Operations',
+        'header' => 'Operations',
         'items' => [
             [
                 'title' => 'SLA Policies',
@@ -75,7 +75,7 @@ $sidebarGroups = [
         ],
     ],
     [
-        'header' => '📈 Analytics',
+        'header' => 'Analytics',
         'items' => [
             [
                 'title' => 'Reports',
@@ -92,7 +92,7 @@ $sidebarGroups = [
         ],
     ],
     [
-        'header' => '🤖 AI',
+        'header' => 'AI',
         'items' => [
             [
                 'title' => 'AI Assistant',
@@ -139,7 +139,7 @@ $sidebarGroups = [
         ],
     ],
     [
-        'header' => '⚙️ Administration',
+        'header' => 'Administration',
         'items' => [
             [
                 'title' => 'Settings',
@@ -156,7 +156,7 @@ $sidebarGroups = [
         ],
     ],
     [
-        'header' => '❓ Help',
+        'header' => 'Help',
         'items' => [
             [
                 'title' => 'User Feedback',
