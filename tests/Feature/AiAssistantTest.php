@@ -433,7 +433,7 @@ class AiAssistantTest extends TestCase
 
         $this->getJson($this->tenantUrl('/assistant/bug-updates'))
             ->assertOk()
-            ->assertJsonFragment(['reference' => 'BUG-'.$bug->id, 'status' => 'pr_opened']);
+            ->assertJsonFragment(['reference' => $bug->reference(), 'status' => 'pr_opened']);
 
         $this->postJson($this->tenantUrl('/assistant/bug-updates/ack'))->assertOk();
         $this->assertEquals('pr_opened', $bug->fresh()->user_notified_status);

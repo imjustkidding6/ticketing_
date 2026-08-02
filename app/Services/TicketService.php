@@ -337,10 +337,6 @@ class TicketService
         if ($status === 'closed') {
             $tasks = $ticket->tasks;
 
-            if ($tasks->isEmpty()) {
-                throw new \InvalidArgumentException('Cannot close ticket: no tasks have been created.');
-            }
-
             $incomplete = $tasks->whereNotIn('status', ['completed', 'cancelled']);
 
             if ($incomplete->isNotEmpty()) {
