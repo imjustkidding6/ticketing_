@@ -4,6 +4,7 @@ namespace App\Models\Traits;
 
 use App\Models\Scopes\TenantScope;
 use App\Models\Tenant;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 trait BelongsToTenant
@@ -33,8 +34,8 @@ trait BelongsToTenant
     /**
      * Scope a query to a specific tenant.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<static>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<static>
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeForTenant($query, int $tenantId)
     {
@@ -45,8 +46,8 @@ trait BelongsToTenant
     /**
      * Scope a query to ignore tenant filtering.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<static>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<static>
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeWithoutTenantScope($query)
     {

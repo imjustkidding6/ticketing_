@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Tenant;
+use App\Services\TenantUrlHelper;
+use App\Support\TenantTime;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class NotificationController extends Controller
 {
@@ -14,7 +18,7 @@ class NotificationController extends Controller
      */
     public function recent(): JsonResponse
     {
-        $tenant = \App\Models\Tenant::find(session('current_tenant_id'));
+        $tenant = Tenant::find(session('current_tenant_id'));
 
         $notifications = $this->scopedNotifications()
             ->latest()
@@ -38,8 +42,8 @@ class NotificationController extends Controller
                         'ticket_number' => null,
                         'url' => null,
                         'read_at' => $n->read_at,
-                        'created_ago' => $n->created_at->setTimezone(\App\Support\TenantTime::timezone())->diffForHumans(),
-                        'published_at_local' => \App\Support\TenantTime::format($publishedAt, 'M d, Y g:i A'),
+                        'created_ago' => $n->created_at->setTimezone(TenantTime::timezone())->diffForHumans(),
+                        'published_at_local' => TenantTime::format($publishedAt, 'M d, Y g:i A'),
                     ];
                 }
 
@@ -49,7 +53,7 @@ class NotificationController extends Controller
                     'status_changed' => 'changed status to '.($data['new_status'] ?? '-'),
                     'sla_breach_warning' => 'is breaching SLA',
                     'escalated' => 'was escalated',
-                    default => str_replace('_', ' ', \Illuminate\Support\Str::snake($type)),
+                    default => str_replace('_', ' ', Str::snake($type)),
                 };
 
                 $number = $data['ticket_number'] ?? null;
@@ -58,7 +62,7 @@ class NotificationController extends Controller
 
                 $url = null;
                 if ($tenant && ! empty($data['ticket_id'])) {
-                    $url = app(\App\Services\TenantUrlHelper::class)
+                    $url = app(TenantUrlHelper::class)
                         ->tenantUrl($tenant, '/tickets/'.$data['ticket_id']);
                 }
 
@@ -71,7 +75,7 @@ class NotificationController extends Controller
                     'ticket_number' => $number,
                     'url' => $url,
                     'read_at' => $n->read_at,
-                    'created_ago' => $n->created_at->setTimezone(\App\Support\TenantTime::timezone())->diffForHumans(),
+                    'created_ago' => $n->created_at->setTimezone(TenantTime::timezone())->diffForHumans(),
                 ];
             });
 
@@ -120,11 +124,11 @@ class NotificationController extends Controller
      * system announcements). Notifications carry the originating ticket's
      * department_id in their data payload — see TicketAssignedNotification etc.
      *
-     * @return Builder<\Illuminate\Notifications\DatabaseNotification>
+     * @return Builder<DatabaseNotification>
      */
     private function scopedNotifications(): Builder
     {
-        $user  = Auth::user();
+        $user = Auth::user();
         $query = DatabaseNotification::query()
             ->where('notifiable_type', $user->getMorphClass())
             ->where('notifiable_id', $user->id);

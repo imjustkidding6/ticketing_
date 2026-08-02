@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Traits\BelongsToTenant;
 use App\Models\Traits\LogsActivity;
+use Database\Factories\KbArticleFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +13,7 @@ use Illuminate\Support\Str;
 
 class KbArticle extends Model
 {
-    /** @use HasFactory<\Database\Factories\KbArticleFactory> */
+    /** @use HasFactory<KbArticleFactory> */
     use BelongsToTenant, HasFactory, LogsActivity;
 
     /** @var list<string> */
@@ -28,6 +29,8 @@ class KbArticle extends Model
         'views_count',
         'sort_order',
         'created_by',
+        'embedding',
+        'embedded_at',
     ];
 
     /**
@@ -40,6 +43,8 @@ class KbArticle extends Model
             'published_at' => 'datetime',
             'views_count' => 'integer',
             'sort_order' => 'integer',
+            'embedding' => 'array',
+            'embedded_at' => 'datetime',
         ];
     }
 

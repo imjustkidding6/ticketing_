@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\License;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantRoleService;
 use App\Services\TenantUrlHelper;
+use Database\Seeders\DepartmentSeeder;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,7 +33,8 @@ class GoogleSocialiteController extends Controller
         try {
             $googleUser = Socialite::driver('google')->user();
         } catch (\Exception $e) {
-            Log::error('Google OAuth error: ' . $e->getMessage(), ['exception' => $e]);
+            Log::error('Google OAuth error: '.$e->getMessage(), ['exception' => $e]);
+
             return redirect()->route('login')
                 ->withErrors(['email' => 'Google authentication failed. Please try again.']);
         }
@@ -51,14 +54,15 @@ class GoogleSocialiteController extends Controller
             if (! $user->email_verified_at) {
                 $user->forceFill(['email_verified_at' => now()])->save();
             }
+
             return $this->loginUser($user, $request);
         }
 
         // New user — store profile and show registration form
         $request->session()->put('google_profile', [
             'google_id' => $googleUser->getId(),
-            'name'      => $googleUser->getName(),
-            'email'     => strtolower($googleUser->getEmail()),
+            'name' => $googleUser->getName(),
+            'email' => strtolower($googleUser->getEmail()),
         ]);
 
         return redirect()->route('auth.google.register.form');
@@ -86,9 +90,9 @@ class GoogleSocialiteController extends Controller
         $profile = $request->session()->get('google_profile');
 
         $request->validate([
-            'license_key'  => ['required', 'string', 'size:24'],
+            'license_key' => ['required', 'string', 'size:24'],
             'company_name' => ['required', 'string', 'max:255'],
-            'app_slug'     => [
+            'app_slug' => [
                 'required', 'string', 'min:3', 'max:63',
                 'regex:/^[a-z0-9][a-z0-9\-]*[a-z0-9]$/',
                 'unique:tenants,slug',
@@ -103,11 +107,12 @@ class GoogleSocialiteController extends Controller
         if ($existing) {
             $existing->update(['google_id' => $profile['google_id']]);
             $request->session()->forget('google_profile');
+
             return $this->loginUser($existing, $request);
         }
 
         $licenseKey = strtoupper($request->license_key);
-        $license    = License::where('license_key', $licenseKey)->first();
+        $license = License::where('license_key', $licenseKey)->first();
 
         if (! $license) {
             return back()->withErrors(['license_key' => 'Invalid license key.'])->withInput();
@@ -129,17 +134,17 @@ class GoogleSocialiteController extends Controller
             $license->activate($tenant);
 
             $user = User::create([
-                'name'              => $profile['name'],
-                'email'             => $profile['email'],
-                'google_id'         => $profile['google_id'],
+                'name' => $profile['name'],
+                'email' => $profile['email'],
+                'google_id' => $profile['google_id'],
                 'email_verified_at' => now(),
-                'password'          => null,
+                'password' => null,
             ]);
 
             $tenant->addUser($user, 'owner');
 
-            \Database\Seeders\DepartmentSeeder::seedForTenant($tenant);
-            app(\App\Services\TenantRoleService::class)->setupDefaultRoles($tenant);
+            DepartmentSeeder::seedForTenant($tenant);
+            app(TenantRoleService::class)->setupDefaultRoles($tenant);
 
             return compact('user', 'tenant');
         });
@@ -171,6 +176,7 @@ class GoogleSocialiteController extends Controller
         if ($tenants->count() === 1) {
             $tenant = $tenants->first();
             $user->setCurrentTenant($tenant);
+
             return redirect()->to(app(TenantUrlHelper::class)->tenantUrl($tenant, '/dashboard'));
         }
 

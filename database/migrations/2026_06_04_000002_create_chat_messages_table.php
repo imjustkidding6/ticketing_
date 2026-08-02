@@ -12,12 +12,13 @@ return new class extends Migration
             $table->id();
             $table->foreignId('chat_conversation_id')->constrained()->cascadeOnDelete();
             $table->string('role'); // user | assistant | tool | system
-            $table->longText('content')->nullable();
             $table->string('tool_name')->nullable();
+            $table->longText('content')->nullable();
             $table->json('metadata')->nullable(); // tool args/results, token usage
             $table->timestamps();
 
             $table->index('chat_conversation_id');
+            $table->index('role');
         });
     }
 

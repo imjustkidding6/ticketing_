@@ -2,12 +2,13 @@
 
 namespace Database\Factories;
 
+use App\Models\KbCategory;
 use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\KbCategory>
+ * @extends Factory<KbCategory>
  */
 class KbCategoryFactory extends Factory
 {

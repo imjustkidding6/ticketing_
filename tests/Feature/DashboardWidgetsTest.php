@@ -9,6 +9,7 @@ use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\TicketCreatedNotification;
+use App\Services\TenantUrlHelper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -74,7 +75,7 @@ class DashboardWidgetsTest extends TestCase
     {
         $tenant = Tenant::factory()->create();
 
-        $this->getJson(app(\App\Services\TenantUrlHelper::class)->tenantUrl($tenant, '/dashboard/stats'))
+        $this->getJson(app(TenantUrlHelper::class)->tenantUrl($tenant, '/dashboard/stats'))
             ->assertUnauthorized();
     }
 

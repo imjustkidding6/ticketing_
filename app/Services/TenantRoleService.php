@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -199,9 +200,9 @@ class TenantRoleService
     /**
      * Get all roles for a tenant.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, Role>
+     * @return Collection<int, Role>
      */
-    public function getTenantRoles(Tenant $tenant): \Illuminate\Database\Eloquent\Collection
+    public function getTenantRoles(Tenant $tenant): Collection
     {
         return Role::where('tenant_id', $tenant->id)->get();
     }

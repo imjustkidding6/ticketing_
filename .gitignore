@@ -22,3 +22,18 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Playwright browser binaries
+chrome/
+
+# Generated screenshots
+screenshots/
+docs/screenshots/
+public/docs/screenshots/
+
+# Generated downloads
+downloads/
+
+# Playwright artifacts
+test-results/
+playwright-report/

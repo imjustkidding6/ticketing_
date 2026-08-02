@@ -44,18 +44,13 @@ return [
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         'model' => env('OPENAI_MODEL', 'gpt-5'),
-        // Reasoning models (gpt-5 family, o-series) use `max_completion_tokens` and a
-        // `reasoning_effort` knob ('minimal'|'low'|'medium'|'high'). Lower = faster/cheaper.
-        // Ignored by non-reasoning models (gpt-4.1, gpt-5-chat-latest).
-        'reasoning_effort' => env('OPENAI_REASONING_EFFORT', 'low'),
-        // Token budget for a single completion. Reasoning models spend hidden reasoning
-        // tokens against this, so it must be generous or replies can come back empty.
-        'max_output_tokens' => (int) env('OPENAI_MAX_OUTPUT_TOKENS', 6000),
-        // Model used for the live web-search tool (OpenAI's built-in web search).
-        'search_model' => env('OPENAI_SEARCH_MODEL', 'gpt-4o-mini-search-preview'),
-        // Embedding model used to learn from resolved tickets (semantic search).
-        'embed_model' => env('OPENAI_EMBED_MODEL', 'text-embedding-3-small'),
+        'embed_model' => env('OPENAI_EMBEDDING_MODEL', env('OPENAI_EMBED_MODEL', 'text-embedding-3-small')),
+        'timeout' => (int) env('OPENAI_TIMEOUT', 60),
         'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+        // Reasoning models (gpt-5 family, o-series) configuration
+        'reasoning_effort' => env('OPENAI_REASONING_EFFORT', 'low'),
+        'max_output_tokens' => (int) env('OPENAI_MAX_OUTPUT_TOKENS', 6000),
+        'search_model' => env('OPENAI_SEARCH_MODEL', 'gpt-4o-mini-search-preview'),
     ],
 
     // GitHub bridge for the "AI Programmer": the app files an issue (label ai-fix)

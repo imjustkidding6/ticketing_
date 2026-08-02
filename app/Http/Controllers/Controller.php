@@ -25,7 +25,7 @@ abstract class Controller
         }
 
         if (! $user->can($permission)) {
-            abort(403, 'You do not have permission to ' . $permission . '.');
+            abort(403, 'You do not have permission to '.$permission.'.');
         }
     }
 }

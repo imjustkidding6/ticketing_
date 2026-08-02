@@ -169,7 +169,10 @@
                                 $sidebarCompanyName = $settingName ?: $sidebarTenant->name;
                             }
                         @endphp
-                        <a href="{{ route('dashboard') }}" class="flex items-center gap-2.5 min-w-0">
+                        @php
+                            $dashRoute = Route::has('admin.dashboard') && (request()->routeIs('admin.*') || !request()->route()) ? route('admin.dashboard') : ($sidebarTenant ? route('dashboard', ['slug' => $sidebarTenant->slug]) : (Route::has('dashboard') ? route('dashboard', ['slug' => 'default']) : '#'));
+                        @endphp
+                        <a href="{{ $dashRoute }}" class="flex items-center gap-2.5 min-w-0">
                             <div class="flex h-8 w-8 items-center justify-center rounded-md overflow-hidden shrink-0">
                                 <img src="{{ $sidebarLogo ?? '/cliqueha-logo.png' }}" alt="{{ $sidebarCompanyName }}" class="h-full w-full object-cover">
                             </div>
@@ -223,7 +226,7 @@
 
                     {{-- ========== MAIN ========== --}}
                     <div class="space-y-1">
-                        <a href="{{ route('dashboard') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('dashboard') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
+                        <a href="{{ $dashRoute }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('dashboard') || request()->routeIs('admin.dashboard') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                             <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('dashboard') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
                             </svg>
@@ -295,13 +298,13 @@
                     </div>
                     @endif
 
-                    {{-- ========== SLA (Business+) ========== --}}
+                    {{-- ========== ADMINISTRATION (Business+) ========== --}}
                     @if($sidebarCan('manage sla') && $planService->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement))
                     <div class="mt-6">
-                        <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('SLA') }}</p>
+                        <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Administration') }}</p>
                         <div class="mt-2 space-y-1">
-                            <a href="{{ route('sla.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('sla.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
-                                <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('sla.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <a href="{{ route('sla.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('sla.*') || request()->is('*/sla*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
+                                <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('sla.*') || request()->is('*/sla*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
                                 </svg>
                                 {{ __('SLA Policies') }}
@@ -467,7 +470,10 @@
                     <div class="mt-6">
                         <p class="px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Help') }}</p>
                         <div class="mt-2 space-y-1">
-                            <a href="{{ route('tutorials.index') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('tutorials.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
+                            @php
+                                $helpUrl = request()->routeIs('admin.*') ? route('admin.help.index') : ($sidebarTenant ? route('tutorials.index', ['slug' => $sidebarTenant->slug]) : '#');
+                            @endphp
+                            <a href="{{ $helpUrl }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('tutorials.*') || request()->routeIs('admin.help.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('tutorials.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                                 </svg>
@@ -729,14 +735,14 @@
 
                     async fetchNotifications() {
                         try {
-                            const res = await fetch('{{ route("notifications.recent") }}');
+                            const res = await fetch('{{ (request()->routeIs("admin.*") || !request()->route()) ? route("admin.notifications.recent") : route("notifications.recent") }}');
                             if (res.ok) this.notifications = await res.json();
                         } catch (e) {}
                     },
 
                     async fetchUnreadCount() {
                         try {
-                            const res = await fetch('{{ route("notifications.unreadCount") }}');
+                            const res = await fetch('{{ (request()->routeIs("admin.*") || !request()->route()) ? route("admin.notifications.unreadCount") : route("notifications.unreadCount") }}');
                             if (res.ok) {
                                 const data = await res.json();
                                 this.unreadCount = data.count;
@@ -769,7 +775,7 @@
                         this.notifications.forEach(n => n.read_at = n.read_at || new Date().toISOString());
                         this.unreadCount = 0;
                         try {
-                            await fetch('{{ route("notifications.markAllRead") }}', {
+                            await fetch('{{ (request()->routeIs("admin.*") || !request()->route()) ? route("admin.notifications.markAllRead") : route("notifications.markAllRead") }}', {
                                 method: 'POST',
                                 headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'Accept': 'application/json' }
                             });

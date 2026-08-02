@@ -110,7 +110,7 @@ class MemberController extends Controller
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
-                'password' => Hash::make($validated['password']),
+                'password' => $validated['password'],
             ]);
 
             // Support agent fields for any non-admin role
@@ -249,7 +249,7 @@ class MemberController extends Controller
             ]);
 
             if (! empty($validated['password'])) {
-                $member->update(['password' => Hash::make($validated['password'])]);
+                $member->update(['password' => $validated['password']]);
             }
 
             // Support agent fields for any non-admin role

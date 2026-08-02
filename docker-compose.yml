@@ -1,5 +1,8 @@
+name: ticketing
+
 services:
   app:
+    image: ticketing-app:dev
     build:
       context: .
       target: development
@@ -14,6 +17,11 @@ services:
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/app.ini
     networks:
       - ticketing
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       - mysql
       - redis
@@ -71,7 +79,7 @@ services:
   # Optional: Node for Vite dev server
   # Uncomment if you prefer running Vite in Docker
   # node:
-  #   image: node:20-alpine
+  #   image: node:22-alpine
   #   container_name: ticketing-node
   #   working_dir: /var/www/html
   #   ports:

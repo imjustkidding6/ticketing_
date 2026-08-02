@@ -9,7 +9,6 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class CustomRoleTest extends TestCase

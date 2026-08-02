@@ -2,28 +2,35 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PlanFeature;
+use App\Http\Controllers\Concerns\HasSortableQuery;
 use App\Http\Requests\StoreTicketRequest;
 use App\Http\Requests\UpdateTicketRequest;
+use App\Models\CannedResponse;
 use App\Models\Client;
 use App\Models\Department;
 use App\Models\Product;
+use App\Models\SlaPolicy;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\User;
+use App\Services\PlanService;
 use App\Services\TicketMergeService;
 use App\Services\TicketService;
 use App\Services\TicketWorkflowService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TicketController extends Controller
 {
-    use \App\Http\Controllers\Concerns\HasSortableQuery;
+    use HasSortableQuery;
 
     public function __construct(
         private TicketService $ticketService,
@@ -35,8 +42,8 @@ class TicketController extends Controller
      * Scope ticket query by the user's department access.
      * Owners/admins see all; agents/managers see only their departments.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<Ticket>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<Ticket>
+     * @param  Builder<Ticket>  $query
+     * @return Builder<Ticket>
      */
     private function scopeByUserDepartments($query)
     {
@@ -88,6 +95,16 @@ class TicketController extends Controller
                 }
             })
             ->when($request->priority, fn ($query, $priority) => $query->where('priority', $priority))
+            ->when($request->sla_policy_id, fn ($query, $policyId) => $query->where('sla_policy_id', $policyId))
+            ->when($request->boolean('sla_breached') || $request->sla_breached === '1', function ($query) {
+                $query->where(function ($q) {
+                    $q->where('resolution_due_at', '<', now())
+                        ->orWhere(function ($q2) {
+                            $q2->whereNull('first_response_at')
+                                ->where('response_due_at', '<', now());
+                        });
+                });
+            })
             ->when($request->department_id, fn ($query, $dept) => $query->where('department_id', $dept))
             ->when($request->category_id, fn ($query, $cat) => $query->where('category_id', $cat))
             ->when($request->client_id, fn ($query, $client) => $query->where('client_id', $client))
@@ -169,7 +186,7 @@ class TicketController extends Controller
             ->get(['id', 'name', 'support_tier']);
 
         // Build SLA lookup: { tier: { priority: { response, resolution } } }
-        $slaLookup = \App\Models\SlaPolicy::active()
+        $slaLookup = SlaPolicy::active()
             ->whereNotNull('client_tier')
             ->whereNotNull('priority')
             ->get()
@@ -189,7 +206,7 @@ class TicketController extends Controller
     {
         $data = $request->validated();
 
-        if ($request->hasFile('attachments') && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments)) {
+        if ($request->hasFile('attachments') && app(PlanService::class)->currentTenantHasFeature(PlanFeature::Attachments)) {
             $data['attachments'] = $this->storeAttachments($request);
         } else {
             unset($data['attachments']);
@@ -230,14 +247,14 @@ class TicketController extends Controller
             'mergedTickets' => fn ($q) => $q->with('client')->latest('merged_at'),
         ]);
 
-        $agents = \App\Models\User::query()
+        $agents = User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
             ->with('schedules')
             ->orderBy('name')
             ->get(['id', 'name', 'support_tier']);
 
         $mergeableTickets = collect();
-        if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketMerging)) {
+        if (app(PlanService::class)->currentTenantHasFeature(PlanFeature::TicketMerging)) {
             $mergeableTickets = Ticket::query()
                 ->where('id', '!=', $ticket->id)
                 ->where('is_merged', false)
@@ -248,8 +265,8 @@ class TicketController extends Controller
         }
 
         $cannedResponses = collect();
-        if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::CannedResponses)) {
-            $cannedResponses = \App\Models\CannedResponse::query()->ordered()->get(['id', 'name', 'category', 'content']);
+        if (app(PlanService::class)->currentTenantHasFeature(PlanFeature::CannedResponses)) {
+            $cannedResponses = CannedResponse::query()->ordered()->get(['id', 'name', 'category', 'content']);
         }
 
         return view('tickets.show', compact('ticket', 'agents', 'mergeableTickets', 'cannedResponses'));
@@ -272,7 +289,7 @@ class TicketController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $slaLookup = \App\Models\SlaPolicy::active()
+        $slaLookup = SlaPolicy::active()
             ->whereNotNull('client_tier')
             ->whereNotNull('priority')
             ->get()
@@ -292,7 +309,7 @@ class TicketController extends Controller
     {
         $data = $request->validated();
 
-        if ($request->hasFile('attachments') && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::Attachments)) {
+        if ($request->hasFile('attachments') && app(PlanService::class)->currentTenantHasFeature(PlanFeature::Attachments)) {
             $existing = $ticket->attachments ?? [];
             $data['attachments'] = array_merge($existing, $this->storeAttachments($request));
         } else {
@@ -316,7 +333,7 @@ class TicketController extends Controller
     {
         $this->checkPermission('assign tickets');
         $validated = $request->validate([
-            'assigned_to' => ['required', \Illuminate\Validation\Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'assigned_to' => ['required', Rule::exists('users', 'id')->whereNull('deleted_at')],
             'priority' => ['nullable', 'in:low,medium,high,critical'],
         ]);
 
@@ -325,7 +342,7 @@ class TicketController extends Controller
             ->findOrFail($validated['assigned_to']);
 
         try {
-            \Illuminate\Support\Facades\DB::transaction(function () use ($ticket, $agent, $validated) {
+            DB::transaction(function () use ($ticket, $agent, $validated) {
                 if (! empty($validated['priority']) && $validated['priority'] !== $ticket->priority) {
                     $this->ticketService->changePriority($ticket, $validated['priority']);
                 }
@@ -370,7 +387,7 @@ class TicketController extends Controller
         ]);
 
         if ($ticket->status === 'closed'
-            && ! app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketReopening)
+            && ! app(PlanService::class)->currentTenantHasFeature(PlanFeature::TicketReopening)
         ) {
             return redirect()->route('tickets.show', $ticket)
                 ->with('error', 'Reopening closed tickets requires the Enterprise plan.');
@@ -541,7 +558,7 @@ class TicketController extends Controller
     {
         $this->checkPermission('delete tickets');
 
-        $this->ticketService->addHistory($ticket, 'deleted', null, null, null, 'Ticket deleted' . ($request->input('reason') ? ': ' . $request->input('reason') : ''));
+        $this->ticketService->addHistory($ticket, 'deleted', null, null, null, 'Ticket deleted'.($request->input('reason') ? ': '.$request->input('reason') : ''));
 
         $ticket->update([
             'deleted_by' => Auth::id(),

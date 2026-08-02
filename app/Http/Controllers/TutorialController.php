@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class TutorialController extends Controller
 {
-    private const TUTORIALS = [
+    public const TUTORIALS = [
         'getting-started' => [
             'title' => 'Getting Started',
             'description' => 'Set up your workspace, departments, categories, and invite your team.',
@@ -50,10 +50,18 @@ class TutorialController extends Controller
 
     public function index(OnboardingService $onboardingService): View
     {
-        $tenant = Auth::user()->currentTenant();
-        $onboardingDismissed = $onboardingService->isDismissed($tenant);
+        $user = Auth::user();
+        $onboardingDismissed = false;
+        if ($user && method_exists($user, 'currentTenant')) {
+            $tenant = $user->currentTenant();
+            if ($tenant) {
+                $onboardingDismissed = $onboardingService->isDismissed($tenant);
+            }
+        }
 
-        return view('tutorials.index', [
+        $viewName = request()->routeIs('admin.*') ? 'admin.help.index' : 'tutorials.index';
+
+        return view($viewName, [
             'tutorials' => self::TUTORIALS,
             'onboardingDismissed' => $onboardingDismissed,
         ]);
@@ -65,7 +73,9 @@ class TutorialController extends Controller
             abort(404);
         }
 
-        return view('tutorials.show', [
+        $viewName = request()->routeIs('admin.*') ? 'admin.help.show' : 'tutorials.show';
+
+        return view($viewName, [
             'slug' => $tutorial,
             'tutorial' => self::TUTORIALS[$tutorial],
             'tutorials' => self::TUTORIALS,
@@ -85,5 +95,21 @@ class TutorialController extends Controller
         ])->setPaper('a4');
 
         return $pdf->download('CliqueHA-Nexus-Help-and-Tutorials.pdf');
+    }
+
+    /**
+     * Download the complete System Administrator User Manual as a PDF document.
+     */
+    public function downloadManual()
+    {
+        $path = public_path('docs/Admin-User-Manual.pdf');
+        if (! file_exists($path) || filesize($path) < 1000) {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('admin.help.manual-pdf');
+            file_put_contents($path, $pdf->output());
+        }
+
+        return response()->download($path, 'Admin-User-Manual.pdf', [
+            'Content-Type' => 'application/pdf',
+        ]);
     }
 }

@@ -241,7 +241,7 @@ class ClientPortalController extends Controller
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
+            'password' => $validated['password'],
         ]);
 
         // Link existing guest client to this user account, or create new
@@ -321,7 +321,11 @@ class ClientPortalController extends Controller
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('id', $ticketId)
-            ->with(['category', 'department'])
+            ->with([
+                'category',
+                'department',
+                'comments.user',
+            ])
             ->firstOrFail();
 
         return view('client-portal.show-ticket', compact('tenant', 'client', 'ticket'));

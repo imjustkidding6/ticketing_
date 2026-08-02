@@ -7,6 +7,7 @@ use App\Models\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SlaPolicy extends Model
 {
@@ -36,6 +37,14 @@ class SlaPolicy extends Model
             'response_time_hours' => 'integer',
             'resolution_time_hours' => 'integer',
         ];
+    }
+
+    /**
+     * Tickets using this SLA Policy.
+     */
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class, 'sla_policy_id');
     }
 
     /**
@@ -75,6 +84,7 @@ class SlaPolicy extends Model
     }
 
     public const TIERS = ['basic', 'premium', 'enterprise'];
+
     public const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
     /**
