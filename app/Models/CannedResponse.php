@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Traits\BelongsToTenant;
 use App\Models\Traits\LogsActivity;
+use Database\Factories\CannedResponseFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CannedResponse extends Model
 {
-    /** @use HasFactory<\Database\Factories\CannedResponseFactory> */
+    /** @use HasFactory<CannedResponseFactory> */
     use BelongsToTenant, HasFactory, LogsActivity;
 
     /** @var list<string> */

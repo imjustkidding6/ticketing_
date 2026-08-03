@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\License;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantRoleService;
 use App\Services\TenantUrlHelper;
+use Database\Seeders\DepartmentSeeder;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class RegisteredUserController extends Controller
@@ -30,7 +33,7 @@ class RegisteredUserController extends Controller
     /**
      * Handle an incoming registration request.
      *
-     * @throws \Illuminate\Validation\ValidationException
+     * @throws ValidationException
      */
     public function store(Request $request): RedirectResponse
     {
@@ -76,13 +79,13 @@ class RegisteredUserController extends Controller
             $user = User::create([
                 'name' => $request->name,
                 'email' => $request->email,
-                'password' => Hash::make($request->password),
+                'password' => $request->password,
             ]);
 
             $tenant->addUser($user, 'owner');
 
-            \Database\Seeders\DepartmentSeeder::seedForTenant($tenant);
-            app(\App\Services\TenantRoleService::class)->setupDefaultRoles($tenant);
+            DepartmentSeeder::seedForTenant($tenant);
+            app(TenantRoleService::class)->setupDefaultRoles($tenant);
 
             return compact('user', 'tenant');
         });

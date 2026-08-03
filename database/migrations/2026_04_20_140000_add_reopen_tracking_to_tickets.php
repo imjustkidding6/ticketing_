@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -15,7 +16,7 @@ return new class extends Migration
         });
 
         // Backfill: tickets already closed at least once get first_closed_at = closed_at.
-        \Illuminate\Support\Facades\DB::statement('UPDATE tickets SET first_closed_at = closed_at WHERE closed_at IS NOT NULL');
+        DB::statement('UPDATE tickets SET first_closed_at = closed_at WHERE closed_at IS NOT NULL');
     }
 
     public function down(): void

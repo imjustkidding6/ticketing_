@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Database\Factories\DistributorFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +11,7 @@ use Illuminate\Support\Str;
 
 class Distributor extends Model
 {
-    /** @use HasFactory<\Database\Factories\DistributorFactory> */
+    /** @use HasFactory<DistributorFactory> */
     use HasFactory;
 
     /**

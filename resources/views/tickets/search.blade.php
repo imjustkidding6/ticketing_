@@ -27,7 +27,7 @@
                 <div class="mb-4 text-sm text-gray-500">
                     {{ __('Showing results for') }} "<span class="font-medium text-gray-900">{{ request('q') }}</span>"
                     @if(isset($tickets))
-                        &mdash; {{ $tickets->total() }} {{ Str::plural('result', $tickets->total()) }} {{ __('found') }}
+                        &mdash; {{ $tickets->count() }} {{ Str::plural('result', $tickets->count()) }} {{ __('found') }}
                     @endif
                 </div>
 
@@ -84,11 +84,7 @@
                     </tbody>
                 </x-data-table>
 
-                @if(isset($tickets) && $tickets->hasPages())
-                    <div class="mt-4">
-                        {{ $tickets->appends(request()->query())->links() }}
-                    </div>
-                @endif
+
             @else
                 <!-- Empty State Before Search -->
                 <div class="rounded-xl bg-white p-12 text-center shadow-sm">

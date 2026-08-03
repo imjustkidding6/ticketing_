@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Traits\BelongsToTenant;
+use Database\Factories\TicketTaskFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TicketTask extends Model
 {
-    /** @use HasFactory<\Database\Factories\TicketTaskFactory> */
+    /** @use HasFactory<TicketTaskFactory> */
     use BelongsToTenant, HasFactory;
 
     /**

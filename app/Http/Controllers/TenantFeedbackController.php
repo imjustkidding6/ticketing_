@@ -19,17 +19,17 @@ class TenantFeedbackController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'type'    => ['required', 'string', 'in:' . implode(',', TenantFeedback::TYPES)],
+            'type' => ['required', 'string', 'in:'.implode(',', TenantFeedback::TYPES)],
             'subject' => ['nullable', 'string', 'max:255'],
-            'body'    => ['required', 'string', 'max:3000'],
+            'body' => ['required', 'string', 'max:3000'],
         ]);
 
         TenantFeedback::create([
             'tenant_id' => session('current_tenant_id'),
-            'user_id'   => auth()->id(),
-            'type'      => $validated['type'],
-            'subject'   => $validated['subject'] ?? null,
-            'body'      => $validated['body'],
+            'user_id' => auth()->id(),
+            'type' => $validated['type'],
+            'subject' => $validated['subject'] ?? null,
+            'body' => $validated['body'],
         ]);
 
         return back()->with('success', 'Thank you for your feedback!');

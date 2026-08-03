@@ -2,12 +2,13 @@
 
 namespace Database\Factories;
 
+use App\Models\CannedResponse;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\CannedResponse>
+ * @extends Factory<CannedResponse>
  */
 class CannedResponseFactory extends Factory
 {

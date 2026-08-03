@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Ticket;
 use App\Models\TicketTask;
 use App\Services\TicketService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 
 class TicketTaskController extends Controller
@@ -15,6 +17,7 @@ class TicketTaskController extends Controller
     public function __construct(
         private TicketService $ticketService,
     ) {}
+
     /**
      * Store a new task for a ticket.
      */
@@ -22,13 +25,13 @@ class TicketTaskController extends Controller
     {
         $validated = $request->validate([
             'description' => ['required', 'string', 'max:1000'],
-            'assigned_to' => ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $ticket->tasks()->create($validated);
 
-        $this->ticketService->addHistory($ticket, 'task_added', null, null, null, 'Task added: ' . $validated['description']);
+        $this->ticketService->addHistory($ticket, 'task_added', null, null, null, 'Task added: '.$validated['description']);
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Task added successfully.');
@@ -41,13 +44,13 @@ class TicketTaskController extends Controller
     {
         $validated = $request->validate([
             'description' => ['required', 'string', 'max:1000'],
-            'assigned_to' => ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $task->update($validated);
 
-        $this->ticketService->addHistory($ticket, 'task_updated', null, null, null, 'Task updated: ' . $validated['description']);
+        $this->ticketService->addHistory($ticket, 'task_updated', null, null, null, 'Task updated: '.$validated['description']);
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Task updated successfully.');
@@ -124,7 +127,7 @@ class TicketTaskController extends Controller
     /**
      * Get task status history.
      */
-    public function history(Ticket $ticket, TicketTask $task): \Illuminate\Http\JsonResponse
+    public function history(Ticket $ticket, TicketTask $task): JsonResponse
     {
         $history = $task->statusHistory()
             ->with('user')
@@ -146,7 +149,7 @@ class TicketTaskController extends Controller
      */
     public function destroy(Ticket $ticket, TicketTask $task): RedirectResponse
     {
-        $this->ticketService->addHistory($ticket, 'task_deleted', null, null, null, 'Task removed: ' . $task->description);
+        $this->ticketService->addHistory($ticket, 'task_deleted', null, null, null, 'Task removed: '.$task->description);
 
         $task->delete();
 

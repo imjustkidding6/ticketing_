@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppSetting;
 use App\Models\Client;
 use App\Models\Department;
 use App\Models\Product;
@@ -9,7 +10,9 @@ use App\Models\TicketCategory;
 use App\Models\User;
 use App\Services\ReportService;
 use App\Services\SlaService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -41,7 +44,7 @@ class ReportController extends Controller
         ]);
 
         // Restrict to user's departments for agents/managers
-        $user = \Illuminate\Support\Facades\Auth::user();
+        $user = Auth::user();
         $tenant = $user?->currentTenant();
 
         if ($tenant) {
@@ -301,7 +304,7 @@ class ReportController extends Controller
                 $t->client?->name ?? '-',
                 $t->department?->name ?? '-',
                 $t->assignee?->name ?? '-',
-                \App\Models\AppSetting::formatCurrency($t->billable_amount),
+                AppSetting::formatCurrency($t->billable_amount),
                 $t->billed_at ? $t->billed_at->format('m/d/Y') : 'Unbilled',
                 $t->billable_description ?? '',
             ])->toArray(),
@@ -315,8 +318,8 @@ class ReportController extends Controller
      */
     public function slaCompliance(Request $request): View
     {
-        $from = $request->input('from') ? \Carbon\Carbon::parse($request->input('from')) : now()->subDays(30);
-        $to = $request->input('to') ? \Carbon\Carbon::parse($request->input('to')) : now();
+        $from = $request->input('from') ? Carbon::parse($request->input('from')) : now()->subDays(30);
+        $to = $request->input('to') ? Carbon::parse($request->input('to')) : now();
 
         $report = $this->slaService->getComplianceReport($from, $to);
 
@@ -383,8 +386,8 @@ class ReportController extends Controller
      */
     public function exportSlaCompliance(Request $request): StreamedResponse
     {
-        $from = $request->input('from') ? \Carbon\Carbon::parse($request->input('from')) : now()->subDays(30);
-        $to = $request->input('to') ? \Carbon\Carbon::parse($request->input('to')) : now();
+        $from = $request->input('from') ? Carbon::parse($request->input('from')) : now()->subDays(30);
+        $to = $request->input('to') ? Carbon::parse($request->input('to')) : now();
 
         $report = $this->slaService->getComplianceReport($from, $to);
 

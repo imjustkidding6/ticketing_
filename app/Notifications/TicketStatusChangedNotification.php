@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Services\TenantUrlHelper;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -21,7 +22,7 @@ class TicketStatusChangedNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        if ($notifiable instanceof \Illuminate\Notifications\AnonymousNotifiable) {
+        if ($notifiable instanceof AnonymousNotifiable) {
             return ['mail'];
         }
 

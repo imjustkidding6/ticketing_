@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\KbArticle;
 use App\Models\KbCategory;
 use App\Models\Tenant;
 use App\Models\User;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\KbArticle>
+ * @extends Factory<KbArticle>
  */
 class KbArticleFactory extends Factory
 {

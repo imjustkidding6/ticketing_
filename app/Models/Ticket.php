@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Traits\BelongsToTenant;
 use App\Models\Traits\LogsActivity;
+use Database\Factories\TicketFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +16,7 @@ use Illuminate\Support\Str;
 
 class Ticket extends Model
 {
-    /** @use HasFactory<\Database\Factories\TicketFactory> */
+    /** @use HasFactory<TicketFactory> */
     use BelongsToTenant, HasFactory, LogsActivity, SoftDeletes;
 
     /**
@@ -82,9 +83,10 @@ class Ticket extends Model
         'preferred_service_date',
         'is_false_alarm',
         'deleted_by',
-        'deletion_reason',
         'sla_breach_notified_at',
         'merge_metadata',
+        'solution_embedding',
+        'solution_embedded_at',
     ];
 
     /**
@@ -105,6 +107,7 @@ class Ticket extends Model
             'hold_started_at' => 'datetime',
             'last_escalated_at' => 'datetime',
             'sla_breach_notified_at' => 'datetime',
+            'solution_embedded_at' => 'datetime',
             'marked_spam_at' => 'datetime',
             'is_billable' => 'boolean',
             'is_merged' => 'boolean',
@@ -116,6 +119,7 @@ class Ticket extends Model
             'metadata' => 'array',
             'attachments' => 'array',
             'merge_metadata' => 'array',
+            'solution_embedding' => 'array',
             'reopened_count' => 'integer',
             'total_hold_time_minutes' => 'integer',
             'escalation_count' => 'integer',

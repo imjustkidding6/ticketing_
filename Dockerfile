@@ -24,7 +24,8 @@ RUN apt-get update && apt-get install -y \
     supervisor \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip \
-    && pecl install redis xdebug \
+    && pecl install redis \
+    && pecl install xdebug \
     && docker-php-ext-enable redis xdebug \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -37,10 +38,9 @@ RUN groupmod -o -g "${HOST_GID}" www-data \
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Install Node.js 20.x
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && npm install -g npm@latest
+# Install Node.js 22.x LTS
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs
 
 # Set working directory
 WORKDIR /var/www/html
@@ -97,7 +97,7 @@ COPY --chown=www-data:www-data . .
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Build frontend assets
-RUN npm ci --production=false && npm run build && rm -rf node_modules
+RUN npm ci --include=dev && npm run build && rm -rf node_modules
 
 # Copy production configs
 COPY docker/nginx/default-prod.conf /etc/nginx/http.d/default.conf

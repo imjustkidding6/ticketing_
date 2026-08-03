@@ -14,3 +14,9 @@ Artisan::command('inspire', function () {
 Schedule::command(SendSlaBreachWarnings::class)->everyFifteenMinutes();
 Schedule::command(CheckLicenseExpirations::class)->dailyAt('02:00');
 Schedule::command(EmbedResolvedTickets::class)->everyFifteenMinutes()->withoutOverlapping();
+Schedule::command('ai:embed:tickets')->daily()->withoutOverlapping();
+Schedule::command('ai:embed:knowledge')->dailyAt('03:00')->withoutOverlapping();
+Schedule::command('ai:embed:snippets')->hourly()->withoutOverlapping();
+Schedule::command('ai:maintenance --mode=daily')->dailyAt('04:00')->withoutOverlapping();
+Schedule::command('ai:maintenance --mode=hourly')->hourly()->withoutOverlapping();
+Schedule::command('ai:maintenance --mode=weekly')->weeklyOn(0, '01:00')->withoutOverlapping();

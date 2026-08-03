@@ -16,9 +16,9 @@ class CheckLicenseExpirations extends Command
     public function handle(): int
     {
         $approaching = 0;
-        $imminent    = 0;
-        $grace       = 0;
-        $expired     = 0;
+        $imminent = 0;
+        $grace = 0;
+        $expired = 0;
 
         // 1. Approaching: expires in 4–7 days, no warning sent yet
         License::query()

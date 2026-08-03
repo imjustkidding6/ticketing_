@@ -15,17 +15,17 @@ php artisan migrate
 php artisan db:seed
 ```
 
-This creates:
+This creates:docker exec -it ticketing-app php artisan route:list | grep track
 
-| Item | Details |
-|------|---------|
-| **Admin user** | `admin@example.com` / `password` (`is_admin = true`) |
-| **Test user** | `test@example.com` / `password` (regular tenant user) |
-| **3 Plans** | Start, Business, Enterprise |
-| **Demo Distributor** | With auto-generated API key |
-| **Demo License** | Start plan, 10 seats, 1-year validity |
-| **Demo Tenant** | "Demo Company" with test user as owner |
-| **16 Permissions** | Spatie permissions for tenant-level RBAC |
+| Item                       | Details                                                    |
+| -------------------------- | ---------------------------------------------------------- |
+| **Admin user**       | `admin@example.com` / `password` (`is_admin = true`) |
+| **Test user**        | `test@example.com` / `password` (regular tenant user)  |
+| **3 Plans**          | Start, Business, Enterprise                                |
+| **Demo Distributor** | With auto-generated API key                                |
+| **Demo License**     | Start plan, 10 seats, 1-year validity                      |
+| **Demo Tenant**      | "Demo Company" with test user as owner                     |
+| **16 Permissions**   | Spatie permissions for tenant-level RBAC                   |
 
 ### Access the Admin Panel
 
@@ -54,6 +54,7 @@ Distributor
 ```
 
 A tenant gets its plan **through a License**, enabling:
+
 - License key distribution and tracking
 - Seat limits independent of the plan
 - Expiry dates with configurable grace periods
@@ -61,12 +62,12 @@ A tenant gets its plan **through a License**, enabling:
 
 ### Middleware Stack
 
-| Alias | Class | Purpose |
-|-------|-------|---------|
-| `admin` | `AdminMiddleware` | Checks `is_admin` on user |
-| `tenant` | `EnsureTenantSession` | Resolves tenant from URL slug, sets session |
-| `feature` | `CheckPlanFeature` | Gates routes by plan feature flags |
-| `portal` | `EnsureClientPortalAccess` | Validates client portal session |
+| Alias       | Class                        | Purpose                                     |
+| ----------- | ---------------------------- | ------------------------------------------- |
+| `admin`   | `AdminMiddleware`          | Checks`is_admin` on user                  |
+| `tenant`  | `EnsureTenantSession`      | Resolves tenant from URL slug, sets session |
+| `feature` | `CheckPlanFeature`         | Gates routes by plan feature flags          |
+| `portal`  | `EnsureClientPortalAccess` | Validates client portal session             |
 
 ---
 
@@ -74,11 +75,11 @@ A tenant gets its plan **through a License**, enabling:
 
 ### Built-in Plans
 
-| Plan | Slug | Max Users | Tickets/Month | Features |
-|------|------|-----------|---------------|----------|
-| **Start** | `start` | 5 | 100 | None (basic ticketing only) |
-| **Business** | `business` | 25 | 500 | 12 features (see below) |
-| **Enterprise** | `enterprise` | unlimited | unlimited | All 18 features |
+| Plan                 | Slug           | Max Users | Tickets/Month | Features                    |
+| -------------------- | -------------- | --------- | ------------- | --------------------------- |
+| **Start**      | `start`      | 5         | 100           | None (basic ticketing only) |
+| **Business**   | `business`   | 25        | 500           | 12 features (see below)     |
+| **Enterprise** | `enterprise` | unlimited | unlimited     | All 18 features             |
 
 ### Feature Flags
 
@@ -86,37 +87,38 @@ Features are defined in `app/Enums/PlanFeature.php` and stored as a JSON array o
 
 **Business plan features:**
 
-| Feature | Description |
-|---------|-------------|
-| `audit_logs` | Ticket Activity History |
-| `billing` | Ticket Billing |
-| `spam_management` | Mark as Spam |
-| `service_reports` | Auto Generated Service Reports |
-| `attachments` | File Attachments |
-| `agent_schedule` | Agent Availability Schedule |
-| `sla_management` | SLA Management |
-| `sla_report` | SLA Compliance Report |
-| `email_notifications` | Email Notifications |
-| `detailed_reporting` | Detailed Reporting & Export |
-| `knowledge_base` | Knowledge Base |
-| `canned_responses` | Canned Responses |
+| Feature                 | Description                    |
+| ----------------------- | ------------------------------ |
+| `audit_logs`          | Ticket Activity History        |
+| `billing`             | Ticket Billing                 |
+| `spam_management`     | Mark as Spam                   |
+| `service_reports`     | Auto Generated Service Reports |
+| `attachments`         | File Attachments               |
+| `agent_schedule`      | Agent Availability Schedule    |
+| `sla_management`      | SLA Management                 |
+| `sla_report`          | SLA Compliance Report          |
+| `email_notifications` | Email Notifications            |
+| `detailed_reporting`  | Detailed Reporting & Export    |
+| `knowledge_base`      | Knowledge Base                 |
+| `canned_responses`    | Canned Responses               |
 
 **Enterprise-only features (in addition to Business):**
 
-| Feature | Description |
-|---------|-------------|
-| `ticket_merging` | Ticket Merging |
-| `ticket_reopening` | Ticket Reopening |
-| `custom_roles` | Custom Roles & Permissions |
-| `department_management` | Department Management |
-| `agent_escalation` | Agent Tiering & Escalation |
-| `client_comments` | Client-Agent Comments |
+| Feature                   | Description                |
+| ------------------------- | -------------------------- |
+| `ticket_merging`        | Ticket Merging             |
+| `ticket_reopening`      | Ticket Reopening           |
+| `custom_roles`          | Custom Roles & Permissions |
+| `department_management` | Department Management      |
+| `agent_escalation`      | Agent Tiering & Escalation |
+| `client_comments`       | Client-Agent Comments      |
 
 ### Managing Plans
 
 Navigate to **Admin > Plans** to create or edit plans.
 
 Each plan has:
+
 - **Name & slug** — slug is used for feature lookups
 - **Max users** — leave blank for unlimited
 - **Max tickets per month** — leave blank for unlimited
@@ -148,11 +150,13 @@ Feature checks are cached for 5 minutes per tenant.
 Distributors are reseller entities that issue licenses. Navigate to **Admin > Distributors**.
 
 Each distributor has:
+
 - **Name, email, contact person, phone, address**
 - **API key** — auto-generated (`dk_` prefix + 32 random chars)
 - **Active status**
 
 Distributors generate licenses via:
+
 ```php
 $distributor->generateLicense($plan, [
     'seats' => 10,
@@ -173,12 +177,12 @@ Licenses are the bridge between distributors, plans, and tenants. Navigate to **
 pending → active → expired/revoked
 ```
 
-| Status | Description |
-|--------|-------------|
-| `pending` | Issued but not yet activated by a tenant |
-| `active` | Activated and in use |
-| `expired` | Past `expires_at` (may still be in grace period) |
-| `revoked` | Manually revoked by admin |
+| Status      | Description                                       |
+| ----------- | ------------------------------------------------- |
+| `pending` | Issued but not yet activated by a tenant          |
+| `active`  | Activated and in use                              |
+| `expired` | Past`expires_at` (may still be in grace period) |
+| `revoked` | Manually revoked by admin                         |
 
 ### License Fields
 
@@ -192,6 +196,7 @@ pending → active → expired/revoked
 ### Validity Check
 
 A license is valid when:
+
 1. Status is `active`
 2. Current date is before `expires_at + grace_days`
 
@@ -220,17 +225,18 @@ Navigate to **Admin > Tenants** to view all tenants.
 
 ### Tenant Actions (Admin Panel)
 
-| Action | Description |
-|--------|-------------|
-| **View** | See tenant details, usage stats, user list |
-| **Suspend** | Sets `suspended_at`, blocks tenant access |
-| **Unsuspend** | Clears `suspended_at` |
-| **Change Plan** | Swaps the license's plan |
-| **Impersonate** | Log into the tenant as their owner user |
+| Action                | Description                                |
+| --------------------- | ------------------------------------------ |
+| **View**        | See tenant details, usage stats, user list |
+| **Suspend**     | Sets`suspended_at`, blocks tenant access |
+| **Unsuspend**   | Clears`suspended_at`                     |
+| **Change Plan** | Swaps the license's plan                   |
+| **Impersonate** | Log into the tenant as their owner user    |
 
 ### Tenant URL Structure
 
 All tenant routes use path-prefix routing:
+
 ```
 /{slug}/dashboard
 /{slug}/tickets
@@ -245,10 +251,10 @@ The `EnsureTenantSession` middleware resolves the tenant from the `{slug}` URL p
 
 The `tenant_user` pivot table stores:
 
-| Role | Capabilities |
-|------|-------------|
-| `owner` | Full access, can manage all settings |
-| `admin` | Can manage users, settings, and all tickets |
+| Role       | Capabilities                                |
+| ---------- | ------------------------------------------- |
+| `owner`  | Full access, can manage all settings        |
+| `admin`  | Can manage users, settings, and all tickets |
 | `member` | Standard agent, can manage assigned tickets |
 
 Spatie Permission's team mode is used, where `setPermissionsTeamId($tenant->id)` scopes all role/permission checks to the specific tenant.
@@ -294,6 +300,7 @@ The admin dashboard (`/admin`) shows:
 5. The license is activated, creating the tenant and associating the user as `owner`
 
 Or via the seeder flow for development:
+
 ```php
 $distributor = Distributor::create(['name' => 'My Distributor']);
 $license = $distributor->generateLicense($plan, ['seats' => 10]);
@@ -361,11 +368,11 @@ app/
 
 ### Route Files
 
-| File | Purpose |
-|------|---------|
-| `routes/web.php` | Admin panel routes, auth routes, home/registration |
-| `routes/tenant.php` | All `/{slug}/...` tenant routes (dashboard, tickets, clients, etc.) |
-| `routes/portal.php` | Client portal routes under `/{tenant}/portal/...` |
+| File                  | Purpose                                                              |
+| --------------------- | -------------------------------------------------------------------- |
+| `routes/web.php`    | Admin panel routes, auth routes, home/registration                   |
+| `routes/tenant.php` | All`/{slug}/...` tenant routes (dashboard, tickets, clients, etc.) |
+| `routes/portal.php` | Client portal routes under`/{tenant}/portal/...`                   |
 
 ---
 
@@ -373,29 +380,30 @@ app/
 
 ### Production Dependencies
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `laravel/framework` | v12 | Core framework |
-| `spatie/laravel-permission` | v6.24 | Role/permission system with **teams mode** (per-tenant RBAC) |
-| `barryvdh/laravel-dompdf` | v3.1 | PDF generation for service reports |
-| `aws/aws-sdk-php` | v3 | AWS SDK for S3 file storage |
-| `league/flysystem-aws-s3-v3` | v3 | Laravel S3 filesystem driver |
-| `laravel/tinker` | latest | REPL debugging |
+| Package                        | Version | Purpose                                                           |
+| ------------------------------ | ------- | ----------------------------------------------------------------- |
+| `laravel/framework`          | v12     | Core framework                                                    |
+| `spatie/laravel-permission`  | v6.24   | Role/permission system with**teams mode** (per-tenant RBAC) |
+| `barryvdh/laravel-dompdf`    | v3.1    | PDF generation for service reports                                |
+| `aws/aws-sdk-php`            | v3      | AWS SDK for S3 file storage                                       |
+| `league/flysystem-aws-s3-v3` | v3      | Laravel S3 filesystem driver                                      |
+| `laravel/tinker`             | latest  | REPL debugging                                                    |
 
 ### Dev Dependencies
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `laravel/breeze` | latest | Auth scaffolding (Blade starter kit) |
-| `laravel/sail` | v1 | Docker dev environment |
-| `laravel/pint` | v1 | Code style formatter |
-| `laravel/boost` | v2 | MCP/dev tooling |
-| `phpunit/phpunit` | v11 | Testing framework |
-| `fakerphp/faker` | latest | Test data generation |
+| Package             | Version | Purpose                              |
+| ------------------- | ------- | ------------------------------------ |
+| `laravel/breeze`  | latest  | Auth scaffolding (Blade starter kit) |
+| `laravel/sail`    | v1      | Docker dev environment               |
+| `laravel/pint`    | v1      | Code style formatter                 |
+| `laravel/boost`   | v2      | MCP/dev tooling                      |
+| `phpunit/phpunit` | v11     | Testing framework                    |
+| `fakerphp/faker`  | latest  | Test data generation                 |
 
 ### No Dedicated Tenancy Package
 
 Multi-tenancy is **entirely custom-built** — no `stancl/tenancy` or `spatie/laravel-multitenancy`. It uses:
+
 - `BelongsToTenant` trait + `TenantScope` global scope for data isolation
 - Session-based tenant switching (`session('current_tenant_id')`)
 - Path-prefix routing (`/{slug}/...`) resolved by `EnsureTenantSession` middleware
@@ -429,32 +437,33 @@ Used only on the `User` model. Provides:
 
 ## 14. Trait Usage Per Model
 
-| Model | Traits |
-|-------|--------|
-| **User** | `HasFactory`, `HasRoles` (Spatie), `HasTenants` (custom), `Notifiable` |
-| **Ticket** | `HasFactory`, `SoftDeletes`, `BelongsToTenant` (custom) |
-| **Client** | `HasFactory`, `BelongsToTenant` (custom) |
-| **Department** | `HasFactory`, `BelongsToTenant` (custom) |
-| **TicketCategory** | `HasFactory`, `BelongsToTenant` (custom) |
-| **TicketComment** | `HasFactory`, `BelongsToTenant` (custom) |
-| **TicketTask** | `HasFactory`, `BelongsToTenant` (custom) |
-| **Product** | `HasFactory`, `BelongsToTenant` (custom) |
-| **SlaPolicy** | `HasFactory`, `BelongsToTenant` (custom) |
-| **CannedResponse** | `HasFactory`, `BelongsToTenant` (custom) |
-| **KbArticle** | `HasFactory`, `BelongsToTenant` (custom) |
-| **KbCategory** | `HasFactory`, `BelongsToTenant` (custom) |
-| **ServiceReport** | `BelongsToTenant` (custom) |
-| **AgentSchedule** | `BelongsToTenant` (custom) |
-| **AppSetting** | `BelongsToTenant` (custom) |
-| **Tenant** | `HasFactory` |
-| **Plan** | `HasFactory` |
-| **License** | `HasFactory` |
-| **Distributor** | `HasFactory` |
-| **TicketAssignment** | *(none — bare Model)* |
-| **TicketEscalation** | *(none — bare Model)* |
-| **TicketHistory** | *(none — bare Model)* |
+| Model                      | Traits                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| **User**             | `HasFactory`, `HasRoles` (Spatie), `HasTenants` (custom), `Notifiable` |
+| **Ticket**           | `HasFactory`, `SoftDeletes`, `BelongsToTenant` (custom)                  |
+| **Client**           | `HasFactory`, `BelongsToTenant` (custom)                                   |
+| **Department**       | `HasFactory`, `BelongsToTenant` (custom)                                   |
+| **TicketCategory**   | `HasFactory`, `BelongsToTenant` (custom)                                   |
+| **TicketComment**    | `HasFactory`, `BelongsToTenant` (custom)                                   |
+| **TicketTask**       | `HasFactory`, `BelongsToTenant` (custom)                                   |
+| **Product**          | `HasFactory`, `BelongsToTenant` (custom)                                   |
+| **SlaPolicy**        | `HasFactory`, `BelongsToTenant` (custom)                                   |
+| **CannedResponse**   | `HasFactory`, `BelongsToTenant` (custom)                                   |
+| **KbArticle**        | `HasFactory`, `BelongsToTenant` (custom)                                   |
+| **KbCategory**       | `HasFactory`, `BelongsToTenant` (custom)                                   |
+| **ServiceReport**    | `BelongsToTenant` (custom)                                                   |
+| **AgentSchedule**    | `BelongsToTenant` (custom)                                                   |
+| **AppSetting**       | `BelongsToTenant` (custom)                                                   |
+| **Tenant**           | `HasFactory`                                                                 |
+| **Plan**             | `HasFactory`                                                                 |
+| **License**          | `HasFactory`                                                                 |
+| **Distributor**      | `HasFactory`                                                                 |
+| **TicketAssignment** | *(none — bare Model)*                                                       |
+| **TicketEscalation** | *(none — bare Model)*                                                       |
+| **TicketHistory**    | *(none — bare Model)*                                                       |
 
 **Key observations:**
+
 - Only `Ticket` uses `SoftDeletes` — all other models use hard deletes
 - Only `User` uses `Notifiable` — client notifications use `Notification::route('mail', $email)`
 - All queued notifications implement `ShouldQueue` with the `Queueable` trait
@@ -465,17 +474,17 @@ Used only on the `User` model. Provides:
 
 All in `app/Services/`:
 
-| Service | Responsibilities |
-|---------|-----------------|
-| **TicketService** | Core ticket lifecycle: create, update, assign, change status, close, billing, spam, history. Wires `SlaService` and `PlanService`. |
-| **SlaService** | Assign SLA policies to tickets, find overdue tickets, breach warning candidates, compliance reporting. |
-| **EscalationService** | Escalate/de-escalate tickets between tiers (tier_1 → tier_2 → tier_3). Records `TicketEscalation` + history. |
-| **TicketMergeService** | Merge/unmerge tickets in a DB transaction, moving tasks and comments to the target ticket. |
-| **PlanService** | Check if a tenant has a `PlanFeature`, read features from cache (5-min TTL), clear cache, check current session tenant. |
-| **TenantRoleService** | Bootstrap default roles/permissions for a tenant using Spatie's teams mode. Defines `PERMISSIONS` and `ROLE_PERMISSIONS` constants. |
-| **ReportService** | Ticket volume, resolution time, department, and agent performance reports. CSV export via streamed response. |
-| **ServiceReportService** | Generate PDF service reports via `barryvdh/laravel-dompdf`, store to S3/disk. |
-| **TenantUrlHelper** | Generate absolute URLs for a tenant's slug-prefixed paths. |
+| Service                        | Responsibilities                                                                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **TicketService**        | Core ticket lifecycle: create, update, assign, change status, close, billing, spam, history. Wires`SlaService` and `PlanService`.  |
+| **SlaService**           | Assign SLA policies to tickets, find overdue tickets, breach warning candidates, compliance reporting.                                 |
+| **EscalationService**    | Escalate/de-escalate tickets between tiers (tier_1 → tier_2 → tier_3). Records`TicketEscalation` + history.                        |
+| **TicketMergeService**   | Merge/unmerge tickets in a DB transaction, moving tasks and comments to the target ticket.                                             |
+| **PlanService**          | Check if a tenant has a`PlanFeature`, read features from cache (5-min TTL), clear cache, check current session tenant.               |
+| **TenantRoleService**    | Bootstrap default roles/permissions for a tenant using Spatie's teams mode. Defines`PERMISSIONS` and `ROLE_PERMISSIONS` constants. |
+| **ReportService**        | Ticket volume, resolution time, department, and agent performance reports. CSV export via streamed response.                           |
+| **ServiceReportService** | Generate PDF service reports via`barryvdh/laravel-dompdf`, store to S3/disk.                                                         |
+| **TenantUrlHelper**      | Generate absolute URLs for a tenant's slug-prefixed paths.                                                                             |
 
 ---
 
@@ -504,6 +513,7 @@ class TenantScope implements Scope
 Applied automatically on every model using `BelongsToTenant` (14 models). This ensures **complete data isolation** — a query on `Ticket::all()` only returns tickets for the current tenant.
 
 **Bypass when needed:**
+
 ```php
 // Remove scope for a single query
 Ticket::withoutGlobalScope(TenantScope::class)->get();
@@ -519,6 +529,7 @@ Ticket::query()->forTenant($tenantId)->get();
 **File:** `config/permission.php`
 
 Key settings:
+
 - **Teams mode enabled:** `'teams' => true`
 - **Team foreign key:** `'team_foreign_key' => 'tenant_id'`
 
@@ -536,8 +547,8 @@ manage_schedules, manage_billing, manage_knowledge_base
 
 ### Default Roles
 
-| Role | Permissions |
-|------|-------------|
-| `admin` | All 16 permissions |
-| `agent` | view/create/edit tickets, assign, manage clients |
-| `viewer` | view_tickets only |
+| Role       | Permissions                                      |
+| ---------- | ------------------------------------------------ |
+| `admin`  | All 16 permissions                               |
+| `agent`  | view/create/edit tickets, assign, manage clients |
+| `viewer` | view_tickets only                                |

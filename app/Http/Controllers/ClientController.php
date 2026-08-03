@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\HasSortableQuery;
 use App\Models\Client;
 use App\Models\ClientAgentAssignment;
 use App\Models\Department;
@@ -14,11 +15,12 @@ use Endroid\QrCode\Writer\PngWriter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ClientController extends Controller
 {
-    use \App\Http\Controllers\Concerns\HasSortableQuery;
+    use HasSortableQuery;
 
     /**
      * Display a listing of clients.
@@ -119,7 +121,7 @@ class ClientController extends Controller
         abort_if($url === null, 404);
 
         $result = (new Builder(
-            writer: new PngWriter(),
+            writer: new PngWriter,
             data: $url,
             size: 240,
             margin: 8,
@@ -236,7 +238,7 @@ class ClientController extends Controller
     public function assignAgent(Request $request, Client $client): RedirectResponse
     {
         $validated = $request->validate([
-            'agent_id' => ['required', \Illuminate\Validation\Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'agent_id' => ['required', Rule::exists('users', 'id')->whereNull('deleted_at')],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 

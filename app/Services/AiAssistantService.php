@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
 use App\Models\AppSetting;
@@ -61,6 +63,28 @@ class AiAssistantService
      */
     private function converse(Tenant $tenant, ChatConversation $conversation, string $userMessage, string $systemPrompt, array $tools, ?string $imageDataUrl = null): string
     {
+        if (app(PromptInjectionService::class)->isInjection($userMessage, $tenant->id, $conversation->user_id)) {
+            $reply = 'Your message could not be processed due to security policy guidelines.';
+            ChatMessage::create([
+                'chat_conversation_id' => $conversation->id,
+                'role' => ChatMessage::ROLE_ASSISTANT,
+                'content' => $reply,
+            ]);
+
+            return $reply;
+        }
+
+        if (app(ModerationService::class)->isFlagged($userMessage, 'balanced', $tenant->id, $conversation->user_id)) {
+            $reply = 'Your message contains content that violates our community safety guidelines.';
+            ChatMessage::create([
+                'chat_conversation_id' => $conversation->id,
+                'role' => ChatMessage::ROLE_ASSISTANT,
+                'content' => $reply,
+            ]);
+
+            return $reply;
+        }
+
         ChatMessage::create([
             'chat_conversation_id' => $conversation->id,
             'role' => ChatMessage::ROLE_USER,
