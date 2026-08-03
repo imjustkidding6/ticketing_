@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "030c810b4fda6d9b933f81ada2a53c57",
+    "content-hash": "15d02606cfea0e4839bce909300f901a",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -417,6 +417,48 @@
                 }
             ],
             "time": "2024-02-09T16:56:22+00:00"
+        },
+        {
+            "name": "cliqueha/assistant-connector",
+            "version": "1.0.0",
+            "source": {
+                "type": "git",
+                "url": "git@github.com:imjustkidding6/assistant-connector.git",
+                "reference": "2f702aa2feff1ef6a7b121f48adf759059aec2b9"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/imjustkidding6/assistant-connector/zipball/2f702aa2feff1ef6a7b121f48adf759059aec2b9",
+                "reference": "2f702aa2feff1ef6a7b121f48adf759059aec2b9",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/http": "^11.0 || ^12.0 || ^13.0",
+                "illuminate/support": "^11.0 || ^12.0 || ^13.0",
+                "php": "^8.2"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Cliqueha\\AssistantConnector\\AssistantConnectorServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Cliqueha\\AssistantConnector\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Expose a Laravel app's actions to the Jude voice-assistant Hub.",
+            "support": {
+                "source": "https://github.com/imjustkidding6/assistant-connector/tree/v1.0.0",
+                "issues": "https://github.com/imjustkidding6/assistant-connector/issues"
+            },
+            "time": "2026-07-07T07:53:54+00:00"
         },
         {
             "name": "dasprid/enum",
@@ -10639,12 +10681,12 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": [],
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.2"
     },
-    "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
 }

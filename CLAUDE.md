@@ -88,6 +88,8 @@ Enforcement points:
 - **Plan-level gates:** Public portal pages (`/{slug}/`, submit-ticket, track-ticket) are Business+ only. Starter tenants get 404.
 - **Cache:** `PlanService` caches features for 300s. Call `PlanService::clearCache($tenant)` after plan changes.
 
+**Gotcha:** `PlanFeature::forPlan()` matches the plan slug `'start'`, not `'starter'` — `forPlan('starter')` hits the `default` arm and silently returns `[]`. Seeders/tests must pass `'start'` (or `'business'`/`'enterprise'`).
+
 ### Permissions
 
 Uses Spatie Permission with `tenant_id` as `team_foreign_key` (configured in `config/permission.php`).
@@ -208,6 +210,10 @@ Public-facing pages live under `/{slug}/` (not `/portal/`). The `/portal/` route
 
 Starter tenants return 404 for all public portal URLs (enforced via `abortIfStarter()` in `ClientPortalController`).
 
+**Submit-form prefill/lock** — `/{slug}/submit-ticket` accepts plain query-string params (`ClientPortalController::resolveSubmitPrefill()`): text fields are prefilled **and locked** (read-only in the view); `department`/`department_id`, `category`/`category_id`, and `product_ids`/`products`/`product` are resolved **by id or name** (category matching scoped to the resolved department). The URLs are **not signed** — any visitor can craft one, so treat prefill values as untrusted input.
+
+**Per-client autofill link + QR** — the client detail page (`ClientController@show`) builds a prefilled submit-ticket link for that client; `GET clients/{client}/autofill-qr` (`ClientController@autofillQr`, permission `manage clients`) streams it as a PNG QR code (`?download=1` for attachment; optional department/category/products baked in). Uses the `endroid/qr-code` package.
+
 ### REST API (v1)
 
 Token-authenticated REST API under `/api/v1/`, defined in `routes/api.php` (mounted via the `api:` key in `withRouting()`). Controllers live in `app/Http/Controllers/Api/V1/`.
@@ -236,6 +242,7 @@ OpenAI-powered assistant gated by the **`ai_chatbot`** feature (**Enterprise onl
 - Create form (`tickets.ai.structure`) — subject + description + tasks; shared partial `tickets/partials/_ai-assist.blade.php`.
 - Edit form — same partial with `$withTasks=false`.
 - Public submit form (`tenant.ai-polish`, `Portal\AiChatController@polish`) — subject + description only (no internal tasks); throttled + daily cap.
+- Ticket-task polish (ticket detail page, `tickets/show.blade.php`) — `AiAssistantService::polishTask()` rewrites a single rough task (`tickets.ai.polish-task`), `polishTaskList()` restructures the whole checklist (`tickets.ai.polish-tasks`) into a proposed list that is applied via a separate POST `tickets.tasks.polish-apply` (`TicketTaskController@applyPolishedTasks`). All `feature:ai_chatbot`-gated.
 
 **Self-learning (genuine ML, not base-model training):**
 - *From resolved tickets* — `EmbedResolvedTickets` (`ai:embed-tickets`, scheduled) embeds closed tickets onto `tickets.solution_embedding` / `solution_embedded_at`. `search_resolved_tickets` embeds the agent's query and cosine-matches (top 5).
@@ -257,6 +264,18 @@ A closed loop where a user reports a product bug to the AI Assistant and an auto
 
 **Config / secrets (set later):** `migrate` adds the `bug_reports` table. `config/services.php` `github` block — `GITHUB_TOKEN` (fine-grained PAT, issues:write on the repo), `GITHUB_REPO`, `GITHUB_WEBHOOK_SECRET`. The Action needs repo secret **`ANTHROPIC_API_KEY`** (not in the app). Until configured, `GitHubService::isConfigured()` is false and **Fix gracefully degrades** to a local escalation (no issue filed), so the queue still works. Point a GitHub repo webhook (PR events) at `/webhooks/github` with the same secret.
 
+### Jude Assistant Hub Connector (external voice control)
+
+Separate from the in-app **AI Assistant** (OpenAI) above. This exposes the helpdesk as a set of tools that an **external** "Jude Hub" (a voice/desktop assistant) calls over HTTP — the app is the tool *provider*, not the LLM host.
+
+Provided by the internal Composer package **`cliqueha/assistant-connector`** (VCS repo in `composer.json`, `repositories` block → `github.com/imjustkidding6/assistant-connector.git`; the package README documents a `path`-repo install for local dev). Its `AssistantConnectorServiceProvider` auto-registers everything: the `assistant.token` middleware alias (`AuthenticateDesktopToken`), the routes `GET|POST /api/assistant/manifest|execute`, the `desktop_tokens` migration, and the `assistant:issue-token` console command.
+
+- **App-side config:** `config/assistant-connector.php` — declares the exposed tools, the `assistant.token` middleware, `user_model`, `context_resolver`, and the route `prefix` (`api/assistant`). The Hub reads `GET /api/assistant/manifest` (tool schemas) and calls `POST /api/assistant/execute`. Bearer auth uses **`DesktopToken`** (package model, `desktop_tokens` table) — NOT the `api_tokens` used by the REST API (v1); the two token systems are unrelated.
+- **Tools** live in `app/Assistant/` (`FindTickets`, `GetTicket`, `TicketSummary`, `ListClients`, `CreateTicket`, `UpdateStatus`, `AddComment`). Each extends `Cliqueha\AssistantConnector\AssistantTool` and defines `name()`, `description()`, `inputSchema()`, `handle($input, $user)`, and `writes()` (true → the Hub asks the user to confirm before running).
+- **Tenant context:** `app/Assistant/SetTenantContext.php` (the `context_resolver`) runs after token auth. The token API is stateless, so it sets the active tenant from the token's stamped `tenant_id` (via `$user->setCurrentTenant()`) — but only if `$user->belongsToTenant($tenant)`; otherwise it silently falls back to the user's current/first workspace (`ensureCurrentTenant()`). After that, `BelongsToTenant` global scopes apply — so the tool `handle()` methods query `Ticket`/`Client` unscoped-by-hand and still stay tenant-isolated.
+- **Self-serve token page:** `/connect-jude` (`ConnectJudeController`, routes `connect-jude`, `.generate`, `.revoke`; sidebar link in `layouts/app.blade.php`). A signed-in user generates a token stamped with `session('current_tenant_id')` so the assistant acts in that workspace. Plain token is shown once.
+- **CAVEAT — bypasses `TicketService`:** the `CreateTicket`/`UpdateStatus`/`AddComment` tools write via `Ticket::create()` / `->update()` directly, so they skip `TicketService` notifications, `addHistory()` audit logging, the SLA-policy guard, and workflow rules. If these tools need parity with the UI/API, route them through the services instead.
+
 ### Escalation System
 
 Agent tiering (Enterprise only): 3 tiers (tier_1, tier_2, tier_3). Escalation enforced:
@@ -269,7 +288,7 @@ Agent tiering (Enterprise only): 3 tiers (tier_1, tier_2, tier_3). Escalation en
 
 `RegisteredUserController::store()` runs everything inside a single DB transaction: creates the tenant (with a user-chosen slug), activates the license, creates the owner user, calls `DepartmentSeeder::seedForTenant($tenant)` and `TenantRoleService::setupDefaultRoles($tenant)`, then redirects directly to the new tenant's dashboard. When modifying onboarding, keep all of this inside the transaction.
 
-**Slug reserved words** — tenant slugs are validated against a blocklist in registration: `admin`, `www`, `mail`, `api`, `portal`, `app`, `support`, `help`, `status`, `login`, `register`, `profile`, `up`, `logout`. Add new reserved route prefixes here if they conflict with the `{slug}` wildcard.
+**Slug reserved words** — tenant slugs are validated against a blocklist in registration: `admin`, `www`, `mail`, `api`, `portal`, `app`, `support`, `help`, `status`, `login`, `register`, `profile`, `up`, `logout`. Add new reserved route prefixes here if they conflict with the `{slug}` wildcard. **Known gaps:** `connect-jude`, `webhooks`, and `auth` are top-level route prefixes but are NOT yet in the blocklist — a tenant registering one of those slugs would be shadowed by the static route.
 
 ### Google Sign-In (Socialite)
 

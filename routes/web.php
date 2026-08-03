@@ -62,6 +62,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    Route::get('/connect-jude', [\App\Http\Controllers\ConnectJudeController::class, 'index'])->name('connect-jude');
+    Route::post('/connect-jude', [\App\Http\Controllers\ConnectJudeController::class, 'generate'])->name('connect-jude.generate');
+    Route::delete('/connect-jude/{token}', [\App\Http\Controllers\ConnectJudeController::class, 'revoke'])->name('connect-jude.revoke');
 });
 
 // Admin auth (public)
