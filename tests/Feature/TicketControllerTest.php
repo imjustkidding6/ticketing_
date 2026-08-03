@@ -74,6 +74,22 @@ class TicketControllerTest extends TestCase
         $this->get($this->tenantUrl('/tickets'))->assertOk();
     }
 
+    public function test_show_has_quick_status_buttons_that_update_status(): void
+    {
+        $tenant = $this->createBusinessTenant();
+        $user = $this->setupTenantContext($tenant);
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id, 'status' => 'open']);
+
+        $this->get($this->tenantUrl("/tickets/{$ticket->id}"))
+            ->assertOk()
+            ->assertSee('Quick update');
+
+        $this->post($this->tenantUrl("/tickets/{$ticket->id}/status"), ['status' => 'in_progress'])
+            ->assertRedirect();
+
+        $this->assertSame('in_progress', $ticket->fresh()->status);
+    }
+
     public function test_create_form_loads(): void
     {
         $tenant = $this->createBusinessTenant();

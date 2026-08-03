@@ -184,13 +184,26 @@
                     </div>
 
                     {{-- Task Checklist --}}
-                    <div class="rounded-xl bg-white p-6 shadow-sm">
+                    @php $taskCopilot = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot) && (bool) \App\Models\AppSetting::get('ai_agent_copilot_enabled', false); @endphp
+                    <div class="rounded-xl bg-white p-6 shadow-sm" @if($taskCopilot) x-data="taskListPolish(@js(route('tickets.ai.polish-tasks', $ticket)))" @endif>
                         <div class="flex items-center justify-between">
                             <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Task Checklist') }}</h4>
-                            <span class="text-sm text-gray-500">
-                                {{ $ticket->tasks->where('status', 'completed')->count() }}/{{ $ticket->tasks->count() }} {{ __('completed') }}
-                            </span>
+                            <div class="flex items-center gap-3">
+                                <span class="text-sm text-gray-500">
+                                    {{ $ticket->tasks->where('status', 'completed')->count() }}/{{ $ticket->tasks->count() }} {{ __('completed') }}
+                                </span>
+                                @if($taskCopilot && !in_array($ticket->status, ['closed', 'cancelled']))
+                                    <button type="button" @click="preview()" :disabled="loading" title="{{ __('Review the whole checklist with AI') }}" class="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50 disabled:opacity-50">
+                                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
+                                        <span x-show="!loading">{{ __('Polish list') }}</span>
+                                        <span x-show="loading" x-cloak>{{ __('Reviewing...') }}</span>
+                                    </button>
+                                @endif
+                            </div>
                         </div>
+                        @if($taskCopilot)
+                            <p x-show="error" x-cloak class="mt-2 text-xs text-red-600" x-text="error"></p>
+                        @endif
 
                         @if($ticket->tasks->count() > 0)
                             <ul class="mt-4 divide-y divide-gray-200">
@@ -268,11 +281,21 @@
 
                         {{-- Add Task Form --}}
                         @if(!in_array($ticket->status, ['closed', 'cancelled']))
-                            <form method="POST" action="{{ route('tickets.tasks.store', $ticket) }}" class="mt-4 flex items-end gap-3 border-t border-gray-200 pt-4">
+                            <form method="POST" action="{{ route('tickets.tasks.store', $ticket) }}" class="mt-4 flex items-end gap-3 border-t border-gray-200 pt-4" @if($taskCopilot) x-data="taskAiPolish(@js(route('tickets.ai.polish-task', $ticket)))" @endif>
                                 @csrf
                                 <div class="flex-1">
-                                    <input type="text" name="description" required placeholder="{{ __('Add a task...') }}" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    <input type="text" name="description" required placeholder="{{ __('Add a task...') }}" @if($taskCopilot) x-ref="taskInput" @endif class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    @if($taskCopilot)
+                                        <p x-show="error" x-cloak class="mt-1 text-xs text-red-600" x-text="error"></p>
+                                    @endif
                                 </div>
+                                @if($taskCopilot)
+                                    <button type="button" @click="polish()" :disabled="loading" title="{{ __('Polish this task with AI') }}" class="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-2 text-sm font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50 disabled:opacity-50">
+                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
+                                        <span x-show="!loading">{{ __('Polish') }}</span>
+                                        <span x-show="loading" x-cloak>{{ __('Polishing...') }}</span>
+                                    </button>
+                                @endif
                                 <button type="submit" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
                                     <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -280,6 +303,91 @@
                                     {{ __('Add Task') }}
                                 </button>
                             </form>
+                            @if($taskCopilot)
+                                <script>
+                                    function taskAiPolish(url) {
+                                        return {
+                                            url, loading: false, error: '',
+                                            csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
+                                            async polish() {
+                                                const input = this.$refs.taskInput;
+                                                const text = (input?.value || '').trim();
+                                                if (!text) { this.error = @js(__('Type a task first.')); return; }
+                                                this.error = ''; this.loading = true;
+                                                try {
+                                                    const res = await fetch(this.url, {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' },
+                                                        body: JSON.stringify({ description: text }),
+                                                    });
+                                                    const data = await res.json().catch(() => ({}));
+                                                    if (!res.ok) throw new Error(data.error || @js(__('The AI request failed.')));
+                                                    if (data.text && input) { input.value = data.text; input.focus(); }
+                                                } catch (e) { this.error = e.message; }
+                                                finally { this.loading = false; }
+                                            },
+                                        };
+                                    }
+                                </script>
+                            @endif
+                        @endif
+
+                        @if($taskCopilot)
+                            {{-- AI checklist-review modal --}}
+                            <div x-show="open" x-cloak @keydown.escape.window="open=false" @click.self="open=false" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.4);">
+                                <div class="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+                                    <h3 class="text-lg font-semibold text-gray-900">{{ __('AI-refined checklist') }}</h3>
+                                    <p class="mt-1 text-sm text-gray-500">{{ __('Review the suggested open tasks. Edit, add, or remove any before applying.') }}</p>
+                                    <p x-show="kept > 0" x-cloak class="mt-1 text-xs text-gray-400"><span x-text="kept"></span> {{ __('completed/cancelled task(s) will be kept.') }}</p>
+
+                                    <form method="POST" action="{{ route('tickets.tasks.polish-apply', $ticket) }}" class="mt-4">
+                                        @csrf
+                                        <div class="space-y-2 max-h-72 overflow-y-auto">
+                                            <template x-for="(item, i) in items" :key="i">
+                                                <div class="flex items-center gap-2">
+                                                    <input type="text" name="tasks[]" x-model="items[i]" class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                                    <button type="button" @click="removeItem(i)" title="{{ __('Remove') }}" class="shrink-0 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-600">
+                                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                                                    </button>
+                                                </div>
+                                            </template>
+                                            <p x-show="items.length === 0" x-cloak class="text-sm text-gray-400">{{ __('No tasks — add one below, or cancel.') }}</p>
+                                        </div>
+                                        <button type="button" @click="addItem()" class="mt-2 inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-500">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                                            {{ __('Add task') }}
+                                        </button>
+
+                                        <div class="mt-5 flex items-center justify-end gap-2">
+                                            <button type="button" @click="open=false" class="rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">{{ __('Cancel') }}</button>
+                                            <button type="submit" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Apply changes') }}</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <script>
+                                function taskListPolish(url) {
+                                    return {
+                                        url, open: false, loading: false, error: '', kept: 0, items: [],
+                                        csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
+                                        async preview() {
+                                            this.error = ''; this.loading = true;
+                                            try {
+                                                const res = await fetch(this.url, { method: 'POST', headers: { 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' } });
+                                                const data = await res.json().catch(() => ({}));
+                                                if (!res.ok) throw new Error(data.error || @js(__('The AI request failed.')));
+                                                this.items = Array.isArray(data.tasks) ? data.tasks : [];
+                                                this.kept = data.kept || 0;
+                                                this.open = true;
+                                            } catch (e) { this.error = e.message; }
+                                            finally { this.loading = false; }
+                                        },
+                                        addItem() { this.items.push(''); },
+                                        removeItem(i) { this.items.splice(i, 1); },
+                                    };
+                                }
+                            </script>
                         @endif
                     </div>
 
@@ -635,6 +743,39 @@
                                     <p class="mt-2 text-xs text-gray-500">{{ __('Reopening closed tickets requires the Enterprise plan.') }}</p>
                                 @endif
                             @else
+                                {{-- Quick status update (one click; close/cancel stay in the dropdown below) --}}
+                                @php
+                                    $quickStatuses = ['open', 'assigned', 'in_progress'];
+                                    if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement)) {
+                                        $quickStatuses[] = 'on_hold';
+                                    }
+                                    $quickStatusStyles = [
+                                        'open' => 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+                                        'assigned' => 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+                                        'in_progress' => 'bg-amber-100 text-amber-800 hover:bg-amber-200',
+                                        'on_hold' => 'bg-purple-100 text-purple-700 hover:bg-purple-200',
+                                    ];
+                                @endphp
+                                <div class="mb-3">
+                                    <p class="mb-1.5 text-xs font-medium text-gray-500">{{ __('Quick update') }}</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        @foreach($quickStatuses as $qs)
+                                            @if($ticket->status === $qs)
+                                                <span class="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold ring-2 ring-indigo-400 {{ $quickStatusStyles[$qs] }}">
+                                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                                                    {{ ucfirst(str_replace('_', ' ', $qs)) }}
+                                                </span>
+                                            @else
+                                                <form method="POST" action="{{ route('tickets.change-status', $ticket) }}">
+                                                    @csrf
+                                                    <input type="hidden" name="status" value="{{ $qs }}">
+                                                    <button type="submit" class="rounded-md px-2.5 py-1.5 text-xs font-medium {{ $quickStatusStyles[$qs] }}">{{ ucfirst(str_replace('_', ' ', $qs)) }}</button>
+                                                </form>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                </div>
+
                                 <form method="POST" action="{{ route('tickets.change-status', $ticket) }}" x-data="{ status: '{{ $ticket->status }}' }">
                                     @csrf
                                     <select name="status" id="sidebar_status" x-model="status" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">

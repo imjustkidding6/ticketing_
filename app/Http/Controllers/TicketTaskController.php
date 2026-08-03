@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class TicketTaskController extends Controller
 {
@@ -154,5 +155,38 @@ class TicketTaskController extends Controller
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Task removed.');
+    }
+
+    /**
+     * Replace the ticket's OPEN (pending/in_progress) tasks with an AI-refined,
+     * agent-reviewed list. Completed and cancelled tasks are preserved as a
+     * record of work already done. Backs the "Polish list with AI" flow.
+     */
+    public function applyPolishedTasks(Request $request, Ticket $ticket): RedirectResponse
+    {
+        $validated = $request->validate([
+            'tasks' => ['present', 'array', 'max:30'],
+            // Blank rows are nulled by ConvertEmptyStringsToNull; allow and drop them below.
+            'tasks.*' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $tasks = array_values(array_filter(
+            array_map(fn ($t) => trim((string) $t), $validated['tasks']),
+            fn ($t) => $t !== '',
+        ));
+
+        DB::transaction(function () use ($ticket, $tasks) {
+            $ticket->tasks()->whereIn('status', ['pending', 'in_progress'])->delete();
+
+            $sort = (int) $ticket->tasks()->max('sort_order');
+            foreach ($tasks as $description) {
+                $ticket->tasks()->create(['description' => $description, 'sort_order' => ++$sort]);
+            }
+        });
+
+        $this->ticketService->addHistory($ticket, 'tasks_polished', null, null, null, 'Task checklist refined with AI ('.count($tasks).' open task'.(count($tasks) === 1 ? '' : 's').')');
+
+        return redirect()->route('tickets.show', $ticket)
+            ->with('success', 'Task checklist updated.');
     }
 }
