@@ -173,7 +173,7 @@ class SlaPolicyController extends Controller
             ];
         })->values()->all();
 
-        return view('sla.index', [
+        return view($request->routeIs('admin.*') ? 'admin.sla.index' : 'sla.index', [
             'grouped' => $grouped,
             'tiers' => SlaPolicy::TIERS,
             'priorities' => SlaPolicy::PRIORITIES,
@@ -573,7 +573,7 @@ class SlaPolicyController extends Controller
             ];
         }
 
-        return view('sla.edit-tier', compact('tier', 'rows'));
+        return view(request()->routeIs('admin.*') ? 'admin.sla.edit-tier' : 'sla.edit-tier', compact('tier', 'rows'));
     }
 
     /**
