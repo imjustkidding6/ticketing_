@@ -9,6 +9,7 @@
         "php": "^8.2",
         "aws/aws-sdk-php": "^3.371",
         "barryvdh/laravel-dompdf": "^3.1",
+        "cliqueha/assistant-connector": "^1.0",
         "endroid/qr-code": "^6.0",
         "laravel/framework": "^12.0",
         "laravel/socialite": "^5.26",
@@ -92,5 +93,11 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": {
+        "assistant-connector": {
+            "type": "vcs",
+            "url": "https://github.com/imjustkidding6/assistant-connector.git"
+        }
+    }
 }
