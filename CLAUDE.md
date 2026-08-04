@@ -75,6 +75,8 @@ Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->get();
 
 **Admin controllers** (`app/Http/Controllers/Admin/`) intentionally operate across tenants.
 
+**View-layer guardrails (CI-enforced by `TenantIsolationGuardrailsTest`):** views outside `resources/views/admin/` must not `@extends('layouts.admin')` (give admin screens their own view under `admin/` — never repurpose a tenant view), and any `withoutGlobalScopes()` in a non-admin view must chain `->where('tenant_id', ...)` on the same line. A controller serving both surfaces should pick the view by route, e.g. `view($request->routeIs('admin.*') ? 'admin.sla.index' : 'sla.index', ...)` (see `SlaPolicyController`).
+
 ### Feature Gating (3-Tier Plans)
 
 Features are gated via `PlanFeature` enum (`app/Enums/PlanFeature.php`):
