@@ -14,6 +14,8 @@ class KbArticleController extends Controller
 {
     public function index(Request $request): View
     {
+        $this->checkPermission('view kb articles');
+
         $categories = KbCategory::query()->active()->ordered()->get();
 
         $articles = KbArticle::query()
@@ -37,6 +39,8 @@ class KbArticleController extends Controller
 
     public function create(): View
     {
+        $this->checkPermission('create kb articles');
+
         $categories = KbCategory::query()->active()->ordered()->get();
 
         return view('knowledge-base.articles.create', compact('categories'));
@@ -44,6 +48,8 @@ class KbArticleController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->checkPermission('create kb articles');
+
         $validated = $request->validate([
             'kb_category_id' => ['required', 'exists:kb_categories,id'],
             'title' => ['required', 'string', 'max:255'],
@@ -68,6 +74,8 @@ class KbArticleController extends Controller
 
     public function show(KbArticle $article): View
     {
+        $this->checkPermission('view kb articles');
+
         $article->load('category', 'author');
         $article->increment('views_count');
 
@@ -76,6 +84,8 @@ class KbArticleController extends Controller
 
     public function edit(KbArticle $article): View
     {
+        $this->checkPermission('update kb articles');
+
         $categories = KbCategory::query()->active()->ordered()->get();
 
         return view('knowledge-base.articles.edit', compact('article', 'categories'));
@@ -83,6 +93,8 @@ class KbArticleController extends Controller
 
     public function update(Request $request, KbArticle $article): RedirectResponse
     {
+        $this->checkPermission('update kb articles');
+
         $validated = $request->validate([
             'kb_category_id' => ['required', 'exists:kb_categories,id'],
             'title' => ['required', 'string', 'max:255'],
@@ -108,6 +120,8 @@ class KbArticleController extends Controller
 
     public function destroy(KbArticle $article): RedirectResponse
     {
+        $this->checkPermission('delete kb articles');
+
         $article->delete();
 
         return redirect()->route('knowledge-base.articles.index')
@@ -119,6 +133,8 @@ class KbArticleController extends Controller
      */
     public function search(Request $request): JsonResponse
     {
+        $this->checkPermission('view kb articles');
+
         $q = $request->string('q')->trim();
 
         if ($q->isEmpty() || $q->length() < 3) {

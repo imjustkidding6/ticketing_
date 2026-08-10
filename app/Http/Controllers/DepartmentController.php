@@ -14,6 +14,8 @@ class DepartmentController extends Controller
      */
     public function index(): View
     {
+        $this->checkPermission('view departments');
+
         $departments = Department::query()
             ->ordered()
             ->withCount('categories')
@@ -27,6 +29,8 @@ class DepartmentController extends Controller
      */
     public function create(): View
     {
+        $this->checkPermission('create departments');
+
         return view('departments.create');
     }
 
@@ -35,6 +39,8 @@ class DepartmentController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $this->checkPermission('create departments');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:10'],
@@ -55,6 +61,8 @@ class DepartmentController extends Controller
      */
     public function edit(Department $department): View
     {
+        $this->checkPermission('update departments');
+
         return view('departments.edit', compact('department'));
     }
 
@@ -63,6 +71,8 @@ class DepartmentController extends Controller
      */
     public function update(Request $request, Department $department): RedirectResponse
     {
+        $this->checkPermission('update departments');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:10'],
@@ -83,6 +93,8 @@ class DepartmentController extends Controller
      */
     public function destroy(Department $department): RedirectResponse
     {
+        $this->checkPermission('delete departments');
+
         if ($department->is_default) {
             return redirect()->route('departments.index')
                 ->with('error', 'Default departments cannot be deleted.');

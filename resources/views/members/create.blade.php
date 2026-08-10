@@ -61,12 +61,8 @@
                             <div class="space-y-3">
                                 @foreach($roles as $roleName)
                                     @php
-                                        $description = match($roleName) {
-                                            'admin' => __('Full system access and user management.'),
-                                            'manager' => __('Manage tickets, clients, and view reports. Can assign tickets.'),
-                                            'agent' => __('Handle tickets and respond to clients.'),
-                                            default => __('Custom role with permissions set in Role Management.'),
-                                        };
+                                        $description = \App\Services\TenantRoleService::ROLE_DESCRIPTIONS[$roleName]
+                                            ?? __('Custom role with permissions set in Role Management.');
                                     @endphp
                                     <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-4 cursor-pointer hover:bg-gray-50" :class="selectedRole === '{{ $roleName }}' && 'ring-2 ring-indigo-500 border-indigo-500'">
                                         <input type="radio" name="role" value="{{ $roleName }}" x-model="selectedRole" class="mt-0.5 h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500">

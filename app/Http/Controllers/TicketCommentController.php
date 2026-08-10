@@ -23,6 +23,8 @@ class TicketCommentController extends Controller
      */
     public function store(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('create ticket comments');
+
         $validated = $request->validate([
             'content' => ['required', 'string', 'max:5000'],
             'type' => ['nullable', 'in:internal,public'],
@@ -31,6 +33,16 @@ class TicketCommentController extends Controller
         ]);
 
         $type = $validated['type'] ?? 'internal';
+
+        // Internal notes are staff-only and carry their own permission.
+        if ($type === 'internal') {
+            $this->checkPermission('create internal notes');
+        }
+
+        if ($request->hasFile('attachments')) {
+            $this->checkPermission('upload attachments');
+        }
+
         $attachments = $this->storeAttachments($request);
 
         $comment = TicketComment::create([
@@ -59,6 +71,8 @@ class TicketCommentController extends Controller
      */
     public function update(Request $request, Ticket $ticket, TicketComment $comment): RedirectResponse
     {
+        $this->checkPermission('update ticket comments');
+
         $validated = $request->validate([
             'content' => ['required', 'string', 'max:5000'],
         ]);
@@ -84,6 +98,8 @@ class TicketCommentController extends Controller
      */
     public function destroy(Ticket $ticket, TicketComment $comment): RedirectResponse
     {
+        $this->checkPermission('delete ticket comments');
+
         $this->ticketService->addHistory(
             $ticket,
             'comment_deleted',
@@ -103,6 +119,8 @@ class TicketCommentController extends Controller
      */
     public function downloadAttachment(Ticket $ticket, TicketComment $comment, int $index): StreamedResponse
     {
+        $this->checkPermission('view attachments');
+
         $attachments = $comment->attachments ?? [];
 
         abort_unless(isset($attachments[$index]), 404);

@@ -18,7 +18,7 @@ class AppSettingController extends Controller
      */
     public function general(): View
     {
-        $this->checkPermission('manage settings');
+        $this->checkPermission('view settings');
 
         $settings = AppSetting::getByGroup('general');
 
@@ -30,6 +30,8 @@ class AppSettingController extends Controller
      */
     public function saveGeneral(Request $request): RedirectResponse
     {
+        $this->checkPermission('update settings');
+
         $validated = $request->validate([
             'company_name' => ['nullable', 'string', 'max:255'],
             'company_email' => ['nullable', 'email', 'max:255'],
@@ -54,6 +56,8 @@ class AppSettingController extends Controller
      */
     public function ticket(): View
     {
+        $this->checkPermission('view settings');
+
         $settings = AppSetting::getByGroup('ticket');
 
         return view('settings.ticket', compact('settings'));
@@ -64,6 +68,8 @@ class AppSettingController extends Controller
      */
     public function saveTicket(Request $request): RedirectResponse
     {
+        $this->checkPermission('update settings');
+
         $validated = $request->validate([
             'default_priority' => ['nullable', 'in:low,medium,high,critical'],
             'auto_assignment' => ['nullable', 'string'],
@@ -83,6 +89,8 @@ class AppSettingController extends Controller
      */
     public function notifications(): View
     {
+        $this->checkPermission('manage email settings');
+
         $settings = AppSetting::getByGroup('notifications');
 
         return view('settings.notifications', compact('settings'));
@@ -93,6 +101,8 @@ class AppSettingController extends Controller
      */
     public function saveNotifications(Request $request): RedirectResponse
     {
+        $this->checkPermission('manage email settings');
+
         $validated = $request->validate([
             'notify_on_ticket_create' => ['nullable', 'string'],
             'notify_on_ticket_assign' => ['nullable', 'string'],
@@ -133,7 +143,7 @@ class AppSettingController extends Controller
      */
     public function ai(): View
     {
-        $this->checkPermission('manage settings');
+        $this->checkPermission('manage ai settings');
 
         $settings = AppSetting::getByGroup('ai');
 
@@ -145,7 +155,7 @@ class AppSettingController extends Controller
      */
     public function saveAi(Request $request): RedirectResponse
     {
-        $this->checkPermission('manage settings');
+        $this->checkPermission('manage ai settings');
 
         $validated = $request->validate([
             'ai_enabled' => ['nullable', 'string'],
@@ -170,6 +180,8 @@ class AppSettingController extends Controller
      */
     public function testEmail(Request $request): RedirectResponse
     {
+        $this->checkPermission('manage email settings');
+
         $validated = $request->validate([
             'test_email' => ['required', 'email', 'max:255'],
         ]);
@@ -233,6 +245,8 @@ class AppSettingController extends Controller
      */
     public function branding(): View
     {
+        $this->checkPermission('manage branding');
+
         $tenant = Tenant::findOrFail(session('current_tenant_id'));
 
         return view('settings.branding', compact('tenant'));
@@ -243,7 +257,7 @@ class AppSettingController extends Controller
      */
     public function serviceReport(): View
     {
-        $this->checkPermission('manage settings');
+        $this->checkPermission('view settings');
 
         $tenant = Tenant::findOrFail(session('current_tenant_id'));
         $settings = AppSetting::getByGroup('service_report');
@@ -256,7 +270,7 @@ class AppSettingController extends Controller
      */
     public function saveServiceReport(Request $request): RedirectResponse
     {
-        $this->checkPermission('manage settings');
+        $this->checkPermission('update settings');
 
         $validated = $request->validate([
             'auto_generate_on_close' => ['nullable', 'boolean'],
@@ -313,7 +327,7 @@ class AppSettingController extends Controller
     public function apiTokens(): View
     {
         $this->ensureApiAccess();
-        $this->checkPermission('manage settings');
+        $this->checkPermission('manage api tokens');
 
         $tokens = ApiToken::orderByDesc('created_at')->get();
 
@@ -326,7 +340,7 @@ class AppSettingController extends Controller
     public function generateApiToken(Request $request): RedirectResponse
     {
         $this->ensureApiAccess();
-        $this->checkPermission('manage settings');
+        $this->checkPermission('manage api tokens');
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
@@ -355,7 +369,7 @@ class AppSettingController extends Controller
     public function revokeApiToken(ApiToken $apiToken): RedirectResponse
     {
         $this->ensureApiAccess();
-        $this->checkPermission('manage settings');
+        $this->checkPermission('manage api tokens');
 
         abort_if($apiToken->tenant_id !== (int) session('current_tenant_id'), 404);
 
@@ -367,6 +381,8 @@ class AppSettingController extends Controller
 
     public function saveBranding(Request $request): RedirectResponse
     {
+        $this->checkPermission('manage branding');
+
         $validated = $request->validate([
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,svg', 'max:2048'],
             'primary_color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],

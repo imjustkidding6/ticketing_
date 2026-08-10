@@ -15,6 +15,8 @@ class ProductController extends Controller
      */
     public function index(): View
     {
+        $this->checkPermission('view products');
+
         $products = Product::query()
             ->with('category')
             ->ordered()
@@ -28,6 +30,8 @@ class ProductController extends Controller
      */
     public function create(): View
     {
+        $this->checkPermission('create products');
+
         $categories = TicketCategory::query()->active()->ordered()->get();
 
         return view('products.create', compact('categories'));
@@ -38,6 +42,8 @@ class ProductController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $this->checkPermission('create products');
+
         $validated = $request->validate([
             'category_id' => ['nullable', 'exists:ticket_categories,id'],
             'name' => ['required', 'string', 'max:255'],
@@ -58,6 +64,8 @@ class ProductController extends Controller
      */
     public function edit(Product $product): View
     {
+        $this->checkPermission('update products');
+
         $categories = TicketCategory::query()->active()->ordered()->get();
 
         return view('products.edit', compact('product', 'categories'));
@@ -68,6 +76,8 @@ class ProductController extends Controller
      */
     public function update(Request $request, Product $product): RedirectResponse
     {
+        $this->checkPermission('update products');
+
         $validated = $request->validate([
             'category_id' => ['nullable', 'exists:ticket_categories,id'],
             'name' => ['required', 'string', 'max:255'],
@@ -88,6 +98,8 @@ class ProductController extends Controller
      */
     public function destroy(Product $product): RedirectResponse
     {
+        $this->checkPermission('delete products');
+
         $product->delete();
 
         return redirect()->route('products.index')

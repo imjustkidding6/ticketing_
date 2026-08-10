@@ -9,8 +9,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class TicketTaskController extends Controller
 {
@@ -23,6 +23,8 @@ class TicketTaskController extends Controller
      */
     public function store(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('manage ticket tasks');
+
         $validated = $request->validate([
             'description' => ['required', 'string', 'max:1000'],
             'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
@@ -42,6 +44,8 @@ class TicketTaskController extends Controller
      */
     public function update(Request $request, Ticket $ticket, TicketTask $task): RedirectResponse
     {
+        $this->checkPermission('manage ticket tasks');
+
         $validated = $request->validate([
             'description' => ['required', 'string', 'max:1000'],
             'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
@@ -61,6 +65,8 @@ class TicketTaskController extends Controller
      */
     public function updateStatus(Request $request, Ticket $ticket, TicketTask $task): RedirectResponse
     {
+        $this->checkPermission('manage ticket tasks');
+
         $validated = $request->validate([
             'status' => ['required', 'in:pending,in_progress,completed,cancelled'],
             'notes' => ['nullable', 'string', 'max:500'],
@@ -80,6 +86,8 @@ class TicketTaskController extends Controller
      */
     public function bulkUpdate(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('manage ticket tasks');
+
         $validated = $request->validate([
             'tasks' => ['required', 'array'],
             'tasks.*.id' => ['required', 'exists:ticket_tasks,id'],
@@ -106,6 +114,8 @@ class TicketTaskController extends Controller
      */
     public function bulkStatusUpdate(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('manage ticket tasks');
+
         $validated = $request->validate([
             'task_ids' => ['required', 'array'],
             'task_ids.*' => ['exists:ticket_tasks,id'],
@@ -129,6 +139,8 @@ class TicketTaskController extends Controller
      */
     public function history(Ticket $ticket, TicketTask $task): JsonResponse
     {
+        $this->checkPermission('view tickets');
+
         $history = $task->statusHistory()
             ->with('user')
             ->latest()
@@ -149,6 +161,8 @@ class TicketTaskController extends Controller
      */
     public function destroy(Ticket $ticket, TicketTask $task): RedirectResponse
     {
+        $this->checkPermission('manage ticket tasks');
+
         $this->ticketService->addHistory($ticket, 'task_deleted', null, null, null, 'Task removed: '.$task->description);
 
         $task->delete();
@@ -164,6 +178,8 @@ class TicketTaskController extends Controller
      */
     public function applyPolishedTasks(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('manage ticket tasks');
+
         $validated = $request->validate([
             'tasks' => ['present', 'array', 'max:30'],
             // Blank rows are nulled by ConvertEmptyStringsToNull; allow and drop them below.

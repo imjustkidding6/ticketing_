@@ -2,11 +2,14 @@
 
 namespace App\Assistant;
 
+use App\Assistant\Concerns\AuthorizesTenantUser;
 use App\Models\Ticket;
 use Cliqueha\AssistantConnector\AssistantTool;
 
 class FindTickets extends AssistantTool
 {
+    use AuthorizesTenantUser;
+
     public function name(): string
     {
         return 'find_tickets';
@@ -29,6 +32,10 @@ class FindTickets extends AssistantTool
 
     public function handle(array $input, mixed $user): array
     {
+        if ($denied = $this->denyUnless($user, 'view tickets')) {
+            return $denied;
+        }
+
         $limit = min((int) ($input['limit'] ?? 10), 25);
 
         $tickets = Ticket::with('client', 'assignee')

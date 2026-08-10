@@ -9,6 +9,7 @@ use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\TicketCategory;
 use App\Models\User;
+use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -41,6 +42,10 @@ class DepartmentManagementTest extends TestCase
     {
         $user = User::factory()->create();
         $tenant->addUser($user, 'member');
+
+        $roleService = app(TenantRoleService::class);
+        $roleService->setupDefaultRoles($tenant);
+        $roleService->syncRole($user, 'admin', $tenant);
 
         $this->actingAs($user)
             ->withTenant($tenant)

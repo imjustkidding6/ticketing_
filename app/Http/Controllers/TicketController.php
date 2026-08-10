@@ -60,6 +60,13 @@ class TicketController extends Controller
             return $query;
         }
 
+        // 'view all tickets' lifts the department restriction for roles that hold
+        // it (manager, supervisor, senior agent, viewer). Unlike the other
+        // permissions this one decides scope, not access — never a 403.
+        if ($this->userCan('view all tickets')) {
+            return $query;
+        }
+
         $departmentIds = $user->departments()->pluck('departments.id');
 
         if ($departmentIds->isEmpty()) {
@@ -204,6 +211,8 @@ class TicketController extends Controller
      */
     public function store(StoreTicketRequest $request): RedirectResponse
     {
+        $this->checkPermission('create tickets');
+
         $data = $request->validated();
 
         if ($request->hasFile('attachments') && app(PlanService::class)->currentTenantHasFeature(PlanFeature::Attachments)) {
@@ -227,6 +236,8 @@ class TicketController extends Controller
      */
     public function show(Ticket $ticket): View
     {
+        $this->checkPermission('view tickets');
+
         // Verify department access
         $accessCheck = $this->scopeByUserDepartments(Ticket::query()->where('id', $ticket->id))->exists();
         abort_unless($accessCheck, 403);
@@ -242,7 +253,13 @@ class TicketController extends Controller
             'assignments.user',
             'tasks',
             'history' => fn ($q) => $q->with('user')->latest(),
-            'comments' => fn ($q) => $q->with('user')->oldest(),
+            // Comments are a separate grant — a role may see the ticket without
+            // seeing the conversation on it.
+            'comments' => fn ($q) => $q->when(
+                $this->userCan('view ticket comments'),
+                fn ($c) => $c->with('user')->oldest(),
+                fn ($c) => $c->whereRaw('1 = 0'),
+            ),
             'escalations' => fn ($q) => $q->with(['escalatedByUser', 'fromUser', 'toUser'])->latest(),
             'mergedTickets' => fn ($q) => $q->with('client')->latest('merged_at'),
         ]);
@@ -307,6 +324,8 @@ class TicketController extends Controller
      */
     public function update(UpdateTicketRequest $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('update tickets');
+
         $data = $request->validated();
 
         if ($request->hasFile('attachments') && app(PlanService::class)->currentTenantHasFeature(PlanFeature::Attachments)) {
@@ -363,6 +382,8 @@ class TicketController extends Controller
      */
     public function selfAssign(Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('update tickets');
+
         try {
             $this->ticketService->assignTicket($ticket, Auth::user());
         } catch (\InvalidArgumentException $e) {
@@ -378,6 +399,8 @@ class TicketController extends Controller
      */
     public function changeStatus(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('update tickets');
+
         $validated = $request->validate([
             'status' => ['required', 'in:open,assigned,in_progress,on_hold,closed,cancelled'],
             'closing_remarks' => [
@@ -413,6 +436,8 @@ class TicketController extends Controller
      */
     public function changePriority(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('update tickets');
+
         $validated = $request->validate([
             'priority' => ['required', 'in:low,medium,high,critical'],
         ]);
@@ -450,6 +475,8 @@ class TicketController extends Controller
      */
     public function markAsSpam(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('update tickets');
+
         $validated = $request->validate([
             'spam_reason' => ['nullable', 'string', 'max:500'],
         ]);
@@ -465,6 +492,8 @@ class TicketController extends Controller
      */
     public function unmarkAsSpam(Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('update tickets');
+
         $this->ticketService->unmarkAsSpam($ticket);
 
         return redirect()->route('tickets.show', $ticket)
@@ -542,6 +571,8 @@ class TicketController extends Controller
      */
     public function downloadAttachment(Ticket $ticket, int $index): StreamedResponse
     {
+        $this->checkPermission('view attachments');
+
         $attachments = $ticket->attachments ?? [];
 
         abort_unless(isset($attachments[$index]), 404);
@@ -634,6 +665,8 @@ class TicketController extends Controller
      */
     public function search(Request $request): View
     {
+        $this->checkPermission('view tickets');
+
         $query = $request->input('q', '');
 
         $tickets = collect();
@@ -660,6 +693,8 @@ class TicketController extends Controller
      */
     public function trashed(Request $request): View
     {
+        $this->checkPermission('delete tickets');
+
         $tickets = Ticket::onlyTrashed()
             ->with(['client', 'department', 'deletedByUser'])
             ->latest('deleted_at')
@@ -674,6 +709,8 @@ class TicketController extends Controller
      */
     public function restore(Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('delete tickets');
+
         $ticket->restore();
         $ticket->update(['deleted_by' => null, 'deletion_reason' => null]);
 
@@ -688,6 +725,8 @@ class TicketController extends Controller
      */
     public function forceDestroy(Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('delete tickets');
+
         $ticketNumber = $ticket->ticket_number;
 
         // Cleanup attachments
@@ -708,6 +747,8 @@ class TicketController extends Controller
      */
     public function markFalseAlarm(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('update tickets');
+
         $validated = $request->validate([
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
@@ -723,6 +764,8 @@ class TicketController extends Controller
      */
     public function createChild(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('create tickets');
+
         $validated = $request->validate([
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],

@@ -30,7 +30,7 @@ class AiAssistantController extends Controller
 
     public function draftReply(Ticket $ticket): JsonResponse
     {
-        $this->checkPermission('view tickets');
+        $this->checkPermission('use ai assistant');
 
         try {
             $text = $this->assistant->draftAgentReply($ticket);
@@ -45,7 +45,7 @@ class AiAssistantController extends Controller
 
     public function summarize(Ticket $ticket): JsonResponse
     {
-        $this->checkPermission('view tickets');
+        $this->checkPermission('use ai assistant');
 
         try {
             $text = $this->assistant->summarizeTicket($ticket);
@@ -64,7 +64,7 @@ class AiAssistantController extends Controller
      */
     public function polishTask(Request $request, Ticket $ticket): JsonResponse
     {
-        $this->checkPermission('view tickets');
+        $this->checkPermission('use ai assistant');
         abort_unless((bool) AppSetting::get('ai_enabled', false), 404);
 
         $validated = $request->validate([
@@ -89,7 +89,7 @@ class AiAssistantController extends Controller
      */
     public function polishTaskList(Ticket $ticket): JsonResponse
     {
-        $this->checkPermission('view tickets');
+        $this->checkPermission('use ai assistant');
         abort_unless((bool) AppSetting::get('ai_enabled', false), 404);
 
         $open = $ticket->tasks()->whereIn('status', ['pending', 'in_progress'])
@@ -115,7 +115,7 @@ class AiAssistantController extends Controller
      */
     public function structureDraft(Request $request): JsonResponse
     {
-        $this->checkPermission('create tickets');
+        $this->checkPermission('use ai assistant');
         abort_unless((bool) AppSetting::get('ai_enabled', false), 404);
 
         $validated = $request->validate([
@@ -187,7 +187,7 @@ class AiAssistantController extends Controller
      */
     public function learn(Request $request): JsonResponse
     {
-        $this->checkPermission('view tickets');
+        $this->checkPermission('manage ai knowledge');
         abort_unless(
             (bool) AppSetting::get('ai_enabled', false) && (bool) AppSetting::get('ai_learn_from_chat', false),
             404
@@ -210,7 +210,7 @@ class AiAssistantController extends Controller
      */
     public function knowledge(): View
     {
-        $this->checkPermission('manage settings');
+        $this->checkPermission('manage ai knowledge');
 
         $snippets = LearnedSnippet::with('creator')->latest('id')->paginate(20);
 
@@ -219,7 +219,7 @@ class AiAssistantController extends Controller
 
     public function deleteKnowledge(LearnedSnippet $snippet): RedirectResponse
     {
-        $this->checkPermission('manage settings');
+        $this->checkPermission('manage ai knowledge');
 
         $snippet->delete(); // tenant-scoped by the global scope
 
@@ -313,7 +313,7 @@ class AiAssistantController extends Controller
 
     public function conversations(): View
     {
-        $this->checkPermission('manage settings');
+        $this->checkPermission('manage ai settings');
 
         $conversations = ChatConversation::with(['user', 'client'])
             ->withCount('messages')
@@ -325,7 +325,7 @@ class AiAssistantController extends Controller
 
     public function showConversation(ChatConversation $conversation): View
     {
-        $this->checkPermission('manage settings');
+        $this->checkPermission('manage ai settings');
 
         $conversation->load(['user', 'client']);
         $messages = $conversation->messages()

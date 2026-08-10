@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\Tenant;
 use App\Models\TicketCategory;
 use App\Models\User;
+use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -24,6 +25,10 @@ class CategoryProductTest extends TestCase
         $tenant = Tenant::factory()->create(['license_id' => $license->id]);
         $user = User::factory()->create();
         $tenant->addUser($user, 'admin');
+
+        $roleService = app(TenantRoleService::class);
+        $roleService->setupDefaultRoles($tenant);
+        $roleService->syncRole($user, 'admin', $tenant);
 
         $this->actingAs($user)->withTenant($tenant)->withSession(['current_tenant_id' => $tenant->id]);
 

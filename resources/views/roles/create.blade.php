@@ -17,12 +17,19 @@
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-3">{{ __('Permissions') }}</label>
-                            <div class="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto border border-gray-200 rounded-md p-4">
-                                @foreach($permissions as $permission)
-                                    <label class="flex items-center gap-2">
-                                        <input type="checkbox" name="permissions[]" value="{{ $permission->id }}" {{ in_array($permission->id, old('permissions', [])) ? 'checked' : '' }} class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                        <span class="text-sm text-gray-700">{{ ucfirst(str_replace('_', ' ', $permission->name)) }}</span>
-                                    </label>
+                            <div class="max-h-96 overflow-y-auto border border-gray-200 rounded-md divide-y divide-gray-100">
+                                @foreach($permissions as $group => $groupPermissions)
+                                    <div class="p-4">
+                                        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __($group) }}</p>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            @foreach($groupPermissions as $permission)
+                                                <label class="flex items-center gap-2">
+                                                    <input type="checkbox" name="permissions[]" value="{{ $permission->id }}" {{ in_array($permission->id, old('permissions', [])) ? 'checked' : '' }} class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                                    <span class="text-sm text-gray-700">{{ ucfirst($permission->name) }}</span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    </div>
                                 @endforeach
                             </div>
                         </div>

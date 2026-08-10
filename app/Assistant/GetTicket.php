@@ -2,11 +2,14 @@
 
 namespace App\Assistant;
 
+use App\Assistant\Concerns\AuthorizesTenantUser;
 use App\Models\Ticket;
 use Cliqueha\AssistantConnector\AssistantTool;
 
 class GetTicket extends AssistantTool
 {
+    use AuthorizesTenantUser;
+
     public function name(): string
     {
         return 'get_ticket';
@@ -26,6 +29,10 @@ class GetTicket extends AssistantTool
 
     public function handle(array $input, mixed $user): array
     {
+        if ($denied = $this->denyUnless($user, 'view tickets')) {
+            return $denied;
+        }
+
         $ticket = Ticket::with('client', 'assignee', 'category', 'comments.user')
             ->where('ticket_number', $input['ticket_number'] ?? '')
             ->first();

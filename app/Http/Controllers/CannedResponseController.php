@@ -15,6 +15,8 @@ class CannedResponseController extends Controller
 {
     public function index(Request $request): View
     {
+        $this->checkPermission('view canned responses');
+
         $categories = CannedResponse::query()
             ->whereNotNull('category')
             ->distinct()
@@ -37,6 +39,8 @@ class CannedResponseController extends Controller
 
     public function create(): View
     {
+        $this->checkPermission('create canned responses');
+
         $categories = CannedResponse::query()
             ->whereNotNull('category')
             ->distinct()
@@ -47,6 +51,8 @@ class CannedResponseController extends Controller
 
     public function store(StoreCannedResponseRequest $request): RedirectResponse
     {
+        $this->checkPermission('create canned responses');
+
         $validated = $request->validated();
         $validated['created_by'] = Auth::id();
 
@@ -58,6 +64,8 @@ class CannedResponseController extends Controller
 
     public function edit(CannedResponse $cannedResponse): View
     {
+        $this->checkPermission('update canned responses');
+
         $categories = CannedResponse::query()
             ->whereNotNull('category')
             ->distinct()
@@ -68,6 +76,8 @@ class CannedResponseController extends Controller
 
     public function update(UpdateCannedResponseRequest $request, CannedResponse $cannedResponse): RedirectResponse
     {
+        $this->checkPermission('update canned responses');
+
         $cannedResponse->update($request->validated());
 
         return redirect()->route('canned-responses.index')
@@ -76,6 +86,8 @@ class CannedResponseController extends Controller
 
     public function destroy(CannedResponse $cannedResponse): RedirectResponse
     {
+        $this->checkPermission('delete canned responses');
+
         $cannedResponse->delete();
 
         return redirect()->route('canned-responses.index')
@@ -84,6 +96,8 @@ class CannedResponseController extends Controller
 
     public function list(Request $request): JsonResponse
     {
+        $this->checkPermission('view canned responses');
+
         $responses = CannedResponse::query()
             ->when($request->category, fn ($q, $cat) => $q->inCategory($cat))
             ->ordered()

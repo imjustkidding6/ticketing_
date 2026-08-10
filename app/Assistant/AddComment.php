@@ -2,12 +2,15 @@
 
 namespace App\Assistant;
 
+use App\Assistant\Concerns\AuthorizesTenantUser;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use Cliqueha\AssistantConnector\AssistantTool;
 
 class AddComment extends AssistantTool
 {
+    use AuthorizesTenantUser;
+
     public function name(): string
     {
         return 'add_comment';
@@ -33,6 +36,10 @@ class AddComment extends AssistantTool
 
     public function handle(array $input, mixed $user): array
     {
+        if ($denied = $this->denyUnless($user, 'create ticket comments')) {
+            return $denied;
+        }
+
         $ticket = Ticket::where('ticket_number', $input['ticket_number'] ?? '')->first();
 
         if (! $ticket) {

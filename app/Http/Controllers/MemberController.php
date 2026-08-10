@@ -11,7 +11,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
@@ -80,7 +79,7 @@ class MemberController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $this->checkPermission('manage users');
+        $this->checkPermission('invite members');
 
         $tenant = Auth::user()->currentTenant();
         $this->roleService->setTenantContext($tenant);
@@ -213,7 +212,7 @@ class MemberController extends Controller
      */
     public function update(Request $request, User $member): RedirectResponse
     {
-        $this->checkPermission('manage users');
+        $this->checkPermission('update members');
 
         $tenant = Auth::user()->currentTenant();
         $this->roleService->setTenantContext($tenant);
@@ -293,7 +292,7 @@ class MemberController extends Controller
      */
     public function destroy(User $member): RedirectResponse
     {
-        $this->checkPermission('manage users');
+        $this->checkPermission('remove members');
 
         $tenant = Auth::user()->currentTenant();
 

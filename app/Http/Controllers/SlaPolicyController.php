@@ -19,6 +19,8 @@ class SlaPolicyController extends Controller
      */
     public function index(Request $request): View
     {
+        $this->checkPermission('view sla policies');
+
         $tenantId = session('current_tenant_id');
 
         // 1. Query policies with ticket usage counts
@@ -207,6 +209,8 @@ class SlaPolicyController extends Controller
      */
     public function store(Request $request): RedirectResponse|JsonResponse
     {
+        $this->checkPermission('create sla policies');
+
         $tenantId = session('current_tenant_id');
 
         $validated = $request->validate([
@@ -278,6 +282,8 @@ class SlaPolicyController extends Controller
      */
     public function update(Request $request, SlaPolicy $policy): RedirectResponse|JsonResponse
     {
+        $this->checkPermission('update sla policies');
+
         $tenantId = session('current_tenant_id');
 
         $validated = $request->validate([
@@ -344,6 +350,8 @@ class SlaPolicyController extends Controller
      */
     public function toggle(Request $request, SlaPolicy $policy): RedirectResponse|JsonResponse
     {
+        $this->checkPermission('update sla policies');
+
         $policy->update([
             'is_active' => ! $policy->is_active,
         ]);
@@ -365,6 +373,8 @@ class SlaPolicyController extends Controller
      */
     public function destroy(Request $request, SlaPolicy $policy): RedirectResponse|JsonResponse
     {
+        $this->checkPermission('delete sla policies');
+
         $assignedTicketsCount = $policy->tickets()->count();
 
         if ($assignedTicketsCount > 0) {
@@ -396,6 +406,8 @@ class SlaPolicyController extends Controller
      */
     public function bulkAction(Request $request): RedirectResponse|JsonResponse
     {
+        $this->checkPermission('update sla policies');
+
         $validated = $request->validate([
             'action' => ['required', 'string', Rule::in(['activate', 'deactivate', 'archive', 'delete', 'export'])],
             'ids' => ['required', 'array', 'min:1'],
@@ -445,6 +457,8 @@ class SlaPolicyController extends Controller
      */
     public function export(Request $request): StreamedResponse
     {
+        $this->checkPermission('view sla policies');
+
         $ids = $request->input('ids');
         $idArray = is_array($ids) ? $ids : (is_string($ids) && strlen($ids) > 0 ? explode(',', $ids) : null);
 
@@ -554,6 +568,8 @@ class SlaPolicyController extends Controller
      */
     public function editTier(string $tier): View
     {
+        $this->checkPermission('update sla policies');
+
         $tier = $this->normalizeTier($tier);
         abort_unless(in_array($tier, SlaPolicy::TIERS, true), 404);
 
@@ -581,6 +597,8 @@ class SlaPolicyController extends Controller
      */
     public function updateTier(Request $request, string $tier): RedirectResponse
     {
+        $this->checkPermission('update sla policies');
+
         $tier = $this->normalizeTier($tier);
         abort_unless(in_array($tier, SlaPolicy::TIERS, true), 404);
 
@@ -628,6 +646,8 @@ class SlaPolicyController extends Controller
      */
     public function seedDefaults(): RedirectResponse
     {
+        $this->checkPermission('create sla policies');
+
         $tenantId = session('current_tenant_id');
         $count = SlaPolicy::seedStandardDefaults($tenantId);
 
@@ -645,6 +665,8 @@ class SlaPolicyController extends Controller
      */
     public function destroyTier(string $tier): RedirectResponse
     {
+        $this->checkPermission('delete sla policies');
+
         $tier = $this->normalizeTier($tier);
         abort_unless(in_array($tier, SlaPolicy::TIERS, true), 404);
 

@@ -8,6 +8,7 @@ use App\Models\License;
 use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantRoleService;
 use App\Services\TenantUrlHelper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -41,6 +42,10 @@ class CannedResponseTest extends TestCase
     {
         $user = User::factory()->create();
         $tenant->addUser($user, 'member');
+
+        $roleService = app(TenantRoleService::class);
+        $roleService->setupDefaultRoles($tenant);
+        $roleService->syncRole($user, 'admin', $tenant);
 
         $this->actingAs($user)
             ->withTenant($tenant)

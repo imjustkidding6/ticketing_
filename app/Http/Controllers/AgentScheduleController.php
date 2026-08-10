@@ -46,6 +46,8 @@ class AgentScheduleController extends Controller
      */
     public function index(Request $request): View
     {
+        $this->checkPermission('view schedules');
+
         $target = $this->resolveTargetUser($request);
 
         $rows = AgentSchedule::where('user_id', $target->id)
@@ -86,6 +88,8 @@ class AgentScheduleController extends Controller
      */
     public function team(): View
     {
+        $this->checkPermission('view schedules');
+
         $agents = User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
             ->whereHas('schedules')
@@ -101,6 +105,8 @@ class AgentScheduleController extends Controller
      */
     public function save(Request $request): RedirectResponse
     {
+        $this->checkPermission('manage schedules');
+
         $target = $this->resolveTargetUser($request);
 
         $rules = [];

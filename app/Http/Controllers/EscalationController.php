@@ -21,6 +21,8 @@ class EscalationController extends Controller
      */
     public function escalate(Request $request, Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('escalate tickets');
+
         $validated = $request->validate([
             'to_tier' => ['required', 'in:tier_1,tier_2,tier_3'],
             'reason' => ['nullable', 'string', 'max:1000'],

@@ -27,7 +27,7 @@ class ClientController extends Controller
      */
     public function index(Request $request): View
     {
-        $this->checkPermission('manage clients');
+        $this->checkPermission('view clients');
 
         $query = Client::query()
             ->when($request->search, function ($query, $search) {
@@ -59,6 +59,8 @@ class ClientController extends Controller
      */
     public function create(): View
     {
+        $this->checkPermission('create clients');
+
         $slaPolicies = SlaPolicy::active()->get()->groupBy('client_tier');
 
         return view('clients.create', compact('slaPolicies'));
@@ -69,6 +71,8 @@ class ClientController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $this->checkPermission('create clients');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
@@ -90,6 +94,8 @@ class ClientController extends Controller
      */
     public function show(Client $client): View
     {
+        $this->checkPermission('view clients');
+
         $clientSlaPolicies = SlaPolicy::active()->where('client_tier', $client->tier)->get();
         $autofillUrl = $this->autofillSubmitUrl($client);
 
@@ -115,7 +121,7 @@ class ClientController extends Controller
      */
     public function autofillQr(Request $request, Client $client): Response
     {
-        $this->checkPermission('manage clients');
+        $this->checkPermission('view clients');
 
         $url = $this->autofillSubmitUrl($client, $this->autofillParamsFromRequest($request));
         abort_if($url === null, 404);
@@ -195,6 +201,8 @@ class ClientController extends Controller
      */
     public function edit(Client $client): View
     {
+        $this->checkPermission('update clients');
+
         $slaPolicies = SlaPolicy::active()->get()->groupBy('client_tier');
 
         return view('clients.edit', compact('client', 'slaPolicies'));
@@ -205,6 +213,8 @@ class ClientController extends Controller
      */
     public function update(Request $request, Client $client): RedirectResponse
     {
+        $this->checkPermission('update clients');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
@@ -226,6 +236,8 @@ class ClientController extends Controller
      */
     public function destroy(Client $client): RedirectResponse
     {
+        $this->checkPermission('delete clients');
+
         $client->delete();
 
         return redirect()->route('clients.index')
@@ -237,6 +249,8 @@ class ClientController extends Controller
      */
     public function assignAgent(Request $request, Client $client): RedirectResponse
     {
+        $this->checkPermission('update clients');
+
         $validated = $request->validate([
             'agent_id' => ['required', Rule::exists('users', 'id')->whereNull('deleted_at')],
             'notes' => ['nullable', 'string', 'max:500'],

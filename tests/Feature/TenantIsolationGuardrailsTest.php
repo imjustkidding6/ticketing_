@@ -8,6 +8,7 @@ use App\Models\Plan;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -104,6 +105,10 @@ class TenantIsolationGuardrailsTest extends TestCase
 
         $user = User::factory()->create();
         $tenantA->addUser($user, 'admin');
+
+        $roleService = app(TenantRoleService::class);
+        $roleService->setupDefaultRoles($tenantA);
+        $roleService->syncRole($user, 'admin', $tenantA);
 
         $response = $this->actingAs($user)
             ->withTenant($tenantA)

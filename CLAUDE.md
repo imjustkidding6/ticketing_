@@ -96,9 +96,20 @@ Enforcement points:
 
 Uses Spatie Permission with `tenant_id` as `team_foreign_key` (configured in `config/permission.php`).
 
-Three default roles per tenant: `admin` (16 permissions), `manager` (14), `agent` (5). Seeded via `TenantRoleService::setupDefaultRoles()`.
+`TenantRoleService` is the single source of truth for both the permission catalogue and the role matrix:
 
-Controllers enforce permissions via `$this->checkPermission('permission name')` (defined in base `Controller.php`). Owners bypass all permission checks.
+- **`PERMISSION_GROUPS`** — every permission, grouped by area (Tickets, Ticket collaboration, Clients, Catalog, Departments, SLA, Knowledge base, Canned responses, Reports, Operations, People, Configuration, AI). 76 permissions, named `<action> <resource>` (`view clients`, `create clients`, …). Use `TenantRoleService::allPermissions()` for the flat list; the group keys drive the headings in the custom-role editor. **Every permission must be enforced somewhere** — `RolePermissionMatrixTest::test_no_permission_is_defined_without_being_enforced` greps `app/`, `resources/views/` and `routes/` and fails on any that isn't. Don't add a permission you aren't going to check.
+- **`BASE_ROLE_PERMISSIONS`** — seven seeded roles, in decreasing access: `admin`, `manager`, `supervisor`, `senior agent`, `agent`, `viewer`, `billing`. Seeded per tenant via `setupDefaultRoles()`. `ROLE_DESCRIPTIONS` supplies the blurbs shown in the member/role pickers.
+- **`FEATURE_PERMISSIONS`** — extra grants layered on per plan feature (`knowledge_base`, `canned_responses`, `ai_chatbot`, `agent_escalation`, `department_management`, …), so a Starter tenant's admin never receives Enterprise-only permissions.
+- **`LEGACY_PERMISSION_MAP`** — maps each pre-expansion name (`manage clients`, `manage settings`, …) onto the granular ones that replaced it. `php artisan roles:migrate-permissions [--dry-run] [--tenant=ID]` re-seeds default roles and expands tenant **custom** roles through this map. Run it after deploying; without it, roles still holding old names lose access.
+
+Notable deliberate grants: `agent` has **no** `view clients` (agents work tickets; they don't browse the client directory), and `viewer` holds view-only permissions exclusively — `RolePermissionMatrixTest` asserts both.
+
+Controllers enforce permissions via `$this->checkPermission('permission name')` (aborts 403) or `$this->userCan('…')` (returns bool — use it to shape a response rather than deny it, e.g. hiding a section or widening a query). Both live in base `Controller.php` and share two bypasses: workspace **owners** bypass every check, and **platform admins** (`is_admin`) bypass on `admin.*` routes — they hold no tenant role, and controllers such as `SlaPolicyController` serve both the tenant and admin surfaces.
+
+`view all tickets` is the one permission that decides **scope, not access**: `TicketController::scopeByUserDepartments()` uses it to lift the department restriction, so a role without it sees a narrower list rather than a 403.
+
+When adding a permission: add it to a group in `PERMISSION_GROUPS`, grant it in the role matrix (or `FEATURE_PERMISSIONS` if plan-gated), enforce it in the controller, and gate the sidebar entry with `$sidebarCan('…')` in `layouts/app.blade.php`.
 
 ### Middleware Stack
 

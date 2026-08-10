@@ -26,6 +26,10 @@ class SlaPolicyTest extends TestCase
         $user = User::factory()->create();
         $tenant->addUser($user, 'admin');
 
+        $roleService = app(TenantRoleService::class);
+        $roleService->setupDefaultRoles($tenant);
+        $roleService->syncRole($user, 'admin', $tenant);
+
         $this->actingAs($user)->withTenant($tenant)->withSession(['current_tenant_id' => $tenant->id]);
 
         return [$tenant, $user];

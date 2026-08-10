@@ -11,6 +11,8 @@ class KbCategoryController extends Controller
 {
     public function index(): View
     {
+        $this->checkPermission('manage kb categories');
+
         $categories = KbCategory::query()
             ->withCount('articles')
             ->ordered()
@@ -21,11 +23,15 @@ class KbCategoryController extends Controller
 
     public function create(): View
     {
+        $this->checkPermission('manage kb categories');
+
         return view('knowledge-base.categories.create');
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $this->checkPermission('manage kb categories');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
@@ -44,11 +50,15 @@ class KbCategoryController extends Controller
 
     public function edit(KbCategory $category): View
     {
+        $this->checkPermission('manage kb categories');
+
         return view('knowledge-base.categories.edit', compact('category'));
     }
 
     public function update(Request $request, KbCategory $category): RedirectResponse
     {
+        $this->checkPermission('manage kb categories');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
@@ -67,6 +77,8 @@ class KbCategoryController extends Controller
 
     public function destroy(KbCategory $category): RedirectResponse
     {
+        $this->checkPermission('manage kb categories');
+
         if ($category->articles()->exists()) {
             return redirect()->route('knowledge-base.categories.index')
                 ->with('error', 'Cannot delete category with existing articles.');

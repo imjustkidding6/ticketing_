@@ -21,6 +21,8 @@ class ServiceReportController extends Controller
      */
     public function index(): View
     {
+        $this->checkPermission('view service reports');
+
         $reports = ServiceReport::query()
             ->with(['ticket', 'client'])
             ->latest()
@@ -34,6 +36,8 @@ class ServiceReportController extends Controller
      */
     public function generate(Ticket $ticket): RedirectResponse
     {
+        $this->checkPermission('view service reports');
+
         $this->serviceReportService->generate($ticket);
 
         return redirect()->route('tickets.show', $ticket)
@@ -45,6 +49,8 @@ class ServiceReportController extends Controller
      */
     public function download(ServiceReport $report): StreamedResponse|Response
     {
+        $this->checkPermission('view service reports');
+
         return $this->serviceReportService->download($report);
     }
 }

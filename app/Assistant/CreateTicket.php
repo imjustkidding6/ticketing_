@@ -2,12 +2,15 @@
 
 namespace App\Assistant;
 
+use App\Assistant\Concerns\AuthorizesTenantUser;
 use App\Models\Client;
 use App\Models\Ticket;
 use Cliqueha\AssistantConnector\AssistantTool;
 
 class CreateTicket extends AssistantTool
 {
+    use AuthorizesTenantUser;
+
     public function name(): string
     {
         return 'create_ticket';
@@ -35,9 +38,19 @@ class CreateTicket extends AssistantTool
 
     public function handle(array $input, mixed $user): array
     {
+        if ($denied = $this->denyUnless($user, 'create tickets')) {
+            return $denied;
+        }
+
         $client = Client::where('name', 'like', '%'.($input['client'] ?? '').'%')->first();
 
         if (! $client) {
+            // Only suggest names to users who are allowed to browse clients —
+            // otherwise this branch would leak the client list past list_clients.
+            if (! $this->userMay($user, 'view clients')) {
+                return ['error' => 'No matching client.'];
+            }
+
             $available = Client::orderBy('name')->limit(10)->pluck('name')->implode(', ');
 
             return ['error' => 'No matching client. Available: '.($available ?: 'none').'.'];

@@ -4,6 +4,7 @@ namespace App\Assistant;
 
 use App\Models\Tenant;
 use Cliqueha\AssistantConnector\Models\DesktopToken;
+use Spatie\Permission\PermissionRegistrar;
 
 /**
  * The token API is stateless, so set the active tenant from the token.
@@ -12,6 +13,10 @@ use Cliqueha\AssistantConnector\Models\DesktopToken;
  * was created in — use that so the assistant acts in the right workspace. Fall
  * back to the user's current/first workspace for tokens with no tenant (e.g.
  * ones minted via the CLI).
+ *
+ * Also syncs the Spatie team id, the same way EnsureTenantSession and
+ * AuthenticateApiToken do — without it the tools' permission checks would
+ * evaluate against no team and deny everyone.
  */
 class SetTenantContext
 {
@@ -23,11 +28,16 @@ class SetTenantContext
             $tenant = Tenant::find($token->tenant_id);
             if ($tenant && $user->belongsToTenant($tenant)) {
                 $user->setCurrentTenant($tenant);
+                app(PermissionRegistrar::class)->setPermissionsTeamId($tenant->id);
 
                 return;
             }
         }
 
-        $user->ensureCurrentTenant();
+        $tenant = $user->ensureCurrentTenant();
+
+        if ($tenant) {
+            app(PermissionRegistrar::class)->setPermissionsTeamId($tenant->id);
+        }
     }
 }

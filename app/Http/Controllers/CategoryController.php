@@ -15,6 +15,8 @@ class CategoryController extends Controller
      */
     public function index(): View
     {
+        $this->checkPermission('view categories');
+
         $categories = TicketCategory::query()
             ->with('department')
             ->ordered()
@@ -28,6 +30,8 @@ class CategoryController extends Controller
      */
     public function create(): View
     {
+        $this->checkPermission('create categories');
+
         $departments = Department::query()->active()->ordered()->get();
 
         return view('categories.create', compact('departments'));
@@ -38,6 +42,8 @@ class CategoryController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $this->checkPermission('create categories');
+
         $validated = $request->validate([
             'department_id' => ['required', 'exists:departments,id'],
             'name' => ['required', 'string', 'max:255'],
@@ -57,6 +63,8 @@ class CategoryController extends Controller
      */
     public function edit(TicketCategory $category): View
     {
+        $this->checkPermission('update categories');
+
         $departments = Department::query()->active()->ordered()->get();
 
         return view('categories.edit', compact('category', 'departments'));
@@ -67,6 +75,8 @@ class CategoryController extends Controller
      */
     public function update(Request $request, TicketCategory $category): RedirectResponse
     {
+        $this->checkPermission('update categories');
+
         $validated = $request->validate([
             'department_id' => ['required', 'exists:departments,id'],
             'name' => ['required', 'string', 'max:255'],
@@ -86,6 +96,8 @@ class CategoryController extends Controller
      */
     public function destroy(TicketCategory $category): RedirectResponse
     {
+        $this->checkPermission('delete categories');
+
         $category->delete();
 
         return redirect()->route('categories.index')

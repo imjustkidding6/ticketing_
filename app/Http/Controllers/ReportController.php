@@ -117,6 +117,8 @@ class ReportController extends Controller
      */
     public function exportVolume(Request $request): StreamedResponse
     {
+        $this->checkPermission('export reports');
+
         $filters = $this->extractFilters($request);
         $volume = $this->reportService->getTicketVolumeReport($filters);
 
@@ -147,6 +149,8 @@ class ReportController extends Controller
      */
     public function exportDepartments(Request $request): StreamedResponse
     {
+        $this->checkPermission('export reports');
+
         $filters = $this->extractFilters($request);
         $departments = $this->reportService->getDepartmentReport($filters);
 
@@ -165,6 +169,8 @@ class ReportController extends Controller
      */
     public function departments(Request $request): View
     {
+        $this->checkPermission('view reports');
+
         $filters = $this->extractFilters($request);
         $groupBy = $filters['trend_group'] ?? 'daily';
         $departmentReport = $this->reportService->getDepartmentReport($filters);
@@ -183,6 +189,8 @@ class ReportController extends Controller
      */
     public function categories(Request $request): View
     {
+        $this->checkPermission('view reports');
+
         $filters = $this->extractFilters($request);
         $groupBy = $filters['trend_group'] ?? 'daily';
         $categoryReport = $this->reportService->getCategoryReport($filters);
@@ -201,6 +209,8 @@ class ReportController extends Controller
      */
     public function clients(Request $request): View
     {
+        $this->checkPermission('view reports');
+
         $filters = $this->extractFilters($request);
         $groupBy = $filters['trend_group'] ?? 'daily';
         $clientReport = $this->reportService->getClientReport($filters);
@@ -219,6 +229,8 @@ class ReportController extends Controller
      */
     public function products(Request $request): View
     {
+        $this->checkPermission('view reports');
+
         $filters = $this->extractFilters($request);
         $groupBy = $filters['trend_group'] ?? 'daily';
         $productReport = $this->reportService->getProductReport($filters);
@@ -237,6 +249,8 @@ class ReportController extends Controller
      */
     public function tickets(Request $request): View
     {
+        $this->checkPermission('view reports');
+
         $filters = $this->extractFilters($request);
         $ticketReport = $this->reportService->getTicketReport($filters);
         $resolution = $this->reportService->getResolutionReport($filters);
@@ -256,6 +270,8 @@ class ReportController extends Controller
      */
     public function exportTickets(Request $request): StreamedResponse
     {
+        $this->checkPermission('export tickets');
+
         $filters = $this->extractFilters($request);
         $report = $this->reportService->getTicketReport($filters);
 
@@ -276,6 +292,8 @@ class ReportController extends Controller
      */
     public function billing(Request $request): View
     {
+        $this->checkPermission('view billing');
+
         $filters = $this->extractFilters($request);
         $filters['billing_status'] = $request->input('billing_status');
         $result = $this->reportService->getBillingReport($filters);
@@ -293,6 +311,8 @@ class ReportController extends Controller
      */
     public function exportBilling(Request $request): StreamedResponse
     {
+        $this->checkPermission('view billing');
+
         $filters = $this->extractFilters($request);
         $filters['billing_status'] = $request->input('billing_status');
         $result = $this->reportService->getBillingReport($filters);
@@ -318,6 +338,8 @@ class ReportController extends Controller
      */
     public function slaCompliance(Request $request): View
     {
+        $this->checkPermission('view sla reports');
+
         $from = $request->input('from') ? Carbon::parse($request->input('from')) : now()->subDays(30);
         $to = $request->input('to') ? Carbon::parse($request->input('to')) : now();
 
@@ -348,7 +370,7 @@ class ReportController extends Controller
      */
     public function exportReopens(Request $request): StreamedResponse
     {
-        $this->checkPermission('view reports');
+        $this->checkPermission('export reports');
 
         $filters = $this->extractFilters($request);
         $report = $this->reportService->getReopenAnalysisReport($filters);
@@ -386,6 +408,8 @@ class ReportController extends Controller
      */
     public function exportSlaCompliance(Request $request): StreamedResponse
     {
+        $this->checkPermission('view sla reports');
+
         $from = $request->input('from') ? Carbon::parse($request->input('from')) : now()->subDays(30);
         $to = $request->input('to') ? Carbon::parse($request->input('to')) : now();
 
@@ -432,6 +456,8 @@ class ReportController extends Controller
      */
     public function agents(Request $request): View
     {
+        $this->checkPermission('view agent performance');
+
         $filters = $this->extractFilters($request);
         $groupBy = $filters['trend_group'] ?? 'daily';
         $agentReport = $this->reportService->getAgentPerformanceReport($filters);
@@ -450,6 +476,8 @@ class ReportController extends Controller
      */
     public function exportDepartmentReport(Request $request): StreamedResponse
     {
+        $this->checkPermission('export reports');
+
         $filters = $this->extractFilters($request);
         $report = $this->reportService->getDepartmentReport($filters);
 
@@ -465,6 +493,8 @@ class ReportController extends Controller
      */
     public function exportCategoryReport(Request $request): StreamedResponse
     {
+        $this->checkPermission('export reports');
+
         $filters = $this->extractFilters($request);
         $report = $this->reportService->getCategoryReport($filters);
 
@@ -480,6 +510,8 @@ class ReportController extends Controller
      */
     public function exportClientReport(Request $request): StreamedResponse
     {
+        $this->checkPermission('export clients');
+
         $filters = $this->extractFilters($request);
         $report = $this->reportService->getClientReport($filters);
 
@@ -495,6 +527,8 @@ class ReportController extends Controller
      */
     public function exportProductReport(Request $request): StreamedResponse
     {
+        $this->checkPermission('export reports');
+
         $filters = $this->extractFilters($request);
         $report = $this->reportService->getProductReport($filters);
 
@@ -510,6 +544,8 @@ class ReportController extends Controller
      */
     public function exportAgents(Request $request): StreamedResponse
     {
+        $this->checkPermission('view agent performance');
+
         $filters = $this->extractFilters($request);
         $agentReport = $this->reportService->getAgentPerformanceReport($filters);
 

@@ -2,11 +2,14 @@
 
 namespace App\Assistant;
 
+use App\Assistant\Concerns\AuthorizesTenantUser;
 use App\Models\Ticket;
 use Cliqueha\AssistantConnector\AssistantTool;
 
 class TicketSummary extends AssistantTool
 {
+    use AuthorizesTenantUser;
+
     public function name(): string
     {
         return 'ticket_summary';
@@ -19,6 +22,10 @@ class TicketSummary extends AssistantTool
 
     public function handle(array $input, mixed $user): array
     {
+        if ($denied = $this->denyUnless($user, 'view tickets')) {
+            return $denied;
+        }
+
         $byStatus = Ticket::selectRaw('status, count(*) as c')->groupBy('status')->pluck('c', 'status');
 
         $open = collect(['open', 'assigned', 'in_progress', 'on_hold'])->sum(fn ($s) => (int) $byStatus->get($s, 0));
