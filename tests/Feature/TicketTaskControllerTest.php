@@ -125,4 +125,107 @@ class TicketTaskControllerTest extends TestCase
             ->assertOk()
             ->assertJsonIsArray();
     }
+
+    public function test_task_from_another_ticket_cannot_be_updated_through_wrong_parent(): void
+    {
+        [$tenant, $user, $ticket] = $this->setupContext();
+        $otherTicket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+        $task = TicketTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'ticket_id' => $otherTicket->id,
+            'description' => 'Original task',
+        ]);
+
+        $this->put($this->tenantUrl("/tickets/{$ticket->id}/tasks/{$task->id}"), [
+            'description' => 'Illicit update',
+        ])->assertNotFound();
+
+        $this->assertSame('Original task', $task->fresh()->description);
+        $this->assertDatabaseMissing('ticket_histories', [
+            'ticket_id' => $ticket->id,
+            'action' => 'task_updated',
+        ]);
+    }
+
+    public function test_cross_tenant_task_cannot_be_reached_through_current_ticket(): void
+    {
+        [$tenant, $user, $ticket] = $this->setupContext();
+        $plan = Plan::factory()->create(['slug' => 'other-business', 'features' => PlanFeature::forPlan('business')]);
+        $otherTenant = Tenant::factory()->create([
+            'license_id' => License::factory()->active()->forPlan($plan)->create()->id,
+        ]);
+        $otherUser = User::factory()->create();
+        $otherTicket = Ticket::factory()->create(['tenant_id' => $otherTenant->id, 'created_by' => $otherUser->id]);
+        $task = TicketTask::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'ticket_id' => $otherTicket->id,
+            'description' => 'Other tenant task',
+        ]);
+
+        $this->delete($this->tenantUrl("/tickets/{$ticket->id}/tasks/{$task->id}"))
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('ticket_tasks', ['id' => $task->id]);
+    }
+
+    public function test_viewer_cannot_update_a_task_even_with_correct_parent(): void
+    {
+        [$tenant, $user, $ticket] = $this->setupContext();
+        $task = TicketTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'ticket_id' => $ticket->id,
+            'description' => 'Protected task',
+        ]);
+        $viewer = User::factory()->create();
+        $tenant->addUser($viewer, 'member');
+        $roleService = app(TenantRoleService::class);
+        $roleService->setTenantContext($tenant);
+        $roleService->syncRole($viewer, 'viewer', $tenant);
+        $this->actingAs($viewer)->withSession(['current_tenant_id' => $tenant->id]);
+
+        $this->put($this->tenantUrl("/tickets/{$ticket->id}/tasks/{$task->id}"), [
+            'description' => 'Unauthorized update',
+        ])->assertForbidden();
+
+        $this->assertSame('Protected task', $task->fresh()->description);
+    }
+
+    public function test_bulk_update_rejects_a_task_from_another_ticket_without_mutation(): void
+    {
+        [$tenant, $user, $ticket] = $this->setupContext();
+        $otherTicket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+        $task = TicketTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'ticket_id' => $otherTicket->id,
+            'description' => 'Other ticket task',
+            'status' => 'pending',
+        ]);
+
+        $this->post($this->tenantUrl("/tickets/{$ticket->id}/tasks/bulk-update"), [
+            'tasks' => [[
+                'id' => $task->id,
+                'description' => 'Illicit bulk update',
+            ]],
+        ])->assertSessionHasErrors('tasks.0.id');
+
+        $this->assertSame('Other ticket task', $task->fresh()->description);
+    }
+
+    public function test_bulk_status_update_rejects_a_task_from_another_ticket_without_mutation(): void
+    {
+        [$tenant, $user, $ticket] = $this->setupContext();
+        $otherTicket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+        $task = TicketTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'ticket_id' => $otherTicket->id,
+            'status' => 'pending',
+        ]);
+
+        $this->post($this->tenantUrl("/tickets/{$ticket->id}/tasks/bulk-status-update"), [
+            'task_ids' => [$task->id],
+            'status' => 'completed',
+        ])->assertSessionHasErrors('task_ids.0');
+
+        $this->assertSame('pending', $task->fresh()->status);
+    }
 }

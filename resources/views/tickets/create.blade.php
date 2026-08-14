@@ -6,8 +6,9 @@
     <div class="py-6">
         <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
             <div class="overflow-hidden rounded-xl bg-white p-6 shadow-sm">
-                <form method="POST" action="{{ route('tickets.store') }}" enctype="multipart/form-data">
+                <form method="POST" action="{{ route('tickets.store') }}" enctype="multipart/form-data" novalidate data-preserve-scroll>
                     @csrf
+                    @include('tickets.partials.preserve-form-scroll')
 
                     <div class="space-y-6">
                         {{-- AI clean-up (Enterprise + copilot enabled) --}}

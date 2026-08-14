@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\KbArticle;
 use App\Models\KbCategory;
+use App\Support\TenantValidation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,7 +52,7 @@ class KbArticleController extends Controller
         $this->checkPermission('create kb articles');
 
         $validated = $request->validate([
-            'kb_category_id' => ['required', 'exists:kb_categories,id'],
+            'kb_category_id' => ['required', TenantValidation::exists('kb_categories')],
             'title' => ['required', 'string', 'max:255'],
             'content' => ['required', 'string'],
             'excerpt' => ['nullable', 'string', 'max:500'],
@@ -96,7 +97,7 @@ class KbArticleController extends Controller
         $this->checkPermission('update kb articles');
 
         $validated = $request->validate([
-            'kb_category_id' => ['required', 'exists:kb_categories,id'],
+            'kb_category_id' => ['required', TenantValidation::exists('kb_categories')],
             'title' => ['required', 'string', 'max:255'],
             'content' => ['required', 'string'],
             'excerpt' => ['nullable', 'string', 'max:500'],

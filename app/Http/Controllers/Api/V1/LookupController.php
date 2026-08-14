@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\TicketCategory;
+use App\Support\TenantValidation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,7 +21,7 @@ class LookupController extends Controller
     public function categories(Request $request): JsonResponse
     {
         $request->validate([
-            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'department_id' => ['nullable', 'integer', TenantValidation::exists('departments')],
         ]);
 
         $query = TicketCategory::active()->ordered();
