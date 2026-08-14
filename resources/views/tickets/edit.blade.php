@@ -6,9 +6,10 @@
     <div class="py-6">
         <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
             <div class="overflow-hidden rounded-xl bg-white p-6 shadow-sm">
-                <form method="POST" action="{{ route('tickets.update', $ticket) }}">
+                <form method="POST" action="{{ route('tickets.update', $ticket) }}" novalidate data-preserve-scroll>
                     @csrf
                     @method('PUT')
+                    @include('tickets.partials.preserve-form-scroll')
 
                     <div class="space-y-6">
                         {{-- AI clean-up (Enterprise + copilot enabled) --}}
