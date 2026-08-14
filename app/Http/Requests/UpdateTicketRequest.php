@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Support\TenantValidation;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateTicketRequest extends FormRequest
 {
@@ -28,12 +28,12 @@ class UpdateTicketRequest extends FormRequest
             'description' => ['required', 'string'],
             'priority' => ['required', 'in:low,medium,high,critical'],
             'status' => ['required', 'in:open,assigned,in_progress,on_hold,closed,cancelled'],
-            'client_id' => ['required', 'exists:clients,id'],
-            'category_id' => ['nullable', 'exists:ticket_categories,id'],
-            'department_id' => ['nullable', 'exists:departments,id'],
+            'client_id' => ['required', TenantValidation::exists('clients')],
+            'category_id' => ['nullable', TenantValidation::exists('ticket_categories')],
+            'department_id' => ['nullable', TenantValidation::exists('departments')],
             'product_ids' => ['nullable', 'array'],
-            'product_ids.*' => ['exists:products,id'],
-            'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'product_ids.*' => [TenantValidation::exists('products')],
+            'assigned_to' => ['nullable', TenantValidation::user()],
             'incident_date' => ['nullable', 'date'],
         ];
     }

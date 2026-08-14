@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\TicketCategory;
+use App\Support\TenantValidation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -45,7 +46,7 @@ class ProductController extends Controller
         $this->checkPermission('create products');
 
         $validated = $request->validate([
-            'category_id' => ['nullable', 'exists:ticket_categories,id'],
+            'category_id' => ['nullable', TenantValidation::exists('ticket_categories')],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'sku' => ['nullable', 'string', 'max:50'],
@@ -79,7 +80,7 @@ class ProductController extends Controller
         $this->checkPermission('update products');
 
         $validated = $request->validate([
-            'category_id' => ['nullable', 'exists:ticket_categories,id'],
+            'category_id' => ['nullable', TenantValidation::exists('ticket_categories')],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'sku' => ['nullable', 'string', 'max:50'],

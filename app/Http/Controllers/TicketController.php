@@ -18,6 +18,7 @@ use App\Services\PlanService;
 use App\Services\TicketMergeService;
 use App\Services\TicketService;
 use App\Services\TicketWorkflowService;
+use App\Support\TenantValidation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -352,7 +353,7 @@ class TicketController extends Controller
     {
         $this->checkPermission('assign tickets');
         $validated = $request->validate([
-            'assigned_to' => ['required', Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'assigned_to' => ['required', TenantValidation::user()],
             'priority' => ['nullable', 'in:low,medium,high,critical'],
         ]);
 
@@ -508,7 +509,7 @@ class TicketController extends Controller
         $this->checkPermission('merge tickets');
 
         $validated = $request->validate([
-            'target_ticket_id' => ['required', 'exists:tickets,id', 'different:ticket'],
+            'target_ticket_id' => ['required', TenantValidation::exists('tickets'), 'different:ticket'],
         ]);
 
         $target = Ticket::findOrFail($validated['target_ticket_id']);

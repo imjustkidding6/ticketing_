@@ -10,12 +10,12 @@ use App\Models\Product;
 use App\Models\SlaPolicy;
 use App\Models\TicketCategory;
 use App\Models\User;
+use App\Support\TenantValidation;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Writer\PngWriter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ClientController extends Controller
@@ -252,7 +252,7 @@ class ClientController extends Controller
         $this->checkPermission('update clients');
 
         $validated = $request->validate([
-            'agent_id' => ['required', Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'agent_id' => ['required', TenantValidation::user()],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 

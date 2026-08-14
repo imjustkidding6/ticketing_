@@ -5,12 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Ticket;
 use App\Models\TicketTask;
 use App\Services\TicketService;
+use App\Support\TenantValidation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 
 class TicketTaskController extends Controller
 {
@@ -27,7 +27,7 @@ class TicketTaskController extends Controller
 
         $validated = $request->validate([
             'description' => ['required', 'string', 'max:1000'],
-            'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'assigned_to' => ['nullable', TenantValidation::user()],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
@@ -48,7 +48,7 @@ class TicketTaskController extends Controller
 
         $validated = $request->validate([
             'description' => ['required', 'string', 'max:1000'],
-            'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'assigned_to' => ['nullable', TenantValidation::user()],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
@@ -92,7 +92,7 @@ class TicketTaskController extends Controller
             'tasks' => ['required', 'array'],
             'tasks.*.id' => ['required', 'exists:ticket_tasks,id'],
             'tasks.*.description' => ['required', 'string', 'max:1000'],
-            'tasks.*.assigned_to' => ['nullable', 'exists:users,id'],
+            'tasks.*.assigned_to' => ['nullable', TenantValidation::user()],
             'tasks.*.notes' => ['nullable', 'string', 'max:2000'],
         ]);
 

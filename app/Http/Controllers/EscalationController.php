@@ -6,9 +6,9 @@ use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\EscalationService;
+use App\Support\TenantValidation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class EscalationController extends Controller
 {
@@ -26,7 +26,7 @@ class EscalationController extends Controller
         $validated = $request->validate([
             'to_tier' => ['required', 'in:tier_1,tier_2,tier_3'],
             'reason' => ['nullable', 'string', 'max:1000'],
-            'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'assigned_to' => ['nullable', TenantValidation::user()],
         ]);
 
         $currentTier = $ticket->current_tier ?? 'tier_1';

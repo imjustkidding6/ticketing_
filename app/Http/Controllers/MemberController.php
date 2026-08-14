@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\ActivityLogger;
 use App\Services\AgentPerformanceService;
 use App\Services\TenantRoleService;
+use App\Support\TenantValidation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -99,7 +100,7 @@ class MemberController extends Controller
             'support_tier' => ['nullable', 'integer', 'in:1,2,3'],
             'is_available' => ['nullable', 'boolean'],
             'department_ids' => ['nullable', 'array'],
-            'department_ids.*' => ['exists:departments,id'],
+            'department_ids.*' => [TenantValidation::exists('departments')],
         ], [
             'email.email' => 'Please enter a valid email address.',
             'role.in' => 'Please select a valid role.',
@@ -234,7 +235,7 @@ class MemberController extends Controller
             'support_tier' => ['nullable', 'integer', 'in:1,2,3'],
             'is_available' => ['nullable', 'boolean'],
             'department_ids' => ['nullable', 'array'],
-            'department_ids.*' => ['exists:departments,id'],
+            'department_ids.*' => [TenantValidation::exists('departments')],
         ]);
 
         $oldRole = $member->roles->first()?->name;
