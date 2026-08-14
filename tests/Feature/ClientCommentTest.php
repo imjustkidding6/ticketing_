@@ -161,4 +161,76 @@ class ClientCommentTest extends TestCase
         $this->assertEquals('Updated content', $comment->content);
         $this->assertNotNull($comment->edited_at);
     }
+
+    public function test_comment_from_another_ticket_cannot_be_updated_through_wrong_parent(): void
+    {
+        $tenant = $this->createEnterpriseTenant();
+        $user = $this->setupTenantContext($tenant);
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+        $otherTicket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+        $comment = TicketComment::factory()->create([
+            'tenant_id' => $tenant->id,
+            'ticket_id' => $otherTicket->id,
+            'user_id' => $user->id,
+            'content' => 'Original comment',
+        ]);
+
+        $this->put($this->tenantUrl("/tickets/{$ticket->id}/comments/{$comment->id}"), [
+            'content' => 'Illicit update',
+        ])->assertNotFound();
+
+        $this->assertSame('Original comment', $comment->fresh()->content);
+        $this->assertDatabaseMissing('ticket_histories', [
+            'ticket_id' => $ticket->id,
+            'action' => 'comment_edited',
+        ]);
+    }
+
+    public function test_cross_tenant_comment_cannot_be_deleted_through_current_ticket(): void
+    {
+        $tenant = $this->createEnterpriseTenant();
+        $user = $this->setupTenantContext($tenant);
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+        $otherTenant = Tenant::factory()->create([
+            'license_id' => License::factory()->active()->forPlan($tenant->license->plan)->create()->id,
+        ]);
+        $otherUser = User::factory()->create();
+        $otherTicket = Ticket::factory()->create(['tenant_id' => $otherTenant->id, 'created_by' => $otherUser->id]);
+        $comment = TicketComment::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'ticket_id' => $otherTicket->id,
+            'user_id' => $otherUser->id,
+            'content' => 'Other tenant comment',
+        ]);
+
+        $this->delete($this->tenantUrl("/tickets/{$ticket->id}/comments/{$comment->id}"))
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('ticket_comments', ['id' => $comment->id]);
+    }
+
+    public function test_viewer_cannot_update_comment_with_correct_parent(): void
+    {
+        $tenant = $this->createEnterpriseTenant();
+        $user = $this->setupTenantContext($tenant);
+        $ticket = Ticket::factory()->create(['tenant_id' => $tenant->id, 'created_by' => $user->id]);
+        $comment = TicketComment::factory()->create([
+            'tenant_id' => $tenant->id,
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'content' => 'Protected comment',
+        ]);
+        $viewer = User::factory()->create();
+        $tenant->addUser($viewer, 'member');
+        $roleService = app(TenantRoleService::class);
+        $roleService->setTenantContext($tenant);
+        $roleService->syncRole($viewer, 'viewer', $tenant);
+        $this->actingAs($viewer)->withSession(['current_tenant_id' => $tenant->id]);
+
+        $this->put($this->tenantUrl("/tickets/{$ticket->id}/comments/{$comment->id}"), [
+            'content' => 'Unauthorized update',
+        ])->assertForbidden();
+
+        $this->assertSame('Protected comment', $comment->fresh()->content);
+    }
 }

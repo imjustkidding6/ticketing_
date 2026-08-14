@@ -179,22 +179,22 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
 
     // Ticket Comments (Enterprise via feature gate)
     Route::post('tickets/{ticket}/comments', [TicketCommentController::class, 'store'])->name('tickets.comments.store')->middleware('feature:client_comments');
-    Route::put('tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update'])->name('tickets.comments.update')->middleware('feature:client_comments');
-    Route::delete('tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'destroy'])->name('tickets.comments.destroy')->middleware('feature:client_comments');
-    Route::get('tickets/{ticket}/comments/{comment}/attachment/{index}', [TicketCommentController::class, 'downloadAttachment'])->name('tickets.comments.attachment')->middleware('feature:client_comments');
+    Route::put('tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update'])->name('tickets.comments.update')->middleware('feature:client_comments')->scopeBindings();
+    Route::delete('tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'destroy'])->name('tickets.comments.destroy')->middleware('feature:client_comments')->scopeBindings();
+    Route::get('tickets/{ticket}/comments/{comment}/attachment/{index}', [TicketCommentController::class, 'downloadAttachment'])->name('tickets.comments.attachment')->middleware('feature:client_comments')->scopeBindings();
 
     // Escalation (Enterprise via feature gate)
     Route::post('tickets/{ticket}/escalate', [EscalationController::class, 'escalate'])->name('tickets.escalate')->middleware('feature:agent_escalation');
 
     // Ticket Tasks
     Route::post('tickets/{ticket}/tasks', [TicketTaskController::class, 'store'])->name('tickets.tasks.store');
-    Route::put('tickets/{ticket}/tasks/{task}', [TicketTaskController::class, 'update'])->name('tickets.tasks.update');
-    Route::post('tickets/{ticket}/tasks/{task}/status', [TicketTaskController::class, 'updateStatus'])->name('tickets.tasks.status');
-    Route::delete('tickets/{ticket}/tasks/{task}', [TicketTaskController::class, 'destroy'])->name('tickets.tasks.destroy');
+    Route::put('tickets/{ticket}/tasks/{task}', [TicketTaskController::class, 'update'])->name('tickets.tasks.update')->scopeBindings();
+    Route::post('tickets/{ticket}/tasks/{task}/status', [TicketTaskController::class, 'updateStatus'])->name('tickets.tasks.status')->scopeBindings();
+    Route::delete('tickets/{ticket}/tasks/{task}', [TicketTaskController::class, 'destroy'])->name('tickets.tasks.destroy')->scopeBindings();
     Route::post('tickets/{ticket}/tasks/polish-apply', [TicketTaskController::class, 'applyPolishedTasks'])->name('tickets.tasks.polish-apply')->middleware('feature:ai_chatbot');
     Route::post('tickets/{ticket}/tasks/bulk-update', [TicketTaskController::class, 'bulkUpdate'])->name('tickets.tasks.bulk-update');
     Route::post('tickets/{ticket}/tasks/bulk-status-update', [TicketTaskController::class, 'bulkStatusUpdate'])->name('tickets.tasks.bulk-status-update');
-    Route::get('tickets/{ticket}/tasks/{task}/history', [TicketTaskController::class, 'history'])->name('tickets.tasks.history');
+    Route::get('tickets/{ticket}/tasks/{task}/history', [TicketTaskController::class, 'history'])->name('tickets.tasks.history')->scopeBindings();
 
     // Notifications
     Route::get('notifications/recent', [NotificationController::class, 'recent'])->name('notifications.recent');
