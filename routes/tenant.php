@@ -95,11 +95,6 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified', 'tenant'])->name('dashboard');
 Route::get('/dashboard/stats', [DashboardController::class, 'stats'])
     ->middleware(['auth', 'verified', 'tenant'])->name('dashboard.stats');
-
-Route::get('/dashboard', [DashboardController::class, 'index'])
-    ->middleware(['auth', 'verified', 'tenant'])->name('dashboard');
-Route::get('/dashboard/stats', [DashboardController::class, 'stats'])
-    ->middleware(['auth', 'verified', 'tenant'])->name('dashboard.stats');
 Route::get('/my-activity', [DashboardController::class, 'myActivity'])
     ->middleware(['auth', 'verified', 'tenant'])->name('dashboard.my-activity');
 
