@@ -147,6 +147,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::delete('tickets/{ticket}/force-delete', [TicketController::class, 'forceDestroy'])->name('tickets.force-delete')->withTrashed();
     Route::post('tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
     Route::post('tickets/{ticket}/self-assign', [TicketController::class, 'selfAssign'])->name('tickets.self-assign');
+    Route::get('tickets/{ticket}/fragments', [TicketController::class, 'fragments'])->name('tickets.fragments');
     Route::post('tickets/{ticket}/status', [TicketController::class, 'changeStatus'])->name('tickets.change-status');
     Route::post('tickets/{ticket}/priority', [TicketController::class, 'changePriority'])->name('tickets.change-priority');
     Route::post('tickets/{ticket}/false-alarm', [TicketController::class, 'markFalseAlarm'])->name('tickets.false-alarm');

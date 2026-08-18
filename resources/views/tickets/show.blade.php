@@ -26,20 +26,7 @@
                     </a>
                 </div>
                 <div class="mt-2 flex items-center gap-2">
-                    @php
-                        $completedTasks = $ticket->tasks->where('status', 'completed')->count();
-                        $totalTasks = $ticket->tasks->count();
-                    @endphp
-                    @if($totalTasks > 0)
-                        <x-badge :type="$completedTasks === $totalTasks ? 'completed' : 'in_progress'">
-                            {{ $completedTasks === $totalTasks ? __('COMPLETE SET') : __('INCOMPLETE SET') }}
-                        </x-badge>
-                    @endif
-                    <x-badge :type="$ticket->status">{{ strtoupper(str_replace('_', ' ', $ticket->status)) }}</x-badge>
-                    <x-badge :type="$ticket->priority">{{ strtoupper($ticket->priority) }}</x-badge>
-                    @if($ticket->isOverdue())
-                        <x-badge type="overdue">{{ __('OVERDUE') }}</x-badge>
-                    @endif
+                    <span id="ticket-badges" data-fragment="badges" class="contents">@include('tickets.partials._badges')</span>
                 </div>
             </div>
 
@@ -184,211 +171,8 @@
                     </div>
 
                     {{-- Task Checklist --}}
-                    @php $taskCopilot = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot) && (bool) \App\Models\AppSetting::get('ai_agent_copilot_enabled', false); @endphp
-                    <div class="rounded-xl bg-white p-6 shadow-sm" @if($taskCopilot) x-data="taskListPolish(@js(route('tickets.ai.polish-tasks', $ticket)))" @endif>
-                        <div class="flex items-center justify-between">
-                            <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Task Checklist') }}</h4>
-                            <div class="flex items-center gap-3">
-                                <span class="text-sm text-gray-500">
-                                    {{ $ticket->tasks->where('status', 'completed')->count() }}/{{ $ticket->tasks->count() }} {{ __('completed') }}
-                                </span>
-                                @if($taskCopilot && !in_array($ticket->status, ['closed', 'cancelled']))
-                                    <button type="button" @click="preview()" :disabled="loading" title="{{ __('Review the whole checklist with AI') }}" class="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50 disabled:opacity-50">
-                                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
-                                        <span x-show="!loading">{{ __('Polish list') }}</span>
-                                        <span x-show="loading" x-cloak>{{ __('Reviewing...') }}</span>
-                                    </button>
-                                @endif
-                            </div>
-                        </div>
-                        @if($taskCopilot)
-                            <p x-show="error" x-cloak class="mt-2 text-xs text-red-600" x-text="error"></p>
-                        @endif
-
-                        @if($ticket->tasks->count() > 0)
-                            <ul class="mt-4 divide-y divide-gray-200">
-                                @foreach($ticket->tasks->sortBy('sort_order') as $task)
-                                    <li class="py-3">
-                                        <div class="flex items-start justify-between gap-3">
-                                            <div class="flex items-start gap-3 min-w-0 flex-1">
-                                                @if($task->status === 'completed')
-                                                    <div class="mt-0.5 h-5 w-5 shrink-0 rounded border-2 border-green-500 bg-green-500 flex items-center justify-center">
-                                                        <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                                        </svg>
-                                                    </div>
-                                                @elseif($task->status === 'cancelled')
-                                                    <div class="mt-0.5 h-5 w-5 shrink-0 rounded border-2 border-gray-300 bg-gray-100 flex items-center justify-center">
-                                                        <svg class="h-3 w-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </div>
-                                                @else
-                                                    <div class="mt-0.5 h-5 w-5 shrink-0 rounded border-2 {{ $task->status === 'in_progress' ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300' }}"></div>
-                                                @endif
-                                                <div class="min-w-0">
-                                                    <span class="text-sm {{ $task->isCompleted() ? 'text-gray-400 line-through' : ($task->status === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-900') }}">{{ $task->description }}</span>
-                                                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
-                                                        @if($task->assignee)
-                                                            <span class="text-xs text-gray-400">{{ $task->assignee->name }}</span>
-                                                        @endif
-                                                        @if($task->completed_at)
-                                                            <span class="text-xs text-green-600">{{ __('Completed') }} @localdt($task->completed_at, 'm/d/Y, g:i A')</span>
-                                                        @endif
-                                                    </div>
-                                                    @if($task->notes)
-                                                        <p class="mt-0.5 text-xs text-gray-500">{{ $task->notes }}</p>
-                                                    @endif
-                                                </div>
-                                            </div>
-                                            <div class="flex items-center gap-2 shrink-0">
-                                                @if(!in_array($ticket->status, ['closed', 'cancelled']) && $task->canChangeStatus())
-                                                    <form method="POST" action="{{ route('tickets.tasks.status', [$ticket, $task]) }}" class="flex items-center gap-1">
-                                                        @csrf
-                                                        <select name="status" onchange="this.form.submit()" class="rounded-md border-gray-300 text-xs py-1 pl-2 pr-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                                            @foreach(['pending', 'in_progress', 'completed', 'cancelled'] as $ts)
-                                                                <option value="{{ $ts }}" {{ $task->status === $ts ? 'selected' : '' }}>{{ ucfirst(str_replace('_', ' ', $ts)) }}</option>
-                                                            @endforeach
-                                                        </select>
-                                                    </form>
-                                                @else
-                                                    <x-badge :type="$task->status">{{ ucfirst(str_replace('_', ' ', $task->status)) }}</x-badge>
-                                                @endif
-                                                @if(!in_array($ticket->status, ['closed', 'cancelled']))
-                                                    <form method="POST" action="{{ route('tickets.tasks.destroy', [$ticket, $task]) }}">
-                                                        @csrf
-                                                        @method('DELETE')
-                                                        <button type="submit" class="text-gray-400 hover:text-red-500" title="{{ __('Remove') }}">
-                                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                            </svg>
-                                                        </button>
-                                                    </form>
-                                                @endif
-                                            </div>
-                                        </div>
-                                    </li>
-                                @endforeach
-                            </ul>
-                        @else
-                            <div class="mt-6 text-center py-8">
-                                <svg class="mx-auto h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-                                </svg>
-                                <p class="mt-2 text-sm text-gray-500">{{ __('No tasks created yet.') }}</p>
-                            </div>
-                        @endif
-
-                        {{-- Add Task Form --}}
-                        @if(!in_array($ticket->status, ['closed', 'cancelled']))
-                            <form method="POST" action="{{ route('tickets.tasks.store', $ticket) }}" class="mt-4 flex items-end gap-3 border-t border-gray-200 pt-4" @if($taskCopilot) x-data="taskAiPolish(@js(route('tickets.ai.polish-task', $ticket)))" @endif>
-                                @csrf
-                                <div class="flex-1">
-                                    <input type="text" name="description" required placeholder="{{ __('Add a task...') }}" @if($taskCopilot) x-ref="taskInput" @endif class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                    @if($taskCopilot)
-                                        <p x-show="error" x-cloak class="mt-1 text-xs text-red-600" x-text="error"></p>
-                                    @endif
-                                </div>
-                                @if($taskCopilot)
-                                    <button type="button" @click="polish()" :disabled="loading" title="{{ __('Polish this task with AI') }}" class="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-2 text-sm font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50 disabled:opacity-50">
-                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
-                                        <span x-show="!loading">{{ __('Polish') }}</span>
-                                        <span x-show="loading" x-cloak>{{ __('Polishing...') }}</span>
-                                    </button>
-                                @endif
-                                <button type="submit" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
-                                    <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                                    </svg>
-                                    {{ __('Add Task') }}
-                                </button>
-                            </form>
-                            @if($taskCopilot)
-                                <script>
-                                    function taskAiPolish(url) {
-                                        return {
-                                            url, loading: false, error: '',
-                                            csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
-                                            async polish() {
-                                                const input = this.$refs.taskInput;
-                                                const text = (input?.value || '').trim();
-                                                if (!text) { this.error = @js(__('Type a task first.')); return; }
-                                                this.error = ''; this.loading = true;
-                                                try {
-                                                    const res = await fetch(this.url, {
-                                                        method: 'POST',
-                                                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' },
-                                                        body: JSON.stringify({ description: text }),
-                                                    });
-                                                    const data = await res.json().catch(() => ({}));
-                                                    if (!res.ok) throw new Error(data.error || @js(__('The AI request failed.')));
-                                                    if (data.text && input) { input.value = data.text; input.focus(); }
-                                                } catch (e) { this.error = e.message; }
-                                                finally { this.loading = false; }
-                                            },
-                                        };
-                                    }
-                                </script>
-                            @endif
-                        @endif
-
-                        @if($taskCopilot)
-                            {{-- AI checklist-review modal --}}
-                            <div x-show="open" x-cloak @keydown.escape.window="open=false" @click.self="open=false" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.4);">
-                                <div class="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
-                                    <h3 class="text-lg font-semibold text-gray-900">{{ __('AI-refined checklist') }}</h3>
-                                    <p class="mt-1 text-sm text-gray-500">{{ __('Review the suggested open tasks. Edit, add, or remove any before applying.') }}</p>
-                                    <p x-show="kept > 0" x-cloak class="mt-1 text-xs text-gray-400"><span x-text="kept"></span> {{ __('completed/cancelled task(s) will be kept.') }}</p>
-
-                                    <form method="POST" action="{{ route('tickets.tasks.polish-apply', $ticket) }}" class="mt-4">
-                                        @csrf
-                                        <div class="space-y-2 max-h-72 overflow-y-auto">
-                                            <template x-for="(item, i) in items" :key="i">
-                                                <div class="flex items-center gap-2">
-                                                    <input type="text" name="tasks[]" x-model="items[i]" class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                                    <button type="button" @click="removeItem(i)" title="{{ __('Remove') }}" class="shrink-0 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-600">
-                                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-                                                    </button>
-                                                </div>
-                                            </template>
-                                            <p x-show="items.length === 0" x-cloak class="text-sm text-gray-400">{{ __('No tasks — add one below, or cancel.') }}</p>
-                                        </div>
-                                        <button type="button" @click="addItem()" class="mt-2 inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-500">
-                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                                            {{ __('Add task') }}
-                                        </button>
-
-                                        <div class="mt-5 flex items-center justify-end gap-2">
-                                            <button type="button" @click="open=false" class="rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">{{ __('Cancel') }}</button>
-                                            <button type="submit" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Apply changes') }}</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-
-                            <script>
-                                function taskListPolish(url) {
-                                    return {
-                                        url, open: false, loading: false, error: '', kept: 0, items: [],
-                                        csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
-                                        async preview() {
-                                            this.error = ''; this.loading = true;
-                                            try {
-                                                const res = await fetch(this.url, { method: 'POST', headers: { 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' } });
-                                                const data = await res.json().catch(() => ({}));
-                                                if (!res.ok) throw new Error(data.error || @js(__('The AI request failed.')));
-                                                this.items = Array.isArray(data.tasks) ? data.tasks : [];
-                                                this.kept = data.kept || 0;
-                                                this.open = true;
-                                            } catch (e) { this.error = e.message; }
-                                            finally { this.loading = false; }
-                                        },
-                                        addItem() { this.items.push(''); },
-                                        removeItem(i) { this.items.splice(i, 1); },
-                                    };
-                                }
-                            </script>
-                        @endif
+                    <div id="ticket-tasks" data-fragment="tasks" data-live-forms>
+                        @include('tickets.partials._tasks')
                     </div>
 
                     {{-- Comments & Updates --}}
@@ -712,163 +496,8 @@
                         </div>
                     </div>
 
-                    {{-- Status --}}
-                    <div class="rounded-xl bg-white p-6 shadow-sm">
-                        <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Status') }}</h4>
-                        @php
-                            $currentTenant = \App\Models\Tenant::find(session('current_tenant_id'));
-                            $isOwner = $currentTenant && auth()->user()?->isOwnerOf($currentTenant);
-                            $canReopen = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::TicketReopening)
-                                && ($isOwner || auth()->user()?->can('reopen tickets'));
-                            $statusLocked = $ticket->status === 'closed' && ! $canReopen;
-                        @endphp
-                        <div class="mt-4">
-                            @if($ticket->status === 'closed')
-                                {{-- Closed status badge --}}
-                                <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                                    <span class="inline-flex items-center gap-2">
-                                        <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                                        </svg>
-                                        {{ __('Closed') }}
-                                    </span>
-                                </div>
-                                @if($ticket->closing_remarks)
-                                    <div class="mt-2 rounded-md bg-gray-50 border border-gray-200 px-3 py-2">
-                                        <p class="text-xs font-medium text-gray-500">{{ __('Final Remarks') }}</p>
-                                        <p class="mt-1 text-sm text-gray-700">{{ $ticket->closing_remarks }}</p>
-                                    </div>
-                                @endif
-                                @if($statusLocked)
-                                    <p class="mt-2 text-xs text-gray-500">{{ __('Reopening closed tickets requires the Enterprise plan.') }}</p>
-                                @endif
-                            @else
-                                {{-- Quick status update (one click; close/cancel stay in the dropdown below) --}}
-                                @php
-                                    $quickStatuses = ['open', 'assigned', 'in_progress'];
-                                    if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement)) {
-                                        $quickStatuses[] = 'on_hold';
-                                    }
-                                    $quickStatusStyles = [
-                                        'open' => 'bg-slate-100 text-slate-700 hover:bg-slate-200',
-                                        'assigned' => 'bg-blue-100 text-blue-700 hover:bg-blue-200',
-                                        'in_progress' => 'bg-amber-100 text-amber-800 hover:bg-amber-200',
-                                        'on_hold' => 'bg-purple-100 text-purple-700 hover:bg-purple-200',
-                                    ];
-                                @endphp
-                                <div class="mb-3">
-                                    <p class="mb-1.5 text-xs font-medium text-gray-500">{{ __('Quick update') }}</p>
-                                    <div class="flex flex-wrap gap-2">
-                                        @foreach($quickStatuses as $qs)
-                                            @if($ticket->status === $qs)
-                                                <span class="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold ring-2 ring-indigo-400 {{ $quickStatusStyles[$qs] }}">
-                                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                                                    {{ ucfirst(str_replace('_', ' ', $qs)) }}
-                                                </span>
-                                            @else
-                                                <form method="POST" action="{{ route('tickets.change-status', $ticket) }}">
-                                                    @csrf
-                                                    <input type="hidden" name="status" value="{{ $qs }}">
-                                                    <button type="submit" class="rounded-md px-2.5 py-1.5 text-xs font-medium {{ $quickStatusStyles[$qs] }}">{{ ucfirst(str_replace('_', ' ', $qs)) }}</button>
-                                                </form>
-                                            @endif
-                                        @endforeach
-                                    </div>
-                                </div>
-
-                                <form method="POST" action="{{ route('tickets.change-status', $ticket) }}" x-data="{ status: '{{ $ticket->status }}' }">
-                                    @csrf
-                                    <select name="status" id="sidebar_status" x-model="status" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                        @php
-                                            $availableStatuses = ['open', 'assigned', 'in_progress', 'closed', 'cancelled'];
-                                            if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement)) {
-                                                $availableStatuses = ['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled'];
-                                            }
-                                        @endphp
-                                        @foreach($availableStatuses as $status)
-                                            <option value="{{ $status }}" {{ $ticket->status === $status ? 'selected' : '' }}>
-                                                {{ ucfirst(str_replace('_', ' ', $status)) }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-
-                                    <div x-show="status === 'closed'" x-cloak class="mt-3">
-                                        <label for="closing_remarks" class="block text-xs font-medium text-gray-700">{{ __('Final Remarks') }} <span class="text-red-500">*</span></label>
-                                        <textarea name="closing_remarks" id="closing_remarks" rows="3" :required="status === 'closed'" class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="{{ __('Summarize the resolution. Shown on the service report PDF.') }}">{{ old('closing_remarks', $ticket->closing_remarks) }}</textarea>
-                                        @error('closing_remarks') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
-                                    </div>
-
-                                    <button type="submit" class="mt-2 w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Update Status') }}</button>
-                                </form>
-                            @endif
-
-                            {{-- Reopen Ticket --}}
-                            @if($canReopen && $ticket->status === 'closed')
-                                <div x-data="{ showReopenModal: false }" class="mt-3 border-t border-gray-100 pt-3">
-                                    <button type="button" @click="showReopenModal = true" class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100">
-                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                                        </svg>
-                                        {{ __('Reopen Ticket') }}
-                                    </button>
-                                    @if($ticket->reopened_count > 0)
-                                        <p class="mt-1 text-center text-xs text-gray-400">{{ __('Reopened') }} {{ $ticket->reopened_count }} {{ __('time(s)') }}</p>
-                                    @endif
-
-                                    {{-- Modal --}}
-                                    <div x-show="showReopenModal" x-cloak
-                                        x-transition.opacity
-                                        class="fixed inset-0 z-50 flex items-center justify-center p-4"
-                                        style="background-color: rgba(17,24,39,0.5);"
-                                        @keydown.escape.window="showReopenModal = false"
-                                        @click.self="showReopenModal = false">
-                                        <div x-show="showReopenModal"
-                                            x-transition:enter="ease-out duration-200"
-                                            x-transition:enter-start="opacity-0 translate-y-2 scale-95"
-                                            x-transition:enter-end="opacity-100 translate-y-0 scale-100"
-                                            class="w-full max-w-md rounded-xl bg-white shadow-xl">
-                                            <form method="POST" action="{{ route('tickets.reopen', $ticket) }}">
-                                                @csrf
-                                                <div class="p-6">
-                                                    <div class="flex items-start gap-4">
-                                                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
-                                                            <svg class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                                                            </svg>
-                                                        </div>
-                                                        <div class="min-w-0 flex-1">
-                                                            <h3 class="text-base font-semibold text-gray-900">{{ __('Reopen this ticket?') }}</h3>
-                                                            <p class="mt-2 text-sm text-gray-600">
-                                                                {{ __('Reopening moves the ticket back to') }} <span class="font-medium text-gray-900">{{ __('Open') }}</span>.
-                                                                @if($ticket->reopened_count > 0)
-                                                                    {{ __('Already reopened') }} <span class="font-medium">{{ $ticket->reopened_count }}</span> {{ __('time(s)') }}.
-                                                                @endif
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div class="mt-4">
-                                                        <label for="reopen_reason" class="block text-xs font-medium text-gray-700">{{ __('Reason for reopening') }} <span class="text-gray-400 font-normal">({{ __('optional but recommended') }})</span></label>
-                                                        <textarea name="reason" id="reopen_reason" rows="2" maxlength="500" placeholder="{{ __('e.g. Issue not fully resolved, user reports recurrence, verification failed') }}" class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500"></textarea>
-                                                        <p class="mt-1 text-xs text-gray-500">{{ __('Shown on the ticket history and used in Reopen Analysis reports.') }}</p>
-                                                    </div>
-                                                </div>
-                                                <div class="flex items-center justify-end gap-2 rounded-b-xl border-t border-gray-100 bg-gray-50 px-6 py-3">
-                                                    <button type="button" @click="showReopenModal = false" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
-                                                        {{ __('Cancel') }}
-                                                    </button>
-                                                    <button type="submit" class="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-500">
-                                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                                                        </svg>
-                                                        {{ __('Yes, Reopen Ticket') }}
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                            @endif
-                        </div>
+                    <div id="ticket-status-card" data-fragment="status" data-live-forms>
+                        @include('tickets.partials._status-card')
                     </div>
 
                     {{-- Escalation --}}
@@ -1374,120 +1003,90 @@
             </div>
 
             {{-- Activity History / Audit Logs --}}
-            @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AuditLogs) && $ticket->history->count() > 0)
-            <div class="mt-6 rounded-xl bg-white p-6 shadow-sm">
-                <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">{{ __('Activity History') }}</h4>
-                <div class="flow-root">
-                    <ul class="-mb-8">
-                        @foreach($ticket->history as $entry)
-                        <li>
-                            <div class="relative pb-8">
-                                @if(!$loop->last)
-                                    <span class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
-                                @endif
-                                <div class="relative flex items-start space-x-3">
-                                    <div class="relative">
-                                        @if($entry->action === 'created')
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                                                </svg>
-                                            </div>
-                                        @elseif($entry->action === 'status_changed')
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-                                                </svg>
-                                            </div>
-                                        @elseif($entry->action === 'assigned')
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                                                </svg>
-                                            </div>
-                                        @elseif(in_array($entry->action, ['marked_spam', 'unmarked_spam']))
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                                                </svg>
-                                            </div>
-                                        @elseif(in_array($entry->action, ['billing_updated', 'marked_billable']))
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
-                                                </svg>
-                                            </div>
-                                        @elseif(in_array($entry->action, ['comment_added', 'comment_edited', 'comment_deleted']))
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-                                                </svg>
-                                            </div>
-                                        @elseif(in_array($entry->action, ['task_added', 'task_updated', 'task_status_changed', 'task_deleted']))
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                </svg>
-                                            </div>
-                                        @elseif($entry->action === 'reopened')
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
-                                                </svg>
-                                            </div>
-                                        @elseif(in_array($entry->action, ['escalated']))
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25m5.25-.75L17.25 9m0 0L21 12.75M17.25 9v12" />
-                                                </svg>
-                                            </div>
-                                        @elseif(in_array($entry->action, ['deleted', 'restored']))
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-rose-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                                </svg>
-                                            </div>
-                                        @elseif(in_array($entry->action, ['merged', 'unmerged']))
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-fuchsia-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-fuchsia-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-                                                </svg>
-                                            </div>
-                                        @else
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 ring-8 ring-white">
-                                                <svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-                                                </svg>
-                                            </div>
-                                        @endif
-                                    </div>
-                                    <div class="min-w-0 flex-1">
-                                        <div class="text-sm text-gray-900">
-                                            @if($entry->description)
-                                                {{ $entry->description }}
-                                            @elseif($entry->field_name)
-                                                <span class="font-medium">{{ ucfirst(str_replace('_', ' ', $entry->field_name)) }}</span>
-                                                changed
-                                                @if($entry->old_value)
-                                                    from <span class="font-medium">{{ $entry->old_value }}</span>
-                                                @endif
-                                                to <span class="font-medium">{{ $entry->new_value }}</span>
-                                            @else
-                                                {{ ucfirst(str_replace('_', ' ', $entry->action)) }}
-                                            @endif
-                                        </div>
-                                        <div class="mt-0.5 text-xs text-gray-500">
-                                            {{ $entry->user?->name ?? __('System') }} &middot; @localdt($entry->created_at, 'm/d/Y, g:i A')
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </li>
-                        @endforeach
-                    </ul>
-                </div>
+            <div id="ticket-history" data-fragment="history">
+                @include('tickets.partials._history')
             </div>
-            @endif
         </div>
     </div>
+
+    {{-- Live in-place updates: status changes and task edits re-render only the
+         affected panels (status card, header badges, checklist, audit trail)
+         instead of reloading the whole ticket page. --}}
+    <script>
+        (function () {
+            const fragmentsUrl = @js(route('tickets.fragments', $ticket));
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+            function toast(message, isError) {
+                let el = document.getElementById('ticket-live-toast');
+                if (!el) {
+                    el = document.createElement('div');
+                    el.id = 'ticket-live-toast';
+                    el.className = 'fixed bottom-4 right-4 z-50 rounded-md px-4 py-3 text-sm shadow-lg';
+                    document.body.appendChild(el);
+                }
+                el.className = 'fixed bottom-4 right-4 z-50 rounded-md px-4 py-3 text-sm shadow-lg border '
+                    + (isError ? 'bg-red-100 border-red-400 text-red-700' : 'bg-green-100 border-green-400 text-green-700');
+                el.textContent = message;
+                el.style.display = 'block';
+                clearTimeout(el._timer);
+                el._timer = setTimeout(() => { el.style.display = 'none'; }, 4000);
+            }
+
+            async function refreshFragments() {
+                const res = await fetch(fragmentsUrl, {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin',
+                });
+                if (!res.ok) { window.location.reload(); return; }
+                const data = await res.json();
+                Object.entries(data).forEach(([key, html]) => {
+                    const target = document.querySelector('[data-fragment="' + key + '"]');
+                    if (target) target.innerHTML = html;
+                });
+            }
+
+            document.addEventListener('submit', async function (event) {
+                const form = event.target;
+                if (!(form instanceof HTMLFormElement) || !form.closest('[data-live-forms]')) return;
+                if (form.method.toLowerCase() !== 'post') return;
+
+                event.preventDefault();
+
+                const body = new FormData(form);
+                const submitter = event.submitter;
+                if (submitter && submitter.name) body.append(submitter.name, submitter.value);
+
+                form.querySelectorAll('button, select, input, textarea').forEach(el => el.disabled = true);
+
+                try {
+                    const res = await fetch(form.action, {
+                        method: 'POST',
+                        body,
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+                        credentials: 'same-origin',
+                    });
+
+                    if (res.status === 419 || res.status === 401) { window.location.reload(); return; }
+
+                    const payload = await res.json().catch(() => ({}));
+
+                    if (!res.ok) {
+                        const message = payload.message
+                            || Object.values(payload.errors || {}).flat()[0]
+                            || @js(__('Something went wrong. Please try again.'));
+                        toast(message, true);
+                        return;
+                    }
+
+                    await refreshFragments();
+                    toast(payload.message || @js(__('Updated.')), false);
+                } catch (e) {
+                    toast(@js(__('Network error. Please try again.')), true);
+                } finally {
+                    form.querySelectorAll('button, select, input, textarea').forEach(el => el.disabled = false);
+                }
+            });
+        })();
+    </script>
 </x-app-layout>

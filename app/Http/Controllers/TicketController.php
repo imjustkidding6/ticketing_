@@ -19,6 +19,7 @@ use App\Services\TicketMergeService;
 use App\Services\TicketService;
 use App\Services\TicketWorkflowService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -232,6 +233,31 @@ class TicketController extends Controller
     }
 
     /**
+     * Return freshly rendered pieces of the ticket page (status card, header badges,
+     * task checklist, audit trail) so the browser can swap them in place instead of
+     * reloading the whole page after a status/task update.
+     */
+    public function fragments(Ticket $ticket): JsonResponse
+    {
+        $this->checkPermission('view tickets');
+
+        $accessCheck = $this->scopeByUserDepartments(Ticket::query()->where('id', $ticket->id))->exists();
+        abort_unless($accessCheck, 403);
+
+        $ticket->load([
+            'tasks.assignee',
+            'history' => fn ($q) => $q->with('user')->latest(),
+        ]);
+
+        return response()->json([
+            'badges' => view('tickets.partials._badges', compact('ticket'))->render(),
+            'tasks' => view('tickets.partials._tasks', compact('ticket'))->render(),
+            'status' => view('tickets.partials._status-card', compact('ticket'))->render(),
+            'history' => view('tickets.partials._history', compact('ticket'))->render(),
+        ]);
+    }
+
+    /**
      * Display the specified ticket.
      */
     public function show(Ticket $ticket): View
@@ -397,7 +423,7 @@ class TicketController extends Controller
     /**
      * Change ticket status.
      */
-    public function changeStatus(Request $request, Ticket $ticket): RedirectResponse
+    public function changeStatus(Request $request, Ticket $ticket): RedirectResponse|JsonResponse
     {
         $this->checkPermission('update tickets');
 
@@ -412,8 +438,7 @@ class TicketController extends Controller
         if ($ticket->status === 'closed'
             && ! app(PlanService::class)->currentTenantHasFeature(PlanFeature::TicketReopening)
         ) {
-            return redirect()->route('tickets.show', $ticket)
-                ->with('error', 'Reopening closed tickets requires the Enterprise plan.');
+            return $this->respondOrRedirect('tickets.show', $ticket, 'Reopening closed tickets requires the Enterprise plan.', true);
         }
 
         if ($validated['status'] === 'closed' && ! empty($validated['closing_remarks'])) {
@@ -423,12 +448,10 @@ class TicketController extends Controller
         try {
             $this->ticketService->changeStatus($ticket->fresh(), $validated['status']);
         } catch (\InvalidArgumentException $e) {
-            return redirect()->route('tickets.show', $ticket)
-                ->with('error', $e->getMessage());
+            return $this->respondOrRedirect('tickets.show', $ticket, $e->getMessage(), true);
         }
 
-        return redirect()->route('tickets.show', $ticket)
-            ->with('success', 'Ticket status changed to '.ucfirst(str_replace('_', ' ', $validated['status'])).'.');
+        return $this->respondOrRedirect('tickets.show', $ticket, 'Ticket status changed to '.ucfirst(str_replace('_', ' ', $validated['status'])).'.');
     }
 
     /**

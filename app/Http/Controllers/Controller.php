@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 
 abstract class Controller
@@ -45,5 +47,23 @@ abstract class Controller
         }
 
         return $user->can($permission);
+    }
+
+    /**
+     * Answer an action that a page may perform either with a normal form post or
+     * over fetch(). AJAX callers get JSON (and re-render only the affected part of
+     * the page); everyone else keeps the existing redirect-with-flash behaviour.
+     */
+    protected function respondOrRedirect(string $route, mixed $routeParams, string $message, bool $isError = false): RedirectResponse|JsonResponse
+    {
+        if (request()->expectsJson()) {
+            return response()->json([
+                'ok' => ! $isError,
+                'message' => $message,
+            ], $isError ? 422 : 200);
+        }
+
+        return redirect()->route($route, $routeParams)
+            ->with($isError ? 'error' : 'success', $message);
     }
 }

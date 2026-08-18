@@ -21,7 +21,7 @@ class TicketTaskController extends Controller
     /**
      * Store a new task for a ticket.
      */
-    public function store(Request $request, Ticket $ticket): RedirectResponse
+    public function store(Request $request, Ticket $ticket): RedirectResponse|JsonResponse
     {
         $this->checkPermission('manage ticket tasks');
 
@@ -35,14 +35,13 @@ class TicketTaskController extends Controller
 
         $this->ticketService->addHistory($ticket, 'task_added', null, null, null, 'Task added: '.$validated['description']);
 
-        return redirect()->route('tickets.show', $ticket)
-            ->with('success', 'Task added successfully.');
+        return $this->respondOrRedirect('tickets.show', $ticket, 'Task added successfully.');
     }
 
     /**
      * Update a task.
      */
-    public function update(Request $request, Ticket $ticket, TicketTask $task): RedirectResponse
+    public function update(Request $request, Ticket $ticket, TicketTask $task): RedirectResponse|JsonResponse
     {
         $this->checkPermission('manage ticket tasks');
 
@@ -56,14 +55,13 @@ class TicketTaskController extends Controller
 
         $this->ticketService->addHistory($ticket, 'task_updated', null, null, null, 'Task updated: '.$validated['description']);
 
-        return redirect()->route('tickets.show', $ticket)
-            ->with('success', 'Task updated successfully.');
+        return $this->respondOrRedirect('tickets.show', $ticket, 'Task updated successfully.');
     }
 
     /**
      * Update task status with history tracking.
      */
-    public function updateStatus(Request $request, Ticket $ticket, TicketTask $task): RedirectResponse
+    public function updateStatus(Request $request, Ticket $ticket, TicketTask $task): RedirectResponse|JsonResponse
     {
         $this->checkPermission('manage ticket tasks');
 
@@ -77,14 +75,13 @@ class TicketTaskController extends Controller
 
         $this->ticketService->addHistory($ticket, 'task_status_changed', 'task_status', $oldStatus, $validated['status'], "Task '{$task->description}' changed from {$oldStatus} to {$validated['status']}");
 
-        return redirect()->route('tickets.show', $ticket)
-            ->with('success', 'Task status updated.');
+        return $this->respondOrRedirect('tickets.show', $ticket, 'Task status updated.');
     }
 
     /**
      * Bulk update tasks.
      */
-    public function bulkUpdate(Request $request, Ticket $ticket): RedirectResponse
+    public function bulkUpdate(Request $request, Ticket $ticket): RedirectResponse|JsonResponse
     {
         $this->checkPermission('manage ticket tasks');
 
@@ -105,14 +102,13 @@ class TicketTaskController extends Controller
             ]);
         }
 
-        return redirect()->route('tickets.show', $ticket)
-            ->with('success', 'Tasks updated.');
+        return $this->respondOrRedirect('tickets.show', $ticket, 'Tasks updated.');
     }
 
     /**
      * Bulk update task statuses.
      */
-    public function bulkStatusUpdate(Request $request, Ticket $ticket): RedirectResponse
+    public function bulkStatusUpdate(Request $request, Ticket $ticket): RedirectResponse|JsonResponse
     {
         $this->checkPermission('manage ticket tasks');
 
@@ -130,8 +126,7 @@ class TicketTaskController extends Controller
             }
         }
 
-        return redirect()->route('tickets.show', $ticket)
-            ->with('success', 'Task statuses updated.');
+        return $this->respondOrRedirect('tickets.show', $ticket, 'Task statuses updated.');
     }
 
     /**
@@ -159,7 +154,7 @@ class TicketTaskController extends Controller
     /**
      * Delete a task.
      */
-    public function destroy(Ticket $ticket, TicketTask $task): RedirectResponse
+    public function destroy(Ticket $ticket, TicketTask $task): RedirectResponse|JsonResponse
     {
         $this->checkPermission('manage ticket tasks');
 
@@ -167,8 +162,7 @@ class TicketTaskController extends Controller
 
         $task->delete();
 
-        return redirect()->route('tickets.show', $ticket)
-            ->with('success', 'Task removed.');
+        return $this->respondOrRedirect('tickets.show', $ticket, 'Task removed.');
     }
 
     /**
@@ -176,7 +170,7 @@ class TicketTaskController extends Controller
      * agent-reviewed list. Completed and cancelled tasks are preserved as a
      * record of work already done. Backs the "Polish list with AI" flow.
      */
-    public function applyPolishedTasks(Request $request, Ticket $ticket): RedirectResponse
+    public function applyPolishedTasks(Request $request, Ticket $ticket): RedirectResponse|JsonResponse
     {
         $this->checkPermission('manage ticket tasks');
 
@@ -202,7 +196,6 @@ class TicketTaskController extends Controller
 
         $this->ticketService->addHistory($ticket, 'tasks_polished', null, null, null, 'Task checklist refined with AI ('.count($tasks).' open task'.(count($tasks) === 1 ? '' : 's').')');
 
-        return redirect()->route('tickets.show', $ticket)
-            ->with('success', 'Task checklist updated.');
+        return $this->respondOrRedirect('tickets.show', $ticket, 'Task checklist updated.');
     }
 }
