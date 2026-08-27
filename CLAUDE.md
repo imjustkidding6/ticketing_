@@ -203,6 +203,26 @@ SlaPolicy::factory()->create(['tenant_id' => $tenant->id, 'priority' => null, 'c
 
 SLA policies are managed **per client-tier** (not per-id): routes `sla.index`, `sla.seed-defaults`, `sla.edit-tier`, `sla.update-tier` (`POST /sla/tier/{tier}`), `sla.destroy-tier` (`DELETE /sla/tier/{tier}`), where `{tier}` ∈ `basic|premium|enterprise`. There is no generic `POST /sla` or `PUT /sla/{id}`.
 
+### Timezones & Reporting (CRITICAL)
+
+Storage and `config('app.timezone')` are **UTC**; display goes through `TenantTime::format()` in the tenant's timezone. The trap is filtering: `whereDate(..., today())`, `now()->startOfMonth()` and `Carbon::parse($date)->startOfDay()` all evaluate on the *server's* calendar, so a report could exclude a row it then printed as being inside the range.
+
+Use `App\Support\TenantTime` for every date boundary that reaches a query:
+
+| Helper | Returns |
+|--------|---------|
+| `TenantTime::now()` | now, in the tenant's timezone |
+| `TenantTime::startOfDay($d)` / `endOfDay($d)` | the UTC instant of a tenant-local day boundary (null = today) |
+| `TenantTime::dayRange($d)` | `[from, to]` UTC pair — the replacement for `whereDate()` |
+| `TenantTime::startOfWeek()` / `startOfMonth()` / `startOfDaysAgo(n)` | tenant-local boundaries as UTC |
+| `TenantTime::sqlLocal('created_at')` | SQL expression shifting a UTC column into tenant-local time, for `GROUP BY DATE(...)` |
+
+A bare date string is parsed **as** a tenant-local date; a real instant is converted, preserving the moment.
+
+**When iterating buckets to build labels, walk tenant-local time** (`$from->copy()->setTimezone(TenantTime::timezone())`), not the UTC instants — the SQL groups on local dates and UTC-derived keys will silently never match, producing an all-zero chart.
+
+`sqlLocal()` deliberately avoids `CONVERT_TZ`, which returns NULL when MySQL's timezone tables aren't loaded. The trade-off is that it applies the tenant's *current* UTC offset, so a range spanning a DST change buckets those rows by today's offset. Zones without DST are unaffected.
+
 ### Queue & Cache
 
 Dev default (`.env.example`): `QUEUE_CONNECTION=database`, `CACHE_STORE=database`, `SESSION_DRIVER=database`. Redis and SQS are opt-in and typically used in production. `composer run dev` starts a queue worker, so queued notifications will be processed locally. If you switch `CACHE_STORE` mid-session, clear the plan-feature cache (`PlanService::clearCache`) since it relies on whatever store is active.

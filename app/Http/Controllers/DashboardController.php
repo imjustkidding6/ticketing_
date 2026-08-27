@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Tenant;
 use App\Models\Ticket;
+use App\Support\TenantTime;
 use App\Models\TicketHistory;
 use App\Models\TicketTask;
 use App\Services\OnboardingService;
@@ -90,7 +91,7 @@ class DashboardController extends Controller
                 ->notSpam()
                 ->where('assigned_to', $userId)
                 ->where('status', 'closed')
-                ->where('closed_at', '>=', now()->startOfMonth())
+                ->where('closed_at', '>=', TenantTime::startOfMonth())
                 ->count(),
             'total_closed' => Ticket::query()->notMerged()->notSpam()->where('assigned_to', $userId)->where('status', 'closed')->count(),
         ];
@@ -111,7 +112,7 @@ class DashboardController extends Controller
                 ->notSpam()
                 ->where('assigned_to', $userId)
                 ->where('status', 'closed')
-                ->whereDate('closed_at', today())
+                ->whereBetween('closed_at', TenantTime::dayRange())
                 ->count(),
             'avg_resolution_hours' => round($myClosedRecent->avg(fn ($t) => $t->getEffectiveResolutionTimeHours()) ?? 0, 1),
             'avg_work_hours' => round(
@@ -208,14 +209,15 @@ class DashboardController extends Controller
             ->notMerged()
             ->notSpam()
             ->where('assigned_to', $userId)
-            ->where('created_at', '>=', now()->subDays(13)->startOfDay())
-            ->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count'))
-            ->groupBy(DB::raw('DATE(created_at)'))
+            ->where('created_at', '>=', TenantTime::startOfDaysAgo(13))
+            ->select(DB::raw('DATE('.TenantTime::sqlLocal('created_at').') as date'), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw('DATE('.TenantTime::sqlLocal('created_at').')'))
             ->pluck('count', 'date');
 
         $trends = [];
         for ($i = 13; $i >= 0; $i--) {
-            $date = Carbon::now()->subDays($i)->toDateString();
+            // Keys must be tenant-local dates to match the grouping above.
+            $date = TenantTime::now()->subDays($i)->toDateString();
             $trends[] = [
                 'date' => $date,
                 'count' => $counts[$date] ?? 0,

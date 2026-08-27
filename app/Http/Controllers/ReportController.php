@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\TenantTime;
 use App\Models\AppSetting;
 use App\Models\Client;
 use App\Models\Department;
@@ -340,8 +341,8 @@ class ReportController extends Controller
     {
         $this->checkPermission('view sla reports');
 
-        $from = $request->input('from') ? Carbon::parse($request->input('from')) : now()->subDays(30);
-        $to = $request->input('to') ? Carbon::parse($request->input('to')) : now();
+        $from = $request->input('from') ? TenantTime::startOfDay($request->input('from')) : TenantTime::startOfDaysAgo(30);
+        $to = $request->input('to') ? TenantTime::endOfDay($request->input('to')) : TenantTime::now();
 
         $report = $this->slaService->getComplianceReport($from, $to);
 
@@ -410,8 +411,8 @@ class ReportController extends Controller
     {
         $this->checkPermission('view sla reports');
 
-        $from = $request->input('from') ? Carbon::parse($request->input('from')) : now()->subDays(30);
-        $to = $request->input('to') ? Carbon::parse($request->input('to')) : now();
+        $from = $request->input('from') ? TenantTime::startOfDay($request->input('from')) : TenantTime::startOfDaysAgo(30);
+        $to = $request->input('to') ? TenantTime::endOfDay($request->input('to')) : TenantTime::now();
 
         $report = $this->slaService->getComplianceReport($from, $to);
 

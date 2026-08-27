@@ -9,7 +9,6 @@ use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\User;
 use App\Support\TenantTime;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -31,11 +30,11 @@ class ReportService
         $query->notMerged()->notSpam();
 
         if (! empty($filters['from'])) {
-            $query->where('created_at', '>=', Carbon::parse($filters['from'])->startOfDay());
+            $query->where('created_at', '>=', TenantTime::startOfDay($filters['from']));
         }
 
         if (! empty($filters['to'])) {
-            $query->where('created_at', '<=', Carbon::parse($filters['to'])->endOfDay());
+            $query->where('created_at', '<=', TenantTime::endOfDay($filters['to']));
         }
 
         if (! empty($filters['status'])) {
@@ -217,11 +216,11 @@ class ReportService
             ->whereNotNull('closed_at');
 
         if (! empty($filters['from'])) {
-            $query->where('closed_at', '>=', Carbon::parse($filters['from'])->startOfDay());
+            $query->where('closed_at', '>=', TenantTime::startOfDay($filters['from']));
         }
 
         if (! empty($filters['to'])) {
-            $query->where('closed_at', '<=', Carbon::parse($filters['to'])->endOfDay());
+            $query->where('closed_at', '<=', TenantTime::endOfDay($filters['to']));
         }
 
         if (! empty($filters['department_id'])) {
@@ -270,8 +269,8 @@ class ReportService
      */
     public function getDepartmentReport(array $filters = []): Collection
     {
-        $from = ! empty($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30);
-        $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
+        $from = ! empty($filters['from']) ? TenantTime::startOfDay($filters['from']) : TenantTime::startOfDaysAgo(30);
+        $to = ! empty($filters['to']) ? TenantTime::endOfDay($filters['to']) : TenantTime::now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
             $q->whereBetween('created_at', [$from, $to])
@@ -322,8 +321,8 @@ class ReportService
      */
     public function getAgentPerformanceReport(array $filters = []): Collection
     {
-        $from = ! empty($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30);
-        $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
+        $from = ! empty($filters['from']) ? TenantTime::startOfDay($filters['from']) : TenantTime::startOfDaysAgo(30);
+        $to = ! empty($filters['to']) ? TenantTime::endOfDay($filters['to']) : TenantTime::now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
             $q->whereBetween('tickets.created_at', [$from, $to])
@@ -410,8 +409,8 @@ class ReportService
      */
     public function getCategoryReport(array $filters = []): Collection
     {
-        $from = ! empty($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30);
-        $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
+        $from = ! empty($filters['from']) ? TenantTime::startOfDay($filters['from']) : TenantTime::startOfDaysAgo(30);
+        $to = ! empty($filters['to']) ? TenantTime::endOfDay($filters['to']) : TenantTime::now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
             $q->whereBetween('created_at', [$from, $to])
@@ -460,8 +459,8 @@ class ReportService
      */
     public function getClientReport(array $filters = []): Collection
     {
-        $from = ! empty($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30);
-        $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
+        $from = ! empty($filters['from']) ? TenantTime::startOfDay($filters['from']) : TenantTime::startOfDaysAgo(30);
+        $to = ! empty($filters['to']) ? TenantTime::endOfDay($filters['to']) : TenantTime::now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
             $q->whereBetween('created_at', [$from, $to])
@@ -509,8 +508,8 @@ class ReportService
      */
     public function getProductReport(array $filters = []): Collection
     {
-        $from = ! empty($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30);
-        $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
+        $from = ! empty($filters['from']) ? TenantTime::startOfDay($filters['from']) : TenantTime::startOfDaysAgo(30);
+        $to = ! empty($filters['to']) ? TenantTime::endOfDay($filters['to']) : TenantTime::now();
 
         $ticketFilter = function ($q) use ($filters, $from, $to) {
             $q->whereBetween('tickets.created_at', [$from, $to])
@@ -562,23 +561,28 @@ class ReportService
      */
     public function getTrend(array $filters = [], string $groupBy = 'daily'): array
     {
-        $from = ! empty($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30)->startOfDay();
-        $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now()->endOfDay();
+        $from = ! empty($filters['from']) ? TenantTime::startOfDay($filters['from']) : TenantTime::startOfDaysAgo(30);
+        $to = ! empty($filters['to']) ? TenantTime::endOfDay($filters['to']) : TenantTime::endOfDay();
 
         $query = $this->applyFilters(Ticket::query(), $filters);
 
+        // Bucket on the tenant's calendar, not the server's — otherwise a ticket
+        // created at 07:00 in a UTC+8 workspace is counted on the previous day
+        // while the report displays it as today.
+        $local = TenantTime::sqlLocal('created_at');
+
         $selectExpr = match ($groupBy) {
-            'weekly' => 'YEARWEEK(created_at, 1) as period, MIN(DATE(created_at)) as period_start',
-            'monthly' => "DATE_FORMAT(created_at, '%Y-%m') as period, DATE_FORMAT(created_at, '%Y-%m') as period_start",
-            'yearly' => 'YEAR(created_at) as period, YEAR(created_at) as period_start',
-            default => 'DATE(created_at) as period, DATE(created_at) as period_start',
+            'weekly' => "YEARWEEK({$local}, 1) as period, MIN(DATE({$local})) as period_start",
+            'monthly' => "DATE_FORMAT({$local}, '%Y-%m') as period, DATE_FORMAT({$local}, '%Y-%m') as period_start",
+            'yearly' => "YEAR({$local}) as period, YEAR({$local}) as period_start",
+            default => "DATE({$local}) as period, DATE({$local}) as period_start",
         };
 
         $groupExpr = match ($groupBy) {
-            'weekly' => 'YEARWEEK(created_at, 1)',
-            'monthly' => "DATE_FORMAT(created_at, '%Y-%m')",
-            'yearly' => 'YEAR(created_at)',
-            default => 'DATE(created_at)',
+            'weekly' => "YEARWEEK({$local}, 1)",
+            'monthly' => "DATE_FORMAT({$local}, '%Y-%m')",
+            'yearly' => "YEAR({$local})",
+            default => "DATE({$local})",
         };
 
         $results = (clone $query)
@@ -591,31 +595,38 @@ class ReportService
 
         $trend = [];
 
+        // The SQL above groups on tenant-local dates, so the labels have to be
+        // generated in the tenant's timezone too — iterating over UTC instants
+        // would produce keys that never match.
+        $tz = TenantTime::timezone();
+        $cursorFrom = $from->copy()->setTimezone($tz);
+        $cursorTo = $to->copy()->setTimezone($tz);
+
         if ($groupBy === 'daily') {
-            $current = $from->copy();
-            while ($current->lte($to)) {
+            $current = $cursorFrom->copy();
+            while ($current->lte($cursorTo)) {
                 $key = $current->toDateString();
                 $trend[] = ['label' => $key, 'count' => (int) ($results[$key]->count ?? 0)];
                 $current->addDay();
             }
         } elseif ($groupBy === 'weekly') {
-            $current = $from->copy()->startOfWeek();
-            while ($current->lte($to)) {
+            $current = $cursorFrom->copy()->startOfWeek();
+            while ($current->lte($cursorTo)) {
                 $key = $current->format('oW');
                 $label = 'W'.$current->isoFormat('W').' '.$current->format('M/d');
                 $trend[] = ['label' => $label, 'count' => (int) ($results[$key]->count ?? 0)];
                 $current->addWeek();
             }
         } elseif ($groupBy === 'monthly') {
-            $current = $from->copy()->startOfMonth();
-            while ($current->lte($to)) {
+            $current = $cursorFrom->copy()->startOfMonth();
+            while ($current->lte($cursorTo)) {
                 $key = $current->format('Y-m');
                 $trend[] = ['label' => $current->format('M Y'), 'count' => (int) ($results[$key]->count ?? 0)];
                 $current->addMonth();
             }
         } elseif ($groupBy === 'yearly') {
-            $current = $from->copy()->startOfYear();
-            while ($current->lte($to)) {
+            $current = $cursorFrom->copy()->startOfYear();
+            while ($current->lte($cursorTo)) {
                 $key = (string) $current->year;
                 $trend[] = ['label' => $key, 'count' => (int) ($results[$key]->count ?? 0)];
                 $current->addYear();
@@ -633,8 +644,8 @@ class ReportService
      */
     public function getTopDepartments(array $filters = [], int $limit = 5): Collection
     {
-        $from = ! empty($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30);
-        $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
+        $from = ! empty($filters['from']) ? TenantTime::startOfDay($filters['from']) : TenantTime::startOfDaysAgo(30);
+        $to = ! empty($filters['to']) ? TenantTime::endOfDay($filters['to']) : TenantTime::now();
 
         return Department::query()
             ->withCount(['tickets as total' => function ($q) use ($filters, $from, $to) {
@@ -668,8 +679,8 @@ class ReportService
      */
     public function getTopClients(array $filters = [], int $limit = 5): Collection
     {
-        $from = ! empty($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30);
-        $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
+        $from = ! empty($filters['from']) ? TenantTime::startOfDay($filters['from']) : TenantTime::startOfDaysAgo(30);
+        $to = ! empty($filters['to']) ? TenantTime::endOfDay($filters['to']) : TenantTime::now();
 
         return Client::query()
             ->withCount(['tickets as total' => function ($q) use ($filters, $from, $to) {
@@ -703,8 +714,8 @@ class ReportService
      */
     public function getTopAgents(array $filters = [], int $limit = 5): Collection
     {
-        $from = ! empty($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30);
-        $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now();
+        $from = ! empty($filters['from']) ? TenantTime::startOfDay($filters['from']) : TenantTime::startOfDaysAgo(30);
+        $to = ! empty($filters['to']) ? TenantTime::endOfDay($filters['to']) : TenantTime::now();
 
         return User::query()
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', session('current_tenant_id')))
@@ -777,8 +788,8 @@ class ReportService
      */
     public function getEntityTrend(array $filters = [], string $groupBy = 'daily', string $entity = 'department', int $limit = 5): array
     {
-        $from = ! empty($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30)->startOfDay();
-        $to = ! empty($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now()->endOfDay();
+        $from = ! empty($filters['from']) ? TenantTime::startOfDay($filters['from']) : TenantTime::startOfDaysAgo(30);
+        $to = ! empty($filters['to']) ? TenantTime::endOfDay($filters['to']) : TenantTime::endOfDay();
 
         $entityConfig = match ($entity) {
             'department' => ['column' => 'department_id', 'model' => Department::class, 'nameField' => 'name'],
@@ -823,15 +834,21 @@ class ReportService
             default => 'Y-m-d',
         };
 
+        // Labels and the SQL buckets below both use the tenant's calendar, so the
+        // cursor walks tenant-local time rather than UTC instants.
+        $tz = TenantTime::timezone();
+        $cursorFrom = $from->copy()->setTimezone($tz);
+        $cursorTo = $to->copy()->setTimezone($tz);
+
         $labels = [];
         $current = match ($groupBy) {
-            'weekly' => $from->copy()->startOfWeek(),
-            'monthly' => $from->copy()->startOfMonth(),
-            'yearly' => $from->copy()->startOfYear(),
-            default => $from->copy(),
+            'weekly' => $cursorFrom->copy()->startOfWeek(),
+            'monthly' => $cursorFrom->copy()->startOfMonth(),
+            'yearly' => $cursorFrom->copy()->startOfYear(),
+            default => $cursorFrom->copy(),
         };
 
-        while ($current->lte($to)) {
+        while ($current->lte($cursorTo)) {
             $labels[] = match ($groupBy) {
                 'weekly' => 'W'.$current->isoFormat('W').' '.$current->format('M/d'),
                 'monthly' => $current->format('M Y'),
@@ -846,11 +863,14 @@ class ReportService
             };
         }
 
+        // Same tenant-local bucketing as getTrend(), for the same reason.
+        $local = TenantTime::sqlLocal('created_at');
+
         $groupExpr = match ($groupBy) {
-            'weekly' => 'YEARWEEK(created_at, 1)',
-            'monthly' => "DATE_FORMAT(created_at, '%Y-%m')",
-            'yearly' => 'YEAR(created_at)',
-            default => 'DATE(created_at)',
+            'weekly' => "YEARWEEK({$local}, 1)",
+            'monthly' => "DATE_FORMAT({$local}, '%Y-%m')",
+            'yearly' => "YEAR({$local})",
+            default => "DATE({$local})",
         };
 
         $series = [];
@@ -868,12 +888,12 @@ class ReportService
 
                 $data = [];
                 $c = match ($groupBy) {
-                    'weekly' => $from->copy()->startOfWeek(),
-                    'monthly' => $from->copy()->startOfMonth(),
-                    'yearly' => $from->copy()->startOfYear(),
-                    default => $from->copy(),
+                    'weekly' => $cursorFrom->copy()->startOfWeek(),
+                    'monthly' => $cursorFrom->copy()->startOfMonth(),
+                    'yearly' => $cursorFrom->copy()->startOfYear(),
+                    default => $cursorFrom->copy(),
                 };
-                while ($c->lte($to)) {
+                while ($c->lte($cursorTo)) {
                     $key = $c->format($periodFormat);
                     $data[] = (int) ($counts[$key] ?? 0);
                     $c = match ($groupBy) {
@@ -898,12 +918,12 @@ class ReportService
 
                 $data = [];
                 $c = match ($groupBy) {
-                    'weekly' => $from->copy()->startOfWeek(),
-                    'monthly' => $from->copy()->startOfMonth(),
-                    'yearly' => $from->copy()->startOfYear(),
-                    default => $from->copy(),
+                    'weekly' => $cursorFrom->copy()->startOfWeek(),
+                    'monthly' => $cursorFrom->copy()->startOfMonth(),
+                    'yearly' => $cursorFrom->copy()->startOfYear(),
+                    default => $cursorFrom->copy(),
                 };
-                while ($c->lte($to)) {
+                while ($c->lte($cursorTo)) {
                     $key = $c->format($periodFormat);
                     $data[] = (int) ($counts[$key] ?? 0);
                     $c = match ($groupBy) {

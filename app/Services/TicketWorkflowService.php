@@ -6,6 +6,7 @@ use App\Exceptions\TicketAlreadyAssignedException;
 use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Support\TenantTime;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -165,8 +166,8 @@ class TicketWorkflowService
             'assigned' => $base()->where('status', 'assigned')->count(),
             'in_progress' => $base()->where('status', 'in_progress')->count(),
             'on_hold' => $base()->where('status', 'on_hold')->count(),
-            'closed_today' => $base()->where('status', 'closed')->whereDate('closed_at', today())->count(),
-            'closed_this_week' => $base()->where('status', 'closed')->where('closed_at', '>=', now()->startOfWeek())->count(),
+            'closed_today' => $base()->where('status', 'closed')->whereBetween('closed_at', TenantTime::dayRange())->count(),
+            'closed_this_week' => $base()->where('status', 'closed')->where('closed_at', '>=', TenantTime::startOfWeek())->count(),
             'overdue' => $base()->whereNotNull('resolution_due_at')->where('resolution_due_at', '<', now())->whereNotIn('status', ['closed', 'cancelled'])->count(),
             'unassigned' => $base()->whereNull('assigned_to')->whereNotIn('status', ['closed', 'cancelled'])->count(),
         ];

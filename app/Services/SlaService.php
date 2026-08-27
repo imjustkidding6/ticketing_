@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\SlaPolicy;
 use App\Models\Ticket;
+use App\Support\TenantTime;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -115,8 +116,8 @@ class SlaService
      */
     public function getComplianceReport(?Carbon $from = null, ?Carbon $to = null): array
     {
-        $from = $from ?? now()->subDays(30);
-        $to = $to ?? now();
+        $from = $from ?? TenantTime::startOfDaysAgo(30);
+        $to = $to ?? TenantTime::now();
 
         $closedTickets = Ticket::query()
             ->notMerged()
