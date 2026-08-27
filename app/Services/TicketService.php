@@ -501,8 +501,6 @@ class TicketService
             return false;
         }
 
-        TenantMailService::configure();
-
         return true;
     }
 
@@ -526,10 +524,21 @@ class TicketService
      */
     private function afterResponse(\Closure $callback): void
     {
+        // Callbacks configure the mailer for a specific tenant. Always restore the
+        // application defaults afterwards, or the next tenant handled by this
+        // worker inherits the previous tenant's SMTP server and From address.
+        $guarded = function () use ($callback) {
+            try {
+                $callback();
+            } finally {
+                TenantMailService::reset();
+            }
+        };
+
         if (app()->runningUnitTests()) {
-            $callback();
+            $guarded();
         } else {
-            dispatch($callback)->afterResponse();
+            dispatch($guarded)->afterResponse();
         }
     }
 }

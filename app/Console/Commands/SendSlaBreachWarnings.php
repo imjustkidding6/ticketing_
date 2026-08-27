@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Notifications\SlaBreachWarningNotification;
 use App\Services\PlanService;
 use App\Services\SlaService;
+use App\Services\TenantMailService;
 use Illuminate\Console\Command;
 
 class SendSlaBreachWarnings extends Command
@@ -40,7 +41,13 @@ class SendSlaBreachWarnings extends Command
 
             $breachType = $ticket->isResponseOverdue() ? 'response' : 'resolution';
 
-            $ticket->assignee->notify(new SlaBreachWarningNotification($ticket, $breachType));
+            // This loop crosses tenants, so the mailer must be configured for each
+            // one and restored afterwards — otherwise every tenant after the first
+            // sends through whichever SMTP server was configured before it.
+            TenantMailService::usingTenant(
+                $ticket->tenant_id,
+                fn () => $ticket->assignee->notify(new SlaBreachWarningNotification($ticket, $breachType)),
+            );
 
             $ticket->update(['sla_breach_notified_at' => now()]);
 
