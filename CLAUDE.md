@@ -45,7 +45,6 @@ Routes are registered in `bootstrap/app.php`. The `then:` closure in `withRoutin
 - `routes/web.php` — Auth, admin panel, home, profile, tenant switching
 - `routes/tenant.php` — All tenant-scoped routes (dashboard, tickets, clients, settings, reports, public portal)
 - `routes/api.php` — Token-authenticated REST API under `/api/v1/` (see **REST API (v1)**). Loaded via the `api:` key in `withRouting()`; the tenant is resolved from the bearer token, not the URL slug.
-- `routes/portal.php` — **Dead code.** The old `/portal/{slug}/...` structure is not loaded anywhere; portal routes now live inside `routes/tenant.php` under `/{slug}/`. Do not edit `portal.php` expecting it to take effect. Verify in `bootstrap/app.php` if in doubt.
 
 Tenant routes resolve the tenant from the URL slug via `EnsureTenantSession` middleware, which sets `session('current_tenant_id')` and syncs the Spatie Permission team context.
 

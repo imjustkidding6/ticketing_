@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\PlanFeature;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class PlanService
 {
@@ -36,7 +37,25 @@ class PlanService
                     return [];
                 }
 
-                return $plan->features ?? [];
+                // The column is cast to array, but a malformed or double-encoded
+                // value comes back as a string and would fatal on the declared
+                // array return type — taking down every request for the tenant.
+                // Degrade to no features instead, and say so in the log.
+                $features = $plan->features;
+
+                if (! is_array($features)) {
+                    if ($features !== null) {
+                        Log::warning('Plan features are not an array; treating the tenant as having none.', [
+                            'plan_id' => $plan->id,
+                            'tenant_id' => $tenant->id,
+                            'type' => get_debug_type($features),
+                        ]);
+                    }
+
+                    return [];
+                }
+
+                return $features;
             }
         );
     }

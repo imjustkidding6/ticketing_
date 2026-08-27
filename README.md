@@ -95,7 +95,6 @@ resources/views/
 
 routes/
 ├── web.php             # Main app + admin routes
-├── portal.php          # Client portal routes
 ├── auth.php            # Authentication routes
 └── console.php         # Console commands
 ```

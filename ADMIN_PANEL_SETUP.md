@@ -372,7 +372,6 @@ app/
 | --------------------- | -------------------------------------------------------------------- |
 | `routes/web.php`    | Admin panel routes, auth routes, home/registration                   |
 | `routes/tenant.php` | All`/{slug}/...` tenant routes (dashboard, tickets, clients, etc.) |
-| `routes/portal.php` | Client portal routes under`/{tenant}/portal/...`                   |
 
 ---
 
