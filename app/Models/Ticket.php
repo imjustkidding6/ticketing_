@@ -534,6 +534,9 @@ class Ticket extends Model
         ?User $user = null,
     ): TicketHistory {
         return TicketHistory::create([
+            // Explicit rather than via the BelongsToTenant creating hook, which
+            // has no session to read from in jobs and scheduled commands.
+            'tenant_id' => $this->tenant_id,
             'ticket_id' => $this->id,
             'user_id' => $user?->id ?? auth()->id(),
             'action' => $action,

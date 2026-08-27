@@ -550,6 +550,10 @@ class TicketService
         ?array $metadata = null,
     ): TicketHistory {
         return TicketHistory::create([
+            // Set explicitly rather than relying on the BelongsToTenant creating
+            // hook: history is also written from queued jobs and scheduled
+            // commands, where there is no session to resolve a tenant from.
+            'tenant_id' => $ticket->tenant_id,
             'ticket_id' => $ticket->id,
             'user_id' => Auth::id(),
             'action' => $action,

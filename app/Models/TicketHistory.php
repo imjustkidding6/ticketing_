@@ -2,15 +2,19 @@
 
 namespace App\Models;
 
+use App\Models\Traits\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TicketHistory extends Model
 {
+    use BelongsToTenant;
+
     /**
      * @var list<string>
      */
     protected $fillable = [
+        'tenant_id',
         'ticket_id',
         'user_id',
         'action',

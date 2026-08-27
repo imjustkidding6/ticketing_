@@ -55,6 +55,9 @@ class DashboardController extends Controller
         $userId = Auth::id();
 
         /** @var LengthAwarePaginator $activity */
+        // TicketHistory is tenant-scoped, so this returns only the current
+        // workspace's rows. Filtering by user_id alone used to surface the
+        // user's activity from every workspace they belong to.
         $activity = TicketHistory::query()
             ->with(['ticket:id,ticket_number,subject', 'user:id,name'])
             ->where('user_id', $userId)
