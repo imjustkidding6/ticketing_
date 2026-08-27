@@ -3,22 +3,14 @@
 namespace App\Services;
 
 use App\Exceptions\TicketAlreadyAssignedException;
+use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class TicketWorkflowService
 {
-    /** Valid status transitions */
-    private const TRANSITIONS = [
-        'open' => ['assigned', 'in_progress', 'on_hold', 'cancelled', 'closed'],
-        'assigned' => ['in_progress', 'on_hold', 'cancelled', 'closed', 'open'],
-        'in_progress' => ['on_hold', 'closed', 'cancelled', 'open'],
-        'on_hold' => ['open', 'in_progress', 'closed', 'cancelled'],
-        'cancelled' => ['open'],
-        'closed' => ['open'],
-    ];
-
     public function __construct(
         private TicketService $ticketService,
     ) {}
@@ -30,7 +22,7 @@ class TicketWorkflowService
      */
     public function getValidTransitions(Ticket $ticket): array
     {
-        return self::TRANSITIONS[$ticket->status] ?? [];
+        return $ticket->allowedTransitions();
     }
 
     /**
@@ -38,41 +30,36 @@ class TicketWorkflowService
      */
     public function isValidTransition(Ticket $ticket, string $newStatus): bool
     {
-        return in_array($newStatus, $this->getValidTransitions($ticket));
+        return $ticket->canTransitionTo($newStatus);
     }
 
     /**
-     * Update ticket status with validation and side effects.
+     * Update ticket status, enforcing the transition map.
+     *
+     * @throws InvalidStatusTransitionException when the move isn't allowed
      */
     public function updateStatus(Ticket $ticket, string $newStatus, ?string $notes = null): bool
     {
-        if (! $this->isValidTransition($ticket, $newStatus)) {
+        if ($ticket->status === $newStatus) {
             return false;
         }
 
-        // Prevent duplicate status changes within 5 seconds
+        if (! $this->isValidTransition($ticket, $newStatus)) {
+            throw new InvalidStatusTransitionException($ticket->status, $newStatus);
+        }
+
+        // Collapse a double-submit of the same transition. Distinct from a rule
+        // violation: the caller asked for something legal that has just happened,
+        // so report "nothing to do" rather than raising.
         $cacheKey = "ticket_status_{$ticket->id}_{$newStatus}";
         if (Cache::has($cacheKey)) {
             return false;
         }
         Cache::put($cacheKey, true, 5);
 
-        // Cannot close without at least one completed/cancelled task (if tasks exist)
-        if ($newStatus === 'closed' && $ticket->tasks()->count() > 0) {
-            $incompleteTasks = $ticket->tasks()
-                ->whereNotIn('status', ['completed', 'cancelled'])
-                ->count();
-            if ($incompleteTasks > 0) {
-                return false;
-            }
-        }
-
+        // changeStatus() enforces the task rule and stamps first_response_at
+        // and in_progress_at; don't duplicate either here.
         $this->ticketService->changeStatus($ticket, $newStatus);
-
-        // Set first_response_at on first move to in_progress
-        if ($newStatus === 'in_progress' && ! $ticket->first_response_at) {
-            $ticket->update(['first_response_at' => now()]);
-        }
 
         return true;
     }
@@ -133,18 +120,33 @@ class TicketWorkflowService
     /**
      * Reopen a closed/cancelled ticket.
      */
-    public function reopenTicket(Ticket $ticket): bool
+    public function reopenTicket(Ticket $ticket, ?string $reason = null): bool
     {
         if (! in_array($ticket->status, ['closed', 'cancelled'])) {
             return false;
         }
 
-        $ticket->update([
-            'closed_at' => null,
-            'reopened_count' => $ticket->reopened_count + 1,
-        ]);
+        $nextCount = $ticket->reopened_count + 1;
 
-        $this->ticketService->changeStatus($ticket->fresh(), 'open');
+        DB::transaction(function () use ($ticket, $reason, $nextCount) {
+            $description = 'Ticket reopened (cycle '.($nextCount + 1).')';
+            if ($reason) {
+                $description .= ' — reason: '.$reason;
+            }
+
+            $this->ticketService->addHistory(
+                $ticket, 'reopened', 'status', $ticket->status, 'open', $description
+            );
+
+            $ticket->update([
+                'reopened_count' => $nextCount,
+                'last_reopened_at' => now(),
+                'last_reopen_reason' => $reason,
+            ]);
+
+            // changeStatus() clears closed_at on the way out of closed.
+            $this->ticketService->changeStatus($ticket->fresh(), 'open');
+        });
 
         return true;
     }

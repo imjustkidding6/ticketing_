@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Enums\PlanFeature;
 use App\Models\AppSetting;
 use App\Models\Client;
+use App\Models\Scopes\TenantScope;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
+use App\Exceptions\InvalidStatusTransitionException;
 use App\Exceptions\TicketAlreadyAssignedException;
 use App\Models\Ticket;
 use App\Models\TicketAssignment;
@@ -124,6 +126,11 @@ class TicketService
         $data['created_by'] = $data['created_by'] ?? Auth::id();
         $data['status'] = 'open';
 
+        // BelongsToTenant fills tenant_id on `creating`, which is far too late:
+        // the guards below run first and silently skipped every web request
+        // because $data['tenant_id'] was still empty.
+        $data['tenant_id'] = $data['tenant_id'] ?? TenantScope::getCurrentTenantId();
+
         if (! empty($data['priority']) && ! empty($data['tenant_id'])) {
             $tenant = Tenant::find($data['tenant_id']);
             if ($tenant) {
@@ -223,6 +230,7 @@ class TicketService
         $productIds = $data['product_ids'] ?? null;
         unset($data['product_ids']);
 
+        $originalPriority = $ticket->priority;
         $nextAssignee = array_key_exists('assigned_to', $data) ? $data['assigned_to'] : $ticket->assigned_to;
         $nextPriority = array_key_exists('priority', $data) ? $data['priority'] : $ticket->priority;
 
@@ -258,6 +266,12 @@ class TicketService
 
         if ($productIds !== null) {
             $ticket->products()->sync($productIds);
+        }
+
+        // A priority change through the edit form must move the deadlines for the
+        // same reason changePriority() does.
+        if (array_key_exists('priority', $data) && $data['priority'] !== $originalPriority) {
+            $this->slaService->assignSla($ticket->fresh());
         }
 
         if ($status !== null) {
@@ -350,6 +364,14 @@ class TicketService
     public function changeStatus(Ticket $ticket, string $status): void
     {
         $oldStatus = $ticket->status;
+
+        // The transition map is enforced here rather than in a caller, so that
+        // every entry point — controller, edit form, API, assistant tools —
+        // is covered by the same rule.
+        if ($oldStatus !== $status && ! $ticket->canTransitionTo($status)) {
+            throw new InvalidStatusTransitionException($oldStatus, $status);
+        }
+
         $updates = ['status' => $status];
 
         if ($status === 'in_progress' && ! $ticket->in_progress_at) {
@@ -376,9 +398,17 @@ class TicketService
             }
         }
 
+        // Leaving closed: drop the closure timestamp, or the ticket stays open
+        // while every closed_at-keyed report still counts it as resolved.
+        if ($oldStatus === 'closed' && $status !== 'closed') {
+            $updates['closed_at'] = null;
+        }
+
         if ($status === 'on_hold') {
             $updates['hold_started_at'] = now();
         }
+
+        $holdMinutes = 0;
 
         if ($ticket->status === 'on_hold' && $status !== 'on_hold' && $ticket->hold_started_at) {
             $holdMinutes = max(0, (int) $ticket->hold_started_at->diffInMinutes(now()));
@@ -387,6 +417,13 @@ class TicketService
         }
 
         $ticket->update($updates);
+
+        // Push the deadlines out by the hold period, so the breach scheduler's
+        // wall-clock check and the report's hold-excluding calculation agree.
+        if ($holdMinutes > 0) {
+            $this->slaService->extendForHold($ticket->fresh(), $holdMinutes);
+            $ticket->refresh();
+        }
 
         $this->addHistory($ticket, 'status_changed', 'status', $oldStatus, $status, "Status changed from {$oldStatus} to {$status}.");
 
@@ -434,6 +471,12 @@ class TicketService
 
         $oldPriority = $ticket->priority;
         $ticket->update(['priority' => $priority]);
+
+        // Targets differ per priority, so the deadlines have to be recomputed —
+        // otherwise a ticket triaged up to critical keeps its low-priority SLA.
+        $this->slaService->assignSla($ticket->fresh());
+        $ticket->refresh();
+
         $this->addHistory($ticket, 'updated', 'priority', $oldPriority, $priority, "Priority changed from {$oldPriority} to {$priority}.");
     }
 

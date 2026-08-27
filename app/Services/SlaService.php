@@ -20,11 +20,45 @@ class SlaService
             return;
         }
 
+        // Time already spent on hold is not the team's to answer for, so it is
+        // added to the deadline. This keeps the stored due date and the report's
+        // effective-hours calculation in agreement: effective <= target holds
+        // exactly when closed_at <= resolution_due_at.
+        $holdMinutes = $ticket->getTotalHoldTimeMinutes();
+
         $ticket->update([
             'sla_policy_id' => $policy->id,
-            'response_due_at' => $ticket->created_at->addHours($policy->response_time_hours),
-            'resolution_due_at' => $ticket->created_at->addHours($policy->resolution_time_hours),
+            'response_due_at' => $ticket->created_at->copy()
+                ->addHours($policy->response_time_hours)
+                ->addMinutes($holdMinutes),
+            'resolution_due_at' => $ticket->created_at->copy()
+                ->addHours($policy->resolution_time_hours)
+                ->addMinutes($holdMinutes),
         ]);
+    }
+
+    /**
+     * Push the deadlines out by a period the ticket spent on hold.
+     */
+    public function extendForHold(Ticket $ticket, int $holdMinutes): void
+    {
+        if ($holdMinutes <= 0) {
+            return;
+        }
+
+        $updates = [];
+
+        if ($ticket->response_due_at && ! $ticket->first_response_at) {
+            $updates['response_due_at'] = $ticket->response_due_at->copy()->addMinutes($holdMinutes);
+        }
+
+        if ($ticket->resolution_due_at) {
+            $updates['resolution_due_at'] = $ticket->resolution_due_at->copy()->addMinutes($holdMinutes);
+        }
+
+        if ($updates) {
+            $ticket->update($updates);
+        }
     }
 
     /**
@@ -36,6 +70,7 @@ class SlaService
     {
         return Ticket::withoutGlobalScopes()
             ->open()
+            ->where('status', '!=', 'on_hold')
             ->notMerged()
             ->notSpam()
             ->where(function ($q) {
@@ -58,6 +93,7 @@ class SlaService
     {
         return Ticket::withoutGlobalScopes()
             ->open()
+            ->where('status', '!=', 'on_hold')
             ->notMerged()
             ->notSpam()
             ->whereNull('sla_breach_notified_at')
@@ -94,8 +130,10 @@ class SlaService
         $rows = $closedTickets->map(function (Ticket $t) {
             $responseMet = $t->first_response_at && $t->response_due_at && $t->first_response_at->lte($t->response_due_at);
             $responseMissed = $t->first_response_at && $t->response_due_at && $t->first_response_at->gt($t->response_due_at);
-            // Resolution time excludes hold time, so compare effective hours against the policy target
-            // rather than wall-clock closed_at vs resolution_due_at (which would penalise held tickets).
+            // Resolution time excludes hold time. Since assignSla()/extendForHold()
+            // also push resolution_due_at out by the hold period, this comparison is
+            // now equivalent to closed_at <= resolution_due_at — the same rule the
+            // breach scheduler applies. Keep them in step if either changes.
             $resolutionHours = $t->getEffectiveResolutionTimeHours();
             $resolutionTarget = $t->slaPolicy?->resolution_time_hours;
             $resolutionMet = $resolutionHours !== null && $resolutionTarget !== null && $resolutionHours <= $resolutionTarget;

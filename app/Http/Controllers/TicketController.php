@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\PlanFeature;
+use App\Http\Controllers\Concerns\ScopesTicketsToDepartments;
 use App\Http\Controllers\Concerns\HasSortableQuery;
 use App\Http\Requests\StoreTicketRequest;
 use App\Http\Requests\UpdateTicketRequest;
@@ -31,6 +32,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TicketController extends Controller
 {
+    use ScopesTicketsToDepartments;
+
     use HasSortableQuery;
 
     public function __construct(
@@ -38,48 +41,6 @@ class TicketController extends Controller
         private TicketMergeService $mergeService,
         private TicketWorkflowService $workflowService,
     ) {}
-
-    /**
-     * Scope ticket query by the user's department access.
-     * Owners/admins see all; agents/managers see only their departments.
-     *
-     * @param  Builder<Ticket>  $query
-     * @return Builder<Ticket>
-     */
-    private function scopeByUserDepartments($query)
-    {
-        $user = Auth::user();
-        $tenant = $user->currentTenant();
-
-        if (! $tenant) {
-            return $query;
-        }
-
-        $role = $user->roleInTenant($tenant);
-
-        if (in_array($role, ['owner', 'admin'])) {
-            return $query;
-        }
-
-        // 'view all tickets' lifts the department restriction for roles that hold
-        // it (manager, supervisor, senior agent, viewer). Unlike the other
-        // permissions this one decides scope, not access — never a 403.
-        if ($this->userCan('view all tickets')) {
-            return $query;
-        }
-
-        $departmentIds = $user->departments()->pluck('departments.id');
-
-        if ($departmentIds->isEmpty()) {
-            return $query;
-        }
-
-        return $query->where(function ($q) use ($departmentIds, $user) {
-            $q->whereIn('department_id', $departmentIds)
-                ->orWhere('assigned_to', $user->id)
-                ->orWhere('created_by', $user->id);
-        });
-    }
 
     /**
      * Display a listing of tickets.
@@ -241,8 +202,7 @@ class TicketController extends Controller
     {
         $this->checkPermission('view tickets');
 
-        $accessCheck = $this->scopeByUserDepartments(Ticket::query()->where('id', $ticket->id))->exists();
-        abort_unless($accessCheck, 403);
+        $this->authorizeTicketAccess($ticket);
 
         $ticket->load([
             'tasks.assignee',
@@ -264,9 +224,7 @@ class TicketController extends Controller
     {
         $this->checkPermission('view tickets');
 
-        // Verify department access
-        $accessCheck = $this->scopeByUserDepartments(Ticket::query()->where('id', $ticket->id))->exists();
-        abort_unless($accessCheck, 403);
+        $this->authorizeTicketAccess($ticket);
 
         $ticket->load([
             'client',
@@ -321,6 +279,7 @@ class TicketController extends Controller
     public function edit(Ticket $ticket): View
     {
         $this->checkPermission('update tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $ticket->load('products');
         $clients = Client::active()->orderBy('name')->get(['id', 'name', 'tier']);
@@ -351,6 +310,7 @@ class TicketController extends Controller
     public function update(UpdateTicketRequest $request, Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('update tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $data = $request->validated();
 
@@ -377,6 +337,7 @@ class TicketController extends Controller
     public function assign(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('assign tickets');
+        $this->authorizeTicketAccess($ticket);
         $validated = $request->validate([
             'assigned_to' => ['required', Rule::exists('users', 'id')->whereNull('deleted_at')],
             'priority' => ['nullable', 'in:low,medium,high,critical'],
@@ -409,6 +370,7 @@ class TicketController extends Controller
     public function selfAssign(Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('update tickets');
+        $this->authorizeTicketAccess($ticket);
 
         try {
             // Self-assign is a claim, not a reassignment: only succeed if the ticket
@@ -428,6 +390,7 @@ class TicketController extends Controller
     public function changeStatus(Request $request, Ticket $ticket): RedirectResponse|JsonResponse
     {
         $this->checkPermission('update tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
             'status' => ['required', 'in:open,assigned,in_progress,on_hold,closed,cancelled'],
@@ -443,12 +406,19 @@ class TicketController extends Controller
             return $this->respondOrRedirect('tickets.show', $ticket, 'Reopening closed tickets requires the Enterprise plan.', true);
         }
 
-        if ($validated['status'] === 'closed' && ! empty($validated['closing_remarks'])) {
-            $ticket->update(['closing_remarks' => $validated['closing_remarks']]);
-        }
-
         try {
-            $this->ticketService->changeStatus($ticket->fresh(), $validated['status']);
+            // Moving out of closed is a reopen however it was triggered, so it goes
+            // through the same path as the Reopen button — otherwise the ticket
+            // comes back with a stale closed_at and an unincremented counter.
+            if ($ticket->status === 'closed' && $validated['status'] === 'open') {
+                $this->workflowService->reopenTicket($ticket);
+            } else {
+                if ($validated['status'] === 'closed' && ! empty($validated['closing_remarks'])) {
+                    $ticket->update(['closing_remarks' => $validated['closing_remarks']]);
+                }
+
+                $this->ticketService->changeStatus($ticket->fresh(), $validated['status']);
+            }
         } catch (\InvalidArgumentException $e) {
             return $this->respondOrRedirect('tickets.show', $ticket, $e->getMessage(), true);
         }
@@ -462,6 +432,7 @@ class TicketController extends Controller
     public function changePriority(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('update tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
             'priority' => ['required', 'in:low,medium,high,critical'],
@@ -479,6 +450,7 @@ class TicketController extends Controller
     public function updateBilling(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('manage billing');
+        $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
             'is_billable' => ['nullable'],
@@ -501,6 +473,7 @@ class TicketController extends Controller
     public function markAsSpam(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('update tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
             'spam_reason' => ['nullable', 'string', 'max:500'],
@@ -518,6 +491,7 @@ class TicketController extends Controller
     public function unmarkAsSpam(Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('update tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $this->ticketService->unmarkAsSpam($ticket);
 
@@ -531,13 +505,23 @@ class TicketController extends Controller
     public function merge(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('merge tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
-            'target_ticket_id' => ['required', 'exists:tickets,id', 'different:ticket'],
+            // `different:ticket` was useless here — the ticket comes from the route,
+            // not the body, so the rule compared against a field that never exists
+            // and always passed. The service now owns every merge rule.
+            'target_ticket_id' => ['required', 'exists:tickets,id'],
         ]);
 
         $target = Ticket::findOrFail($validated['target_ticket_id']);
-        $this->mergeService->merge($ticket, $target);
+        $this->authorizeTicketAccess($target);
+
+        try {
+            $this->mergeService->merge($ticket, $target);
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->route('tickets.show', $ticket)->with('error', $e->getMessage());
+        }
 
         return redirect()->route('tickets.show', $target)
             ->with('success', "Ticket {$ticket->ticket_number} merged into this ticket.");
@@ -549,12 +533,13 @@ class TicketController extends Controller
     public function unmerge(Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('unmerge tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $target = $ticket->merged_into_ticket_id ? Ticket::find($ticket->merged_into_ticket_id) : null;
         $this->mergeService->unmerge($ticket);
 
         return redirect()->route('tickets.show', $target ?? $ticket)
-            ->with('success', "Ticket {$ticket->ticket_number} was unmerged and reopened.");
+            ->with('success', "Ticket {$ticket->ticket_number} was unmerged and restored.");
     }
 
     /**
@@ -563,29 +548,18 @@ class TicketController extends Controller
     public function reopen(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('reopen tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $reason = $validated['reason'] ?? null;
-        $nextCount = $ticket->reopened_count + 1;
-
-        $description = 'Ticket reopened (cycle '.($nextCount + 1).')';
-        if ($reason) {
-            $description .= ' — reason: '.$reason;
+        // Only a closed or cancelled ticket can be reopened; the service owns that
+        // rule so the reopen counter can't be inflated on a live ticket.
+        if (! $this->workflowService->reopenTicket($ticket, $validated['reason'] ?? null)) {
+            return redirect()->route('tickets.show', $ticket)
+                ->with('error', 'Only a closed or cancelled ticket can be reopened.');
         }
-
-        $this->ticketService->addHistory($ticket, 'reopened', 'status', $ticket->status, 'open', $description);
-
-        $ticket->update([
-            'closed_at' => null,
-            'reopened_count' => $nextCount,
-            'last_reopened_at' => now(),
-            'last_reopen_reason' => $reason,
-        ]);
-
-        $this->ticketService->changeStatus($ticket->fresh(), 'open');
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Ticket reopened.');
@@ -597,6 +571,7 @@ class TicketController extends Controller
     public function downloadAttachment(Ticket $ticket, int $index): StreamedResponse
     {
         $this->checkPermission('view attachments');
+        $this->authorizeTicketAccess($ticket);
 
         $attachments = $ticket->attachments ?? [];
 
@@ -613,6 +588,7 @@ class TicketController extends Controller
     public function destroy(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('delete tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $this->ticketService->addHistory($ticket, 'deleted', null, null, null, 'Ticket deleted'.($request->input('reason') ? ': '.$request->input('reason') : ''));
 
@@ -773,6 +749,7 @@ class TicketController extends Controller
     public function markFalseAlarm(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('update tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
             'reason' => ['nullable', 'string', 'max:500'],
@@ -790,6 +767,7 @@ class TicketController extends Controller
     public function createChild(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('create tickets');
+        $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
             'subject' => ['required', 'string', 'max:255'],

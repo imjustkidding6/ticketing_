@@ -143,6 +143,42 @@ class Ticket extends Model
     }
 
     /**
+     * Allowed status moves, keyed by current status.
+     *
+     * This lives on the model rather than in a service because every write path —
+     * the controller, the edit form, the API, the assistant tools — must obey it.
+     * A rule that only one caller consults is not a rule.
+     *
+     * @var array<string, list<string>>
+     */
+    public const TRANSITIONS = [
+        'open' => ['assigned', 'in_progress', 'on_hold', 'cancelled', 'closed'],
+        'assigned' => ['in_progress', 'on_hold', 'cancelled', 'closed', 'open'],
+        'in_progress' => ['on_hold', 'closed', 'cancelled', 'open'],
+        'on_hold' => ['open', 'in_progress', 'closed', 'cancelled'],
+        'cancelled' => ['open'],
+        'closed' => ['open'],
+    ];
+
+    /**
+     * Statuses a ticket in this state may move to.
+     *
+     * @return list<string>
+     */
+    public function allowedTransitions(): array
+    {
+        return self::TRANSITIONS[$this->status] ?? [];
+    }
+
+    /**
+     * Whether this ticket may move to the given status.
+     */
+    public function canTransitionTo(string $status): bool
+    {
+        return in_array($status, $this->allowedTransitions(), true);
+    }
+
+    /**
      * Generate a unique ticket number.
      */
     public static function generateTicketNumber(): string
