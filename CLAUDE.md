@@ -73,6 +73,15 @@ User::find($id);
 Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->get();
 ```
 
+**Validation rules are not tenant-scoped by default.** `exists:clients,id` queries the raw table — validation runs before any model, so the global scope never sees the value and an id from another workspace is accepted. Use the `ScopesRulesToTenant` trait (`app/Http/Requests/Concerns/`) for every foreign key accepted from a request:
+
+```php
+'client_id'   => ['required', $this->tenantExists('clients')],
+'assigned_to' => array_merge(['nullable'], $this->tenantMemberRules()),  // users + tenant_user pivot
+```
+
+**Tenant mail config is global runtime state.** `TenantMailService::configure()` mutates `config('mail')`, so every path that sets it must unset it — otherwise a worker handling several tenants sends one tenant's mail through another's SMTP server and From address. Prefer `TenantMailService::usingTenant($tenantId, fn () => ...)`, which restores defaults in a `finally`. `configure()` with no tenant or no configured SMTP resets rather than leaving the previous tenant in place.
+
 **Admin controllers** (`app/Http/Controllers/Admin/`) intentionally operate across tenants.
 
 **View-layer guardrails (CI-enforced by `TenantIsolationGuardrailsTest`):** views outside `resources/views/admin/` must not `@extends('layouts.admin')` (give admin screens their own view under `admin/` — never repurpose a tenant view), and any `withoutGlobalScopes()` in a non-admin view must chain `->where('tenant_id', ...)` on the same line. A controller serving both surfaces should pick the view by route, e.g. `view($request->routeIs('admin.*') ? 'admin.sla.index' : 'sla.index', ...)` (see `SlaPolicyController`).
@@ -107,7 +116,9 @@ Notable deliberate grants: `agent` has **no** `view clients` (agents work ticket
 
 Controllers enforce permissions via `$this->checkPermission('permission name')` (aborts 403) or `$this->userCan('…')` (returns bool — use it to shape a response rather than deny it, e.g. hiding a section or widening a query). Both live in base `Controller.php` and share two bypasses: workspace **owners** bypass every check, and **platform admins** (`is_admin`) bypass on `admin.*` routes — they hold no tenant role, and controllers such as `SlaPolicyController` serve both the tenant and admin surfaces.
 
-`view all tickets` is the one permission that decides **scope, not access**: `TicketController::scopeByUserDepartments()` uses it to lift the department restriction, so a role without it sees a narrower list rather than a 403.
+`view all tickets` is the one permission that decides **scope, not access**: the `ScopesTicketsToDepartments` trait (`app/Http/Controllers/Concerns/`) uses it to lift the department restriction, so a role without it sees a narrower list rather than a 403.
+
+**Department scoping fails closed.** A user with no departments gets only the tickets they are assigned to or created — not everything. Any controller action resolving a `{ticket}` route parameter must call `authorizeTicketAccess($ticket)` from that trait; applying the check to only some actions leaves the others open to a same-tenant IDOR (a restricted agent refused the show page but able to open `/edit`).
 
 When adding a permission: add it to a group in `PERMISSION_GROUPS`, grant it in the role matrix (or `FEATURE_PERMISSIONS` if plan-gated), enforce it in the controller, and gate the sidebar entry with `$sidebarCan('…')` in `layouts/app.blade.php`.
 
@@ -165,9 +176,25 @@ Defined in `routes/console.php`:
 - **`CheckLicenseExpirations`** — daily at 02:00 UTC. Multi-stage notification lifecycle: 4–7 days = approaching, 0–3 days = imminent, then grace period tracking, then final status flip to `EXPIRED`. Uses warning flags on the license to avoid duplicate sends.
 - **`EmbedResolvedTickets`** (`ai:embed-tickets {--limit=200}`) — every 15 minutes, `withoutOverlapping()`. Embeds closed tickets without a `solution_embedded_at` so the AI assistant can learn from past resolutions. No-op if OpenAI isn't configured. See **AI Assistant**.
 
+### Ticket Status Lifecycle (CRITICAL)
+
+Statuses are `open`, `assigned`, `in_progress`, `on_hold`, `closed`, `cancelled`. There is **no `resolved` status** — resolution and closure are the same event.
+
+The allowed moves live in **`Ticket::TRANSITIONS`**, with `allowedTransitions()` and `canTransitionTo()` on the model. The map is enforced inside **`TicketService::changeStatus()`**, which throws `InvalidStatusTransitionException` (an `InvalidArgumentException`, so existing catch blocks handle it). It is enforced there — rather than in a controller — so that every entry point obeys it: the web controller, the edit form, the REST API and the assistant tools. **Never bypass `changeStatus()` to write `status` directly.**
+
+`TicketWorkflowService` is the higher-level wrapper: `updateStatus()` adds a 5-second double-submit collapse (returns `false`, distinct from the exception raised for an illegal move) and `reopenTicket()` owns the reopen rules.
+
+**Reopening** must go through `TicketWorkflowService::reopenTicket()`, which refuses anything not `closed`/`cancelled`, increments `reopened_count`, stamps `last_reopened_at`/`last_reopen_reason` and writes the history entry, all in a transaction. `TicketController::changeStatus()` routes a `closed → open` move there too, so both the Reopen button and the status dropdown behave identically. Leaving `closed` by any route clears `closed_at` — an open ticket carrying a closure timestamp is counted as resolved by every `closed_at`-keyed report.
+
+**Merging** rules live in `TicketMergeService::guardMerge()`: no self-merge, no merging a ticket that is already merged, no merging *into* an already-merged ticket (which would build a chain the mother can't see). Merge moves tasks and comments to the target and records what it moved — plus the pre-merge status — in `tickets.merge_metadata`, so `unmerge()` can move exactly those rows back and restore the original status rather than force-opening the ticket.
+
 ### Ticket Hold Time & SLA
 
 Tickets track hold time via `startHold()`, `endHold()`, and `getTotalHoldTimeMinutes()`. Hold time is excluded from SLA calculations: `getEffectiveResolutionTimeHours()` and `getEffectiveResponseTimeHours()` subtract hold duration. This is critical for accurate SLA compliance reporting. **Resolution-time figures in every report path must use `getEffectiveResolutionTimeHours()`** (not raw `created_at → closed_at`) so hold time is excluded — this includes `ReportService`, `SlaService::getComplianceReport`, `AgentPerformanceService`, `TicketWorkflowService`, and `ServiceReportService`. Response time is reported raw (`created_at → first_response_at`); do NOT subtract hold from it, because `getEffectiveResponseTimeHours()` subtracts *total* hold (including holds after the first response) and would under-report.
+
+**SLA due dates are recomputed, not set once.** `SlaService::assignSla()` runs on creation *and* after any priority change (`changePriority()` and the priority path of `updateTicket()`), because targets differ per priority — a ticket triaged up to critical must not keep its low-priority deadline.
+
+**Hold time moves the deadline, it doesn't just get subtracted later.** When a hold ends, `changeStatus()` calls `SlaService::extendForHold()` to push `response_due_at`/`resolution_due_at` out by the hold duration. This keeps the two SLA consumers in agreement: the breach scheduler's wall-clock check (`resolution_due_at < now()`) and the compliance report's effective-hours check become the same rule. If you change one, change the other. Tickets currently `on_hold` are excluded from the breach sweep entirely, since their clock is paused and the extension isn't applied until the hold ends.
 
 **SLA-policy guard (important for tests):** `TicketService::guardSlaPolicy()` throws `InvalidArgumentException` when a ticket priority is set for a tenant that has the `sla_management` feature (Business+) and no matching SLA policy exists (`SlaPolicy::hasPolicyFor(tenantId, clientTier, priority)`). Owners do **not** bypass this guard. Any test that creates/changes ticket priority through `TicketService`/the controller on a Business+ tenant must first seed a policy — a catch-all (`priority` null, `client_tier` null, `is_active` true) matches everything:
 ```php

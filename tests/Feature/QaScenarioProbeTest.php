@@ -65,20 +65,20 @@ class QaScenarioProbeTest extends TestCase
 
     // ── SCENARIO 14 — invalid status transitions ───────────────────────────
 
-    public function test_probe_closed_ticket_can_jump_straight_back_to_in_progress(): void
+    public function test_closed_ticket_cannot_jump_straight_back_to_in_progress(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $t = $this->ticket($tenant, ['status' => 'closed', 'closed_at' => now()]);
 
-        $this->post($this->tenantUrl("/tickets/{$t->id}/status"), ['status' => 'in_progress']);
+        $this->post($this->tenantUrl("/tickets/{$t->id}/status"), ['status' => 'in_progress'])
+            ->assertSessionHas('error');
 
-        // The state machine in TicketWorkflowService forbids closed -> in_progress.
-        $this->assertSame('in_progress', $t->fresh()->status,
-            'EVIDENCE: HTTP path bypassed TicketWorkflowService and allowed closed -> in_progress');
+        $this->assertSame('closed', $t->fresh()->status,
+            'closed -> in_progress is not in the transition map and must be refused');
     }
 
-    public function test_probe_open_ticket_can_be_closed_without_ever_being_worked(): void
+    public function test_open_ticket_may_be_closed_directly_leaving_no_response_time(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
@@ -88,38 +88,46 @@ class QaScenarioProbeTest extends TestCase
             'status' => 'closed', 'closing_remarks' => 'done',
         ]);
 
+        // open -> closed IS in the transition map: a ticket can legitimately be
+        // closed without being worked (duplicate, spam, resolved on the call).
+        // Documented here so the consequence is visible rather than surprising.
         $f = $t->fresh();
         $this->assertSame('closed', $f->status);
         $this->assertNull($f->first_response_at,
-            'EVIDENCE: ticket closed with no first_response_at — SLA response is unmeasurable');
+            'A ticket closed without ever moving to in_progress has no measurable response time');
     }
 
-    public function test_probe_workflow_service_would_have_rejected_what_http_allowed(): void
+    public function test_transition_map_is_enforced_at_the_service_layer_too(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $t = $this->ticket($tenant, ['status' => 'closed']);
 
         $wf = app(\App\Services\TicketWorkflowService::class);
-        $this->assertFalse($wf->isValidTransition($t, 'in_progress'),
-            'EVIDENCE: the rule exists in the service layer but nothing on the HTTP path calls it');
+        $this->assertFalse($wf->isValidTransition($t, 'in_progress'));
+
+        // The same rule must hold at the service layer, which is what the API and
+        // the assistant tools go through.
+        $this->expectException(\App\Exceptions\InvalidStatusTransitionException::class);
+        app(TicketService::class)->changeStatus($t, 'in_progress');
     }
 
     // ── SCENARIO 7 — reopening ─────────────────────────────────────────────
 
-    public function test_probe_already_open_ticket_can_be_reopened_again(): void
+    public function test_already_open_ticket_cannot_be_reopened(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $t = $this->ticket($tenant, ['status' => 'open', 'reopened_count' => 0]);
 
-        $this->post($this->tenantUrl("/tickets/{$t->id}/reopen"), ['reason' => 'bogus']);
+        $this->post($this->tenantUrl("/tickets/{$t->id}/reopen"), ['reason' => 'bogus'])
+            ->assertSessionHas('error');
 
-        $this->assertSame(1, $t->fresh()->reopened_count,
-            'EVIDENCE: reopen() has no guard that the ticket is closed; counter inflated on an open ticket');
+        $this->assertSame(0, $t->fresh()->reopened_count,
+            'Reopening a ticket that was never closed must not inflate the reopen counter');
     }
 
-    public function test_probe_status_change_reopen_leaves_stale_closed_at(): void
+    public function test_status_change_reopen_clears_closed_at_and_counts_the_reopen(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
@@ -130,29 +138,30 @@ class QaScenarioProbeTest extends TestCase
 
         $f = $t->fresh();
         $this->assertSame('open', $f->status);
-        $this->assertNotNull($f->closed_at,
-            'EVIDENCE: ticket is open but still carries closed_at — reports keyed on closed_at double-count it');
-        $this->assertSame(0, $f->reopened_count,
-            'EVIDENCE: reopened_count not incremented on this path, so reopen metrics undercount');
+        $this->assertNull($f->closed_at,
+            'An open ticket must not carry a closure timestamp — reports key on closed_at');
+        $this->assertSame(1, $f->reopened_count,
+            'Reopening through the status control counts as a reopen, same as the button');
     }
 
     // ── SCENARIO 8 / 11 — merging ──────────────────────────────────────────
 
-    public function test_probe_ticket_can_be_merged_into_itself(): void
+    public function test_ticket_cannot_be_merged_into_itself(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $t = $this->ticket($tenant);
 
-        $this->post($this->tenantUrl("/tickets/{$t->id}/merge"), ['target_ticket_id' => $t->id]);
+        $this->post($this->tenantUrl("/tickets/{$t->id}/merge"), ['target_ticket_id' => $t->id])
+            ->assertSessionHas('error');
 
         $f = $t->fresh();
-        $this->assertTrue((bool) $f->is_merged);
-        $this->assertSame($t->id, $f->merged_into_ticket_id,
-            'EVIDENCE: self-merge accepted — ticket is its own parent, is_merged=true so it vanishes from every list');
+        $this->assertFalse((bool) $f->is_merged,
+            'A ticket merged into itself becomes its own parent and vanishes from every list');
+        $this->assertNull($f->merged_into_ticket_id);
     }
 
-    public function test_probe_child_can_be_merged_into_another_child_creating_a_chain(): void
+    public function test_child_cannot_be_merged_into_another_child(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
@@ -161,15 +170,18 @@ class QaScenarioProbeTest extends TestCase
         $childB = $this->ticket($tenant);
 
         $this->post($this->tenantUrl("/tickets/{$childA->id}/merge"), ['target_ticket_id' => $mother->id]);
-        $this->post($this->tenantUrl("/tickets/{$childB->id}/merge"), ['target_ticket_id' => $childA->id]);
+        $this->post($this->tenantUrl("/tickets/{$childB->id}/merge"), ['target_ticket_id' => $childA->id])
+            ->assertSessionHas('error');
 
-        $this->assertSame($childA->id, $childB->fresh()->merged_into_ticket_id,
-            'EVIDENCE: merged into an already-merged ticket; mother->mergedTickets() will not show childB');
-        $this->assertCount(1, $mother->fresh()->mergedTickets,
-            'EVIDENCE: the mother ticket shows 1 merged child but 2 tickets were merged away');
+        $this->assertFalse((bool) $childB->fresh()->is_merged,
+            'Merging into an already-merged ticket builds a chain the mother cannot see');
+
+        // Merged straight into the mother, both children are visible where staff look.
+        $this->post($this->tenantUrl("/tickets/{$childB->id}/merge"), ['target_ticket_id' => $mother->id]);
+        $this->assertCount(2, $mother->fresh()->mergedTickets);
     }
 
-    public function test_probe_unmerge_does_not_return_comments_to_the_child(): void
+    public function test_unmerge_returns_comments_to_the_child(): void
     {
         $tenant = $this->tenantOnPlan();
         $user = $this->actor($tenant);
@@ -183,12 +195,12 @@ class QaScenarioProbeTest extends TestCase
         $this->post($this->tenantUrl("/tickets/{$child->id}/merge"), ['target_ticket_id' => $mother->id]);
         $this->post($this->tenantUrl("/tickets/{$child->id}/unmerge"));
 
-        $this->assertSame(0, $child->fresh()->comments()->count(),
-            'EVIDENCE: merge MOVES comments and unmerge never moves them back — permanent loss of ticket history');
-        $this->assertSame(1, $mother->fresh()->comments()->count());
+        $this->assertSame(1, $child->fresh()->comments()->count(),
+            'Unmerge must return the comments the merge moved, or the undo loses history');
+        $this->assertSame(0, $mother->fresh()->comments()->count());
     }
 
-    public function test_probe_unmerge_reopens_a_child_that_was_closed_before_the_merge(): void
+    public function test_unmerge_restores_the_status_the_child_had_before_the_merge(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
@@ -198,8 +210,9 @@ class QaScenarioProbeTest extends TestCase
         $this->post($this->tenantUrl("/tickets/{$child->id}/merge"), ['target_ticket_id' => $mother->id]);
         $this->post($this->tenantUrl("/tickets/{$child->id}/unmerge"));
 
-        $this->assertSame('open', $child->fresh()->status,
-            'EVIDENCE: unmerge unconditionally forces status=open, resurrecting a ticket that was legitimately closed');
+        $this->assertSame('closed', $child->fresh()->status,
+            'Unmerge must restore the pre-merge status, not resurrect a legitimately closed ticket');
+        $this->assertNotNull($child->fresh()->closed_at);
     }
 
     // ── SCENARIO 9 — concurrent assignment ─────────────────────────────────
@@ -308,7 +321,7 @@ class QaScenarioProbeTest extends TestCase
 
     // ── SLA guard reachability ─────────────────────────────────────────────
 
-    public function test_probe_sla_guard_never_fires_on_the_web_create_path(): void
+    public function test_sla_guard_fires_on_the_web_create_path(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
@@ -319,16 +332,13 @@ class QaScenarioProbeTest extends TestCase
         $this->post($this->tenantUrl('/tickets'), [
             'subject' => 'probe', 'description' => 'probe',
             'priority' => 'critical', 'client_id' => $client->id,
-        ])->assertSessionHasNoErrors();
+        ])->assertSessionHasErrors();
 
-        $created = Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->latest('id')->first();
-        $this->assertNotNull($created,
-            'EVIDENCE: guardSlaPolicy is skipped because $data["tenant_id"] is empty until the model boots');
-        $this->assertNull($created->sla_policy_id,
-            'EVIDENCE: ticket created with a critical priority and no SLA policy at all');
+        $this->assertSame(0, Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count(),
+            'The SLA guard must reject a prioritised ticket with no matching policy on every entry point');
     }
 
-    public function test_probe_service_layer_guard_does_fire_when_tenant_id_is_supplied(): void
+    public function test_sla_guard_fires_at_the_service_layer(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
@@ -344,7 +354,7 @@ class QaScenarioProbeTest extends TestCase
 
     // ── SCENARIO 5 — SLA clock start ───────────────────────────────────────
 
-    public function test_probe_sla_clock_starts_at_creation_not_assignment(): void
+    public function test_sla_clock_starts_at_creation_not_assignment(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
@@ -366,7 +376,7 @@ class QaScenarioProbeTest extends TestCase
 
     // ── SCENARIO 10 — department scoping fail-open ─────────────────────────
 
-    public function test_probe_agent_with_no_departments_sees_every_ticket(): void
+    public function test_agent_with_no_departments_does_not_see_every_ticket(): void
     {
         $tenant = $this->tenantOnPlan();
         $itDept = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'IT']);
@@ -378,10 +388,15 @@ class QaScenarioProbeTest extends TestCase
         $agent = $this->actor($tenant, 'agent', 'member');
         $this->assertSame(0, $agent->departments()->count());
 
-        $this->get($this->tenantUrl("/tickets/{$hrTicket->id}"))->assertOk();
+        // No departments means no departmental grant — not a grant to everything.
+        $this->get($this->tenantUrl("/tickets/{$hrTicket->id}"))->assertForbidden();
+
+        // Their own work stays reachable.
+        $ownTicket = $this->ticket($tenant, ['department_id' => $itDept->id, 'assigned_to' => $agent->id]);
+        $this->get($this->tenantUrl("/tickets/{$ownTicket->id}"))->assertOk();
     }
 
-    public function test_probe_department_restricted_agent_blocked_on_show_but_not_on_edit(): void
+    public function test_department_restriction_applies_to_every_verb_not_just_show(): void
     {
         $tenant = $this->tenantOnPlan();
         $it = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'IT']);
@@ -393,11 +408,14 @@ class QaScenarioProbeTest extends TestCase
 
         $this->get($this->tenantUrl("/tickets/{$hrTicket->id}"))->assertForbidden();
 
-        // Same ticket, different verb — no department check on this path.
-        $this->get($this->tenantUrl("/tickets/{$hrTicket->id}/edit"))->assertOk();
+        // The restriction must hold whichever verb is used to reach the ticket.
+        $this->get($this->tenantUrl("/tickets/{$hrTicket->id}/edit"))->assertForbidden();
+        $this->post($this->tenantUrl("/tickets/{$hrTicket->id}/status"), ['status' => 'in_progress'])
+            ->assertForbidden();
+        $this->post($this->tenantUrl("/tickets/{$hrTicket->id}/self-assign"))->assertForbidden();
     }
 
-    public function test_probe_department_restricted_agent_can_download_foreign_attachment(): void
+    public function test_department_restricted_agent_cannot_download_foreign_attachment(): void
     {
         $tenant = $this->tenantOnPlan();
         $it = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'IT']);
@@ -410,10 +428,8 @@ class QaScenarioProbeTest extends TestCase
         $agent = $this->actor($tenant, 'agent', 'member');
         $agent->departments()->attach($it->id);
 
-        // 403 would mean access control ran. Anything else means only storage stopped us.
-        $res = $this->get($this->tenantUrl("/tickets/{$hrTicket->id}/attachments/0"));
-        $this->assertNotSame(403, $res->getStatusCode(),
-            'EVIDENCE: downloadAttachment performs no department access check');
+        $this->get($this->tenantUrl("/tickets/{$hrTicket->id}/attachments/0"))
+            ->assertForbidden();
     }
 
     // ── SCENARIO 12 — duplicate submission ─────────────────────────────────
