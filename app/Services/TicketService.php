@@ -158,24 +158,33 @@ class TicketService
             }
         }
 
-        $ticket = Ticket::create($data);
+        // Five tables: tickets, product_ticket, ticket_tasks, the SLA columns and
+        // ticket_histories. A failure part-way through used to leave a live ticket
+        // with no SLA and no `created` audit entry. Notifications stay outside the
+        // transaction — they are deferred until after the response, and an email
+        // that cannot be unsent has no business holding a database lock.
+        $ticket = DB::transaction(function () use ($data, $productIds, $tasks) {
+            $ticket = Ticket::create($data);
 
-        if (! empty($productIds)) {
-            $ticket->products()->sync($productIds);
-        }
-
-        foreach ($tasks as $index => $taskDescription) {
-            if (! empty(trim($taskDescription))) {
-                $ticket->tasks()->create([
-                    'description' => trim($taskDescription),
-                    'sort_order' => $index,
-                ]);
+            if (! empty($productIds)) {
+                $ticket->products()->sync($productIds);
             }
-        }
 
-        $this->slaService->assignSla($ticket);
+            foreach ($tasks as $index => $taskDescription) {
+                if (! empty(trim($taskDescription))) {
+                    $ticket->tasks()->create([
+                        'description' => trim($taskDescription),
+                        'sort_order' => $index,
+                    ]);
+                }
+            }
 
-        $this->addHistory($ticket, 'created', description: 'Ticket created.');
+            $this->slaService->assignSla($ticket);
+
+            $this->addHistory($ticket, 'created', description: 'Ticket created.');
+
+            return $ticket->fresh();
+        });
 
         if ($this->notificationsEnabled()) {
             $ticketId = $ticket->id;
@@ -416,24 +425,26 @@ class TicketService
             $updates['hold_started_at'] = null;
         }
 
-        $ticket->update($updates);
+        DB::transaction(function () use ($ticket, $updates, $holdMinutes, $oldStatus, $status) {
+            $ticket->update($updates);
 
-        // Push the deadlines out by the hold period, so the breach scheduler's
-        // wall-clock check and the report's hold-excluding calculation agree.
-        if ($holdMinutes > 0) {
-            $this->slaService->extendForHold($ticket->fresh(), $holdMinutes);
-            $ticket->refresh();
-        }
+            // Push the deadlines out by the hold period, so the breach scheduler's
+            // wall-clock check and the report's hold-excluding calculation agree.
+            if ($holdMinutes > 0) {
+                $this->slaService->extendForHold($ticket->fresh(), $holdMinutes);
+                $ticket->refresh();
+            }
 
-        $this->addHistory($ticket, 'status_changed', 'status', $oldStatus, $status, "Status changed from {$oldStatus} to {$status}.");
+            $this->addHistory($ticket, 'status_changed', 'status', $oldStatus, $status, "Status changed from {$oldStatus} to {$status}.");
 
-        if ($status === 'closed'
-            && $oldStatus !== 'closed'
-            && $this->planService->tenantHasFeature($ticket->tenant, PlanFeature::ServiceReports)
-            && (AppSetting::get('auto_generate_on_close', '1') === '1')
-        ) {
-            $this->serviceReportService->generate($ticket->fresh());
-        }
+            if ($status === 'closed'
+                && $oldStatus !== 'closed'
+                && $this->planService->tenantHasFeature($ticket->tenant, PlanFeature::ServiceReports)
+                && (AppSetting::get('auto_generate_on_close', '1') === '1')
+            ) {
+                $this->serviceReportService->generate($ticket->fresh());
+            }
+        });
 
         if ($this->notificationsEnabled()) {
             $ticketId = $ticket->id;

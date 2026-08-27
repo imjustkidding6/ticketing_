@@ -6,6 +6,7 @@ use App\Models\Ticket;
 use App\Models\TicketEscalation;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class EscalationService
 {
@@ -25,6 +26,22 @@ class EscalationService
     ): TicketEscalation {
         $fromTier = $ticket->current_tier;
 
+        return DB::transaction(function () use ($ticket, $toTier, $reason, $triggerType, $toAgent, $fromTier) {
+            return $this->performEscalation($ticket, $toTier, $reason, $triggerType, $toAgent, $fromTier);
+        });
+    }
+
+    /**
+     * The escalation writes themselves: escalation record, ticket, history.
+     */
+    private function performEscalation(
+        Ticket $ticket,
+        string $toTier,
+        ?string $reason,
+        string $triggerType,
+        ?User $toAgent,
+        string $fromTier,
+    ): TicketEscalation {
         $escalation = TicketEscalation::create([
             'ticket_id' => $ticket->id,
             'escalated_by' => Auth::id(),
@@ -36,17 +53,20 @@ class EscalationService
             'reason' => $reason,
         ]);
 
-        $updates = [
+        $ticket->update([
             'current_tier' => $toTier,
             'escalation_count' => $ticket->escalation_count + 1,
             'last_escalated_at' => now(),
-        ];
+        ]);
 
-        if ($toAgent) {
-            $updates['assigned_to'] = $toAgent->id;
+        // Hand the ticket over through the assignment service rather than writing
+        // assigned_to directly, so an escalated ticket gets the same assignment
+        // record, history entry and notification as any other reassignment.
+        // The controller has already checked the target agent's tier.
+        if ($toAgent && $toAgent->id !== $ticket->assigned_to) {
+            $this->ticketService->assignTicket($ticket->fresh(), $toAgent);
+            $ticket->refresh();
         }
-
-        $ticket->update($updates);
 
         $this->ticketService->addHistory(
             $ticket,
