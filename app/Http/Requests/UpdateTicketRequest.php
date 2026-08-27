@@ -2,12 +2,14 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ScopesRulesToTenant;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateTicketRequest extends FormRequest
 {
+    use ScopesRulesToTenant;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -28,12 +30,12 @@ class UpdateTicketRequest extends FormRequest
             'description' => ['required', 'string'],
             'priority' => ['required', 'in:low,medium,high,critical'],
             'status' => ['required', 'in:open,assigned,in_progress,on_hold,closed,cancelled'],
-            'client_id' => ['required', 'exists:clients,id'],
-            'category_id' => ['nullable', 'exists:ticket_categories,id'],
-            'department_id' => ['nullable', 'exists:departments,id'],
+            'client_id' => ['required', $this->tenantExists('clients')],
+            'category_id' => ['nullable', $this->tenantExists('ticket_categories')],
+            'department_id' => ['nullable', $this->tenantExists('departments')],
             'product_ids' => ['nullable', 'array'],
-            'product_ids.*' => ['exists:products,id'],
-            'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'product_ids.*' => [$this->tenantExists('products')],
+            'assigned_to' => array_merge(['nullable'], $this->tenantMemberRules()),
             'incident_date' => ['nullable', 'date'],
         ];
     }

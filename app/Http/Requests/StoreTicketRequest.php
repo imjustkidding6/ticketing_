@@ -2,12 +2,14 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ScopesRulesToTenant;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class StoreTicketRequest extends FormRequest
 {
+    use ScopesRulesToTenant;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -27,12 +29,12 @@ class StoreTicketRequest extends FormRequest
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
             'priority' => ['required', 'in:low,medium,high,critical'],
-            'client_id' => ['required', 'exists:clients,id'],
-            'category_id' => ['nullable', 'exists:ticket_categories,id'],
-            'department_id' => ['nullable', 'exists:departments,id'],
+            'client_id' => ['required', $this->tenantExists('clients')],
+            'category_id' => ['nullable', $this->tenantExists('ticket_categories')],
+            'department_id' => ['nullable', $this->tenantExists('departments')],
             'product_ids' => ['nullable', 'array'],
-            'product_ids.*' => ['exists:products,id'],
-            'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'product_ids.*' => [$this->tenantExists('products')],
+            'assigned_to' => array_merge(['nullable'], $this->tenantMemberRules()),
             'incident_date' => ['nullable', 'date'],
             'tasks' => ['nullable', 'array', 'max:20'],
             'tasks.*' => ['nullable', 'string', 'max:1000'],

@@ -127,7 +127,11 @@ class TicketService
             if ($tenant) {
                 $clientTier = null;
                 if (! empty($data['client_id'])) {
-                    $clientTier = Client::withoutGlobalScopes()->find($data['client_id'])?->tier;
+                    // Scoped to the ticket's own tenant: reading a client from another
+                    // workspace here would let a foreign client_id through the guard.
+                    $clientTier = Client::withoutGlobalScopes()
+                        ->where('tenant_id', $data['tenant_id'])
+                        ->find($data['client_id'])?->tier;
                 }
                 $this->guardSlaPolicy($data['tenant_id'], $clientTier, $data['priority'], $tenant);
             }
