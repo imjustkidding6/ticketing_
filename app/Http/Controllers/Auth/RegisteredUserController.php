@@ -44,7 +44,7 @@ class RegisteredUserController extends Controller
                 'required', 'string', 'min:3', 'max:63',
                 'regex:/^[a-z0-9][a-z0-9\-]*[a-z0-9]$/',
                 'unique:tenants,slug',
-                Rule::notIn(['admin', 'www', 'mail', 'api', 'portal', 'app', 'support', 'help', 'status', 'login', 'register', 'profile', 'up', 'logout']),
+                Rule::notIn(Tenant::RESERVED_SLUGS),
             ],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],

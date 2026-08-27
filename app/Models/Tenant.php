@@ -12,6 +12,22 @@ use Illuminate\Support\Str;
 
 class Tenant extends Model
 {
+    /**
+     * Slugs that cannot be registered, because a static top-level route already
+     * owns that path and would shadow the tenant entirely.
+     *
+     * Keep in step with the route files — TenantSlugReservationTest fails the
+     * build if a new top-level prefix is added without being listed here.
+     *
+     * @var list<string>
+     */
+    public const RESERVED_SLUGS = [
+        'admin', 'api', 'app', 'auth', 'confirm-password', 'connect-jude', 'email',
+        'forgot-password', 'health', 'help', 'login', 'logout', 'mail', 'no-tenant',
+        'password', 'portal', 'profile', 'register', 'reset-password', 'status',
+        'support', 'tenant', 'up', 'verify-email', 'webhooks', 'www',
+    ];
+
     /** @use HasFactory<TenantFactory> */
     use HasFactory;
 
