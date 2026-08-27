@@ -444,7 +444,7 @@ class QaScenarioProbeTest extends TestCase
 
     // ── SCENARIO 12 — duplicate submission ─────────────────────────────────
 
-    public function test_probe_identical_submissions_create_two_tickets(): void
+    public function test_double_click_creates_one_ticket_but_a_later_repeat_creates_another(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
@@ -457,7 +457,16 @@ class QaScenarioProbeTest extends TestCase
         $this->post($this->tenantUrl('/tickets'), $payload);
         $this->post($this->tenantUrl('/tickets'), $payload);
 
+        $this->assertSame(1, Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count(),
+            'A double-click must not create a second ticket');
+
+        // A genuine repeat outside the window is a real second report, not a
+        // duplicate — two colleagues can hit the same fault minutes apart.
+        $this->travel(30)->seconds();
+        $this->post($this->tenantUrl('/tickets'), $payload);
+
         $this->assertSame(2, Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count(),
-            'EVIDENCE: no idempotency key, no duplicate detection — a double-click yields two tickets');
+            'A later identical report is a separate ticket, not a rejected duplicate');
+        $this->travelBack();
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\PlanFeature;
+use App\Http\Controllers\Concerns\PreventsDuplicateSubmissions;
 use App\Http\Controllers\Concerns\ScopesTicketsToDepartments;
 use App\Http\Controllers\Concerns\HasSortableQuery;
 use App\Http\Requests\StoreTicketRequest;
@@ -32,6 +33,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TicketController extends Controller
 {
+    use PreventsDuplicateSubmissions;
     use ScopesTicketsToDepartments;
 
     use HasSortableQuery;
@@ -183,11 +185,24 @@ class TicketController extends Controller
             unset($data['attachments']);
         }
 
+        // A double-clicked button or a browser retry sends this twice within a
+        // second. Land on the ticket that was already created rather than making
+        // a second one; two people reporting the same fault minutes apart are
+        // still two tickets, which is why the window is short.
+        $fingerprint = [Auth::id(), $data['client_id'] ?? null, $data['subject'], $data['description']];
+
+        if ($existingId = $this->recentDuplicateOf('ticket', $fingerprint)) {
+            return redirect()->route('tickets.show', $existingId)
+                ->with('success', 'Ticket created successfully.');
+        }
+
         try {
             $ticket = $this->ticketService->createTicket($data);
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withInput()->withErrors(['assigned_to' => $e->getMessage()]);
         }
+
+        $this->rememberSubmission('ticket', $fingerprint, $ticket->id);
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Ticket created successfully.');
@@ -799,7 +814,10 @@ class TicketController extends Controller
         foreach ($request->file('attachments') as $file) {
             $path = $file->store("tenants/{$tenantId}/attachments", config('filesystems.default'));
             $stored[] = [
-                'name' => $file->getClientOriginalName(),
+                // The stored path is framework-generated; this is only the label
+                // shown to users and offered as the download filename, so strip
+                // anything path-like or control-ish out of what the client sent.
+                'name' => $this->sanitizeAttachmentName($file->getClientOriginalName()),
                 'path' => $path,
                 'size' => $file->getSize(),
                 'mime' => $file->getMimeType(),
@@ -807,5 +825,17 @@ class TicketController extends Controller
         }
 
         return $stored;
+    }
+
+    /**
+     * Reduce a client-supplied filename to something safe to display and serve.
+     */
+    private function sanitizeAttachmentName(string $name): string
+    {
+        $name = basename(str_replace('\\', '/', $name));
+        $name = preg_replace('/[\x00-\x1F\x7F"]+/', '', $name) ?? '';
+        $name = trim($name) ?: 'attachment';
+
+        return mb_substr($name, 0, 120);
     }
 }
