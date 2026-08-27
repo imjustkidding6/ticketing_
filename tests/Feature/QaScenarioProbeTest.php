@@ -220,13 +220,18 @@ class QaScenarioProbeTest extends TestCase
     public function test_second_agent_cannot_steal_an_already_claimed_ticket(): void
     {
         $tenant = $this->tenantOnPlan();
+        $dept = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'IT']);
+        $t = $this->ticket($tenant, ['department_id' => $dept->id]);
+
+        // Both agents work the queue this ticket sits in, so both can see it.
         $john = $this->actor($tenant, 'agent', 'member');
-        $t = $this->ticket($tenant);
+        $john->departments()->attach($dept->id);
 
         $this->post($this->tenantUrl("/tickets/{$t->id}/self-assign"));
         $this->assertSame($john->id, $t->fresh()->assigned_to);
 
         $maria = $this->actor($tenant, 'agent', 'member');
+        $maria->departments()->attach($dept->id);
         $this->post($this->tenantUrl("/tickets/{$t->id}/self-assign"))
             ->assertSessionHas('error');
 
@@ -239,8 +244,11 @@ class QaScenarioProbeTest extends TestCase
     public function test_manager_reassignment_still_overwrites_an_existing_assignee(): void
     {
         $tenant = $this->tenantOnPlan();
+        $dept = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'IT']);
+        $t = $this->ticket($tenant, ['department_id' => $dept->id]);
+
         $john = $this->actor($tenant, 'agent', 'member');
-        $t = $this->ticket($tenant);
+        $john->departments()->attach($dept->id);
         $this->post($this->tenantUrl("/tickets/{$t->id}/self-assign"));
 
         $maria = User::factory()->create();
@@ -258,8 +266,10 @@ class QaScenarioProbeTest extends TestCase
     public function test_claim_is_rejected_when_the_row_is_taken_between_read_and_write(): void
     {
         $tenant = $this->tenantOnPlan();
+        $dept = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'IT']);
         $john = $this->actor($tenant, 'agent', 'member');
-        $t = $this->ticket($tenant);
+        $john->departments()->attach($dept->id);
+        $t = $this->ticket($tenant, ['department_id' => $dept->id]);
         $other = User::factory()->create();
         $tenant->addUser($other, 'member');
 
