@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ScopesTicketsToDepartments;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Services\TicketService;
@@ -14,6 +15,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TicketCommentController extends Controller
 {
+    use ScopesTicketsToDepartments;
+
     public function __construct(
         private TicketService $ticketService,
     ) {}
@@ -24,6 +27,7 @@ class TicketCommentController extends Controller
     public function store(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->checkPermission('create ticket comments');
+        $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
             'content' => ['required', 'string', 'max:5000'],
@@ -72,6 +76,7 @@ class TicketCommentController extends Controller
     public function update(Request $request, Ticket $ticket, TicketComment $comment): RedirectResponse
     {
         $this->checkPermission('update ticket comments');
+        $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
             'content' => ['required', 'string', 'max:5000'],
@@ -99,6 +104,7 @@ class TicketCommentController extends Controller
     public function destroy(Ticket $ticket, TicketComment $comment): RedirectResponse
     {
         $this->checkPermission('delete ticket comments');
+        $this->authorizeTicketAccess($ticket);
 
         $this->ticketService->addHistory(
             $ticket,
@@ -120,6 +126,7 @@ class TicketCommentController extends Controller
     public function downloadAttachment(Ticket $ticket, TicketComment $comment, int $index): StreamedResponse
     {
         $this->checkPermission('view attachments');
+        $this->authorizeTicketAccess($ticket);
 
         $attachments = $comment->attachments ?? [];
 
