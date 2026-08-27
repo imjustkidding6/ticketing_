@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\TicketAlreadyAssignedException;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
@@ -104,7 +105,11 @@ class TicketWorkflowService
             return false;
         }
 
-        $this->ticketService->assignTicket($ticket, $user);
+        try {
+            $this->ticketService->assignTicket($ticket, $user, onlyIfUnassigned: true);
+        } catch (TicketAlreadyAssignedException) {
+            return false;
+        }
 
         return true;
     }

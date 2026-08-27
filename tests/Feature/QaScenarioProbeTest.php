@@ -204,7 +204,7 @@ class QaScenarioProbeTest extends TestCase
 
     // ── SCENARIO 9 — concurrent assignment ─────────────────────────────────
 
-    public function test_probe_two_agents_can_both_self_assign_the_same_ticket(): void
+    public function test_second_agent_cannot_steal_an_already_claimed_ticket(): void
     {
         $tenant = $this->tenantOnPlan();
         $john = $this->actor($tenant, 'agent', 'member');
@@ -214,12 +214,49 @@ class QaScenarioProbeTest extends TestCase
         $this->assertSame($john->id, $t->fresh()->assigned_to);
 
         $maria = $this->actor($tenant, 'agent', 'member');
+        $this->post($this->tenantUrl("/tickets/{$t->id}/self-assign"))
+            ->assertSessionHas('error');
+
+        $this->assertSame($john->id, $t->fresh()->assigned_to,
+            'A claimed ticket must stay with the agent who claimed it first');
+        $this->assertSame(1, $t->fresh()->assignments()->count(),
+            'A losing claim must not leave an assignment row behind');
+    }
+
+    public function test_manager_reassignment_still_overwrites_an_existing_assignee(): void
+    {
+        $tenant = $this->tenantOnPlan();
+        $john = $this->actor($tenant, 'agent', 'member');
+        $t = $this->ticket($tenant);
         $this->post($this->tenantUrl("/tickets/{$t->id}/self-assign"));
 
-        $this->assertSame($maria->id, $t->fresh()->assigned_to,
-            'EVIDENCE: second self-assign silently stole an already-assigned ticket — no ownership guard, no lock');
+        $maria = User::factory()->create();
+        $tenant->addUser($maria, 'member');
+        $this->actor($tenant, 'manager', 'member');
+
+        // Reassignment is deliberate, so it must not be blocked by the claim guard.
+        $this->post($this->tenantUrl("/tickets/{$t->id}/assign"), ['assigned_to' => $maria->id]);
+
+        $this->assertSame($maria->id, $t->fresh()->assigned_to);
         $this->assertSame(2, $t->fresh()->assignments()->count(),
-            'EVIDENCE: two assignment rows, last-write-wins; under true concurrency this is a lost update');
+            'Both the original claim and the reassignment stay in the assignment history');
+    }
+
+    public function test_claim_is_rejected_when_the_row_is_taken_between_read_and_write(): void
+    {
+        $tenant = $this->tenantOnPlan();
+        $john = $this->actor($tenant, 'agent', 'member');
+        $t = $this->ticket($tenant);
+        $other = User::factory()->create();
+        $tenant->addUser($other, 'member');
+
+        // Stand in for the interleaving: the in-memory model still reads as
+        // unassigned while the row underneath has already been claimed.
+        Ticket::withoutGlobalScopes()->where('id', $t->id)->update(['assigned_to' => $other->id]);
+        $this->assertNull($t->assigned_to);
+
+        $this->expectException(\App\Exceptions\TicketAlreadyAssignedException::class);
+        app(TicketService::class)->assignTicket($t, $john, onlyIfUnassigned: true);
     }
 
     // ── SCENARIO 10 / 19 — cross-tenant foreign keys ───────────────────────

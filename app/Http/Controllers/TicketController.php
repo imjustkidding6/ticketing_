@@ -411,7 +411,9 @@ class TicketController extends Controller
         $this->checkPermission('update tickets');
 
         try {
-            $this->ticketService->assignTicket($ticket, Auth::user());
+            // Self-assign is a claim, not a reassignment: only succeed if the ticket
+            // is still unowned, so two agents clicking at once can't both take it.
+            $this->ticketService->assignTicket($ticket, Auth::user(), onlyIfUnassigned: true);
         } catch (\InvalidArgumentException $e) {
             return redirect()->route('tickets.show', $ticket)->with('error', $e->getMessage());
         }

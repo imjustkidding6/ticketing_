@@ -7,6 +7,7 @@ use App\Models\AppSetting;
 use App\Models\Client;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
+use App\Exceptions\TicketAlreadyAssignedException;
 use App\Models\Ticket;
 use App\Models\TicketAssignment;
 use App\Models\TicketHistory;
@@ -18,6 +19,7 @@ use App\Notifications\TicketAssignedNotification;
 use App\Notifications\TicketCreatedNotification;
 use App\Notifications\TicketStatusChangedNotification;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
 class TicketService
@@ -268,25 +270,46 @@ class TicketService
     /**
      * Assign a ticket to an agent.
      */
-    public function assignTicket(Ticket $ticket, User $agent, ?User $assignedBy = null): void
+    public function assignTicket(Ticket $ticket, User $agent, ?User $assignedBy = null, bool $onlyIfUnassigned = false): void
     {
         $this->guardAgentTier($ticket, $agent);
         $this->guardAgentAvailability($ticket, $agent);
 
         $oldAssignee = $ticket->assigned_to;
 
-        $ticket->update([
-            'assigned_to' => $agent->id,
-            'status' => $ticket->status === 'open' ? 'assigned' : $ticket->status,
-        ]);
+        DB::transaction(function () use ($ticket, $agent, $assignedBy, $oldAssignee, $onlyIfUnassigned) {
+            // Claiming an unassigned ticket is a race: two agents can both read
+            // assigned_to as null and both write. Make the write conditional and
+            // let the database decide the winner. Deliberate reassignment by a
+            // manager passes $onlyIfUnassigned = false and overwrites as before.
+            $update = Ticket::withoutGlobalScopes()->where('id', $ticket->id);
 
-        TicketAssignment::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => $agent->id,
-            'assigned_by' => $assignedBy?->id ?? Auth::id(),
-        ]);
+            if ($onlyIfUnassigned) {
+                $update->whereNull('assigned_to');
+            }
 
-        $this->addHistory($ticket, 'assigned', 'assigned_to', (string) $oldAssignee, (string) $agent->id, 'Assigned to '.$agent->name);
+            $claimed = $update->update([
+                'assigned_to' => $agent->id,
+                'status' => $ticket->status === 'open' ? 'assigned' : $ticket->status,
+                'updated_at' => now(),
+            ]);
+
+            if ($onlyIfUnassigned && $claimed === 0) {
+                throw new TicketAlreadyAssignedException(
+                    'This ticket was just picked up by another agent.'
+                );
+            }
+
+            $ticket->refresh();
+
+            TicketAssignment::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $agent->id,
+                'assigned_by' => $assignedBy?->id ?? Auth::id(),
+            ]);
+
+            $this->addHistory($ticket, 'assigned', 'assigned_to', (string) $oldAssignee, (string) $agent->id, 'Assigned to '.$agent->name);
+        });
 
         if ($this->notificationsEnabled()) {
             $ticketId = $ticket->id;
