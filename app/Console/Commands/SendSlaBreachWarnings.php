@@ -25,36 +25,46 @@ class SendSlaBreachWarnings extends Command
 
     public function handle(): int
     {
-        $tickets = $this->slaService->getTicketsNeedingBreachWarning();
         $sent = 0;
+        $seen = 0;
 
-        foreach ($tickets as $ticket) {
-            $tenant = Tenant::find($ticket->tenant_id);
+        // Chunked: this runs every 15 minutes over every tenant, and loading the
+        // whole overdue set into memory at once does not survive real volume.
+        // Tenant feature lookups are memoised per run rather than per ticket.
+        $tenants = [];
 
-            if (! $tenant || ! $this->planService->tenantHasFeature($tenant, PlanFeature::EmailNotifications)) {
-                continue;
-            }
+        $this->slaService->breachWarningQuery()
+            ->chunkById(200, function ($tickets) use (&$sent, &$seen, &$tenants) {
+                foreach ($tickets as $ticket) {
+                    $seen++;
 
-            if (! $ticket->assignee) {
-                continue;
-            }
+                    if (! array_key_exists($ticket->tenant_id, $tenants)) {
+                        $tenant = Tenant::find($ticket->tenant_id);
+                        $tenants[$ticket->tenant_id] = $tenant
+                            && $this->planService->tenantHasFeature($tenant, PlanFeature::EmailNotifications);
+                    }
 
-            $breachType = $ticket->isResponseOverdue() ? 'response' : 'resolution';
+                    if (! $tenants[$ticket->tenant_id] || ! $ticket->assignee) {
+                        continue;
+                    }
 
-            // This loop crosses tenants, so the mailer must be configured for each
-            // one and restored afterwards — otherwise every tenant after the first
-            // sends through whichever SMTP server was configured before it.
-            TenantMailService::usingTenant(
-                $ticket->tenant_id,
-                fn () => $ticket->assignee->notify(new SlaBreachWarningNotification($ticket, $breachType)),
-            );
+                    $breachType = $ticket->isResponseOverdue() ? 'response' : 'resolution';
 
-            $ticket->update(['sla_breach_notified_at' => now()]);
+                    // This loop crosses tenants, so the mailer must be configured
+                    // for each one and restored afterwards — otherwise every tenant
+                    // after the first sends through the previous tenant's SMTP.
+                    TenantMailService::usingTenant(
+                        $ticket->tenant_id,
+                        fn () => $ticket->assignee->notify(new SlaBreachWarningNotification($ticket, $breachType)),
+                    );
 
-            $sent++;
-        }
+                    $ticket->update(['sla_breach_notified_at' => now()]);
 
-        $this->info("Sent {$sent} SLA breach warning(s) out of {$tickets->count()} overdue ticket(s).");
+                    $sent++;
+                }
+            });
+
+        $this->info("Sent {$sent} SLA breach warning(s) out of {$seen} overdue ticket(s).");
 
         return self::SUCCESS;
     }

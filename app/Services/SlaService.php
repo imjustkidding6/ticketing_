@@ -92,6 +92,17 @@ class SlaService
      */
     public function getTicketsNeedingBreachWarning(): Collection
     {
+        return $this->breachWarningQuery()->get();
+    }
+
+    /**
+     * The breach-warning set as a query, so callers can chunk rather than load
+     * every overdue ticket across every tenant into memory at once.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<Ticket>
+     */
+    public function breachWarningQuery(): \Illuminate\Database\Eloquent\Builder
+    {
         return Ticket::withoutGlobalScopes()
             ->open()
             ->where('status', '!=', 'on_hold')
@@ -105,8 +116,7 @@ class SlaService
                             ->where('response_due_at', '<', now());
                     });
             })
-            ->with(['client', 'assignee'])
-            ->get();
+            ->with(['client', 'assignee']);
     }
 
     /**
