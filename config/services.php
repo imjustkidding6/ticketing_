@@ -51,6 +51,18 @@ return [
         'reasoning_effort' => env('OPENAI_REASONING_EFFORT', 'low'),
         'max_output_tokens' => (int) env('OPENAI_MAX_OUTPUT_TOKENS', 6000),
         'search_model' => env('OPENAI_SEARCH_MODEL', 'gpt-4o-mini-search-preview'),
+
+        // USD per 1,000 tokens, for the estimated-cost column on ai_usage_logs.
+        // Estimates only — the authoritative figure is the OpenAI dashboard.
+        // Longest matching model prefix wins; 'default' covers anything unlisted.
+        'pricing' => [
+            'gpt-5' => ['prompt' => 0.00125, 'completion' => 0.01],
+            'gpt-4o-mini' => ['prompt' => 0.00015, 'completion' => 0.0006],
+            'gpt-4o' => ['prompt' => 0.0025, 'completion' => 0.01],
+            'text-embedding-3-small' => ['prompt' => 0.00002, 'completion' => 0.0],
+            'text-embedding-3-large' => ['prompt' => 0.00013, 'completion' => 0.0],
+            'default' => ['prompt' => 0.0015, 'completion' => 0.002],
+        ],
     ],
 
     // GitHub bridge for the "AI Programmer": the app files an issue (label ai-fix)

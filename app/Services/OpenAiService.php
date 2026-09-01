@@ -209,6 +209,17 @@ class OpenAiService
                 $circuit->recordFailure();
                 $status = $response->status();
                 $body = $response->body();
+
+                $this->logUsageFailure(
+                    $endpoint,
+                    $payload,
+                    $durationMs,
+                    // A 429 is a rate limit, which is worth telling apart from a
+                    // genuine failure on the analytics screen.
+                    $status === 429 ? 'rate_limited' : 'failed',
+                    "HTTP {$status}: ".mb_substr($body, 0, 500),
+                );
+
                 throw new OpenAiException("OpenAI API request to [{$endpoint}] failed with status {$status}: {$body}");
             }
 
@@ -239,13 +250,33 @@ class OpenAiService
             throw $e;
         } catch (ConnectionException $e) {
             $circuit->recordFailure();
+            $this->logUsageFailure($endpoint, $payload, (int) round((microtime(true) - $startTime) * 1000), 'failed', $e->getMessage());
             throw new OpenAiException("OpenAI connection failed or timed out after {$this->timeout}s: {$e->getMessage()}", previous: $e);
         } catch (RequestException $e) {
             $circuit->recordFailure();
+            $this->logUsageFailure($endpoint, $payload, (int) round((microtime(true) - $startTime) * 1000), 'failed', $e->getMessage());
             throw new OpenAiException("OpenAI HTTP request error: {$e->getMessage()}", previous: $e);
         } catch (Throwable $e) {
             $circuit->recordFailure();
+            $this->logUsageFailure($endpoint, $payload, (int) round((microtime(true) - $startTime) * 1000), 'failed', $e->getMessage());
             throw new OpenAiException("Unexpected error communicating with OpenAI: {$e->getMessage()}", previous: $e);
         }
+    }
+
+    /**
+     * Record a failed call, so the analytics screen reflects reality.
+     *
+     * Only successes used to be logged, which made the success rate 100% by
+     * construction and hid every outage behind an empty chart.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function logUsageFailure(string $endpoint, array $payload, int $durationMs, string $status, string $message): void
+    {
+        app(AiUsageTrackerService::class)->logFailure([
+            'model' => (string) ($payload['model'] ?? $this->model),
+            'latency_ms' => $durationMs,
+            'feature' => str_contains($endpoint, 'embed') ? 'embed' : 'chat',
+        ], $status, $message);
     }
 }

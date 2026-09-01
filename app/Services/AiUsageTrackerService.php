@@ -21,8 +21,8 @@ class AiUsageTrackerService
         $completionTokens = (int) ($data['completion_tokens'] ?? 0);
         $totalTokens = $promptTokens + $completionTokens;
 
-        // Estimated cost ($0.0015 per 1k prompt, $0.0020 per 1k completion tokens)
-        $cost = round(($promptTokens * 0.0000015) + ($completionTokens * 0.0000020), 6);
+        $model = (string) ($data['model'] ?? config('services.openai.model', 'gpt-5'));
+        $cost = $this->estimateCost($model, $promptTokens, $completionTokens);
 
         try {
             return AiUsageLog::create([
@@ -30,7 +30,7 @@ class AiUsageTrackerService
                 'user_id' => $data['user_id'] ?? null,
                 'conversation_id' => $data['conversation_id'] ?? null,
                 'chat_message_id' => $data['chat_message_id'] ?? null,
-                'model' => (string) ($data['model'] ?? 'gpt-5'),
+                'model' => $model,
                 'prompt_tokens' => $promptTokens,
                 'completion_tokens' => $completionTokens,
                 'total_tokens' => $totalTokens,
@@ -45,5 +45,48 @@ class AiUsageTrackerService
 
             return new AiUsageLog;
         }
+    }
+
+    /**
+     * Record a request that did not succeed.
+     *
+     * Failures used to go unlogged entirely, so the analytics screen reported a
+     * 100% success rate by construction and error rates were invisible.
+     */
+    public function logFailure(array $data, string $status, ?string $message = null): AiUsageLog
+    {
+        return $this->log(array_merge($data, [
+            'response_status' => $status,
+            'error_message' => $message,
+        ]));
+    }
+
+    /**
+     * Estimated cost in USD, from the per-model rates in config.
+     *
+     * Rates were previously hard-coded at figures that predate the models in use
+     * — gpt-5 completions were priced at a fifth of their actual rate.
+     */
+    private function estimateCost(string $model, int $promptTokens, int $completionTokens): float
+    {
+        $table = config('services.openai.pricing', []);
+        $rates = $table['default'] ?? ['prompt' => 0.0, 'completion' => 0.0];
+
+        // Longest matching prefix wins, so gpt-4o-mini doesn't match gpt-4o.
+        $bestMatch = '';
+        foreach ($table as $prefix => $candidate) {
+            if ($prefix !== 'default'
+                && str_starts_with($model, $prefix)
+                && strlen($prefix) > strlen($bestMatch)
+            ) {
+                $bestMatch = $prefix;
+                $rates = $candidate;
+            }
+        }
+
+        return round(
+            ($promptTokens / 1000 * $rates['prompt']) + ($completionTokens / 1000 * $rates['completion']),
+            6,
+        );
     }
 }
