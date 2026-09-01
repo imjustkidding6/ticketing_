@@ -596,6 +596,11 @@
                             </template>
                         </button>
 
+                        <!-- Guided tours -->
+                        @auth
+                        @include('partials.tour-launcher')
+                        @endauth
+
                         <!-- Notification Bell -->
                         @auth
                         <div x-data="notificationBell()" class="relative">
@@ -721,8 +726,6 @@
             </div>
 
         </div>
-
-        @include('partials.tour-launcher')
 
         @stack('scripts')
         @auth
