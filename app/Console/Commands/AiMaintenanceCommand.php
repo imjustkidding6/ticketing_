@@ -27,8 +27,10 @@ class AiMaintenanceCommand extends Command
             $deletedLogs = AiUsageLog::where('created_at', '<', now()->subDays(30))->delete();
             $this->info("Cleaned up {$deletedLogs} expired AI usage log entries.");
 
-            Cache::forget('ai_metric_*');
-            $this->info('Flushed old AI metrics cache counters.');
+            // Cache::forget('ai_metric_*') matched nothing — the cache API has no
+            // wildcard delete, so this reported success while doing nothing.
+            $embeddingService->resetMetrics();
+            $this->info('Reset AI metric counters.');
         }
 
         if ($mode === 'hourly' || $mode === 'daily') {

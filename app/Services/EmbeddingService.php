@@ -79,11 +79,21 @@ class EmbeddingService
             return false;
         }
 
-        $resolution = trim((string) $ticket->closing_remarks);
-        if ($resolution === '') {
-            $agentReply = $ticket->comments->first(fn ($c) => $c->user_id !== null);
-            $resolution = (string) ($agentReply?->content ?? '');
-        }
+        // Every public agent reply, not just the first: the resolution is often
+        // spread across a conversation rather than stated in closing_remarks.
+        // Internal notes are excluded — they can carry detail that should not be
+        // surfaced back through retrieval.
+        $agentReplies = $ticket->comments()
+            ->where('is_public', true)
+            ->whereNotNull('user_id')
+            ->orderBy('id')
+            ->pluck('content')
+            ->all();
+
+        $resolution = trim(implode("\n", array_filter(array_merge(
+            [(string) $ticket->closing_remarks],
+            $agentReplies,
+        ))));
 
         $textToEmbed = trim("Subject: {$ticket->subject}\nDescription: {$ticket->description}\nResolution: {$resolution}");
         if (mb_strlen($textToEmbed) < 10) {
@@ -276,5 +286,35 @@ class EmbeddingService
             'total_duration_seconds' => (int) Cache::get('ai_metric_time', 0),
             'cache_misses' => (int) Cache::get('ai_metric_cache_miss', 0),
         ];
+    }
+
+    /**
+     * The counter keys behind getMetrics(), so a caller can reset them.
+     *
+     * Named explicitly because Laravel's cache API has no wildcard delete:
+     * Cache::forget('ai_metric_*') matches nothing and fails silently.
+     *
+     * @return list<string>
+     */
+    public static function metricKeys(): array
+    {
+        return [
+            'ai_metric_generated',
+            'ai_metric_failures',
+            'ai_metric_time',
+            'ai_metric_cache_miss',
+            'ai_metric_cache_hits',
+            'ai_metric_cache_miss_count',
+        ];
+    }
+
+    /**
+     * Reset the embedding metric counters.
+     */
+    public function resetMetrics(): void
+    {
+        foreach (self::metricKeys() as $key) {
+            Cache::forget($key);
+        }
     }
 }
