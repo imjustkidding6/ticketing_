@@ -18,7 +18,6 @@ class AdminAiCopilotService
     public function __construct(
         private readonly PromptInjectionService $promptInjection,
         private readonly ModerationService $moderation,
-        private readonly SemanticCacheService $cache,
         private readonly OpenAiService $openAi
     ) {}
 

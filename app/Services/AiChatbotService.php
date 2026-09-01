@@ -17,7 +17,6 @@ class AiChatbotService
         private readonly OpenAiService $openAi,
         private readonly PromptInjectionService $promptInjection,
         private readonly ModerationService $moderation,
-        private readonly SemanticCacheService $cache
     ) {}
 
     /**
