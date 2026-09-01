@@ -16,7 +16,7 @@
                         {{-- Client --}}
                         <div>
                             <label for="client_id" class="block text-sm font-medium text-gray-700">{{ __('Client') }} <span class="text-red-500">*</span></label>
-                            <select name="client_id" id="client_id" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <select name="client_id" id="client_id" data-tour="ticket-client" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                 <option value="">{{ __('Select client') }}</option>
                                 @foreach($clients as $client)
                                     <option value="{{ $client->id }}" data-tier="{{ $client->tier }}" {{ old('client_id') == $client->id ? 'selected' : '' }}>{{ $client->name }}</option>
@@ -103,7 +103,7 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" x-data="prioritySla()">
                             <div>
                                 <label for="priority" class="block text-sm font-medium text-gray-700">{{ __('Priority') }}</label>
-                                <select name="priority" id="priority" required x-model="selectedPriority" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <select name="priority" id="priority" data-tour="ticket-priority" required x-model="selectedPriority" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                     @foreach(['low', 'medium', 'high', 'critical'] as $p)
                                         <option value="{{ $p }}" {{ old('priority', 'medium') === $p ? 'selected' : '' }}>{{ ucfirst($p) }}</option>
                                     @endforeach
@@ -119,7 +119,7 @@
                             <div>
                                 @php $scheduleFeature = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AgentSchedule); @endphp
                                 <label for="assigned_to" class="block text-sm font-medium text-gray-700">{{ __('Assign To') }}</label>
-                                <select name="assigned_to" id="assigned_to" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <select name="assigned_to" id="assigned_to" data-tour="ticket-assignee" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                     <option value="">{{ __('Unassigned') }}</option>
                                     @foreach($agents as $agent)
                                         @php $offSchedule = $scheduleFeature && ! $agent->isOnScheduleAt(); @endphp
@@ -176,7 +176,7 @@
 
                     <div class="mt-6 flex items-center justify-end gap-3">
                         <a href="{{ route('tickets.index') }}" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">{{ __('Cancel') }}</a>
-                        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Create Ticket') }}</button>
+                        <button type="submit" data-tour="ticket-submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Create Ticket') }}</button>
                     </div>
                 </form>
             </div>

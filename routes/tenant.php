@@ -26,6 +26,7 @@ use App\Http\Controllers\SlaPolicyController;
 use App\Http\Controllers\TenantFeedbackController;
 use App\Http\Controllers\TicketCommentController;
 use App\Http\Controllers\TicketController;
+use App\Http\Controllers\TourController;
 use App\Http\Controllers\TicketTaskController;
 use App\Http\Controllers\TutorialController;
 use App\Models\Product;
@@ -141,6 +142,11 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
 
     // Tickets
     Route::resource('tickets', TicketController::class);
+    // Guided tours — definitions are served by key so a tour can resume on a
+    // page that knows nothing about the tour system.
+    Route::get('tours', [TourController::class, 'index'])->name('tours.index');
+    Route::get('tours/{key}', [TourController::class, 'show'])->name('tours.show');
+
     Route::get('tickets-search', [TicketController::class, 'search'])->name('tickets.search');
     Route::get('tickets-trashed', [TicketController::class, 'trashed'])->name('tickets.trashed');
     Route::post('tickets/{ticket}/restore', [TicketController::class, 'restore'])->name('tickets.restore')->withTrashed();

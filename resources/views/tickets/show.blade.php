@@ -914,7 +914,7 @@
                                         },
                                         get selected() { return this.targets.find(t => t.id === this.selectedId) || null; },
                                     }">
-                                        <button type="button" @click="open = true" class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100">
+                                        <button type="button" @click="open = true" data-tour="ticket-merge" class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100">
                                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a4 4 0 0 0 4 4 4 4 0 0 0 4-4V7M4 11h16" />
                                             </svg>
@@ -949,7 +949,7 @@
                                                         <input type="text" x-model="search" placeholder="{{ __('Number, subject, or client') }}" class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                                     </div>
                                                 </div>
-                                                <div class="flex-1 overflow-y-auto p-3">
+                                                <div class="flex-1 overflow-y-auto p-3" data-tour="ticket-merge-target">
                                                     <template x-if="filtered.length === 0">
                                                         <p class="text-center py-8 text-sm text-gray-500">{{ __('No matching tickets.') }}</p>
                                                     </template>
@@ -1003,7 +1003,7 @@
             </div>
 
             {{-- Activity History / Audit Logs --}}
-            <div id="ticket-history" data-fragment="history">
+            <div id="ticket-history" data-fragment="history" data-tour="ticket-history">
                 @include('tickets.partials._history')
             </div>
         </div>

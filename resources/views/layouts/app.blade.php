@@ -128,7 +128,11 @@
             })();
         </script>
     </head>
-    <body class="font-sans antialiased">
+    {{-- data-route / data-tour-endpoint let the tour runner work out which
+         steps belong to this page and where to fetch definitions from. --}}
+    <body class="font-sans antialiased"
+          data-route="{{ Route::currentRouteName() }}"
+          data-tour-endpoint="{{ route('tours.index') }}">
         @if(session('admin_impersonating'))
             <div class="bg-yellow-500 text-yellow-900 text-center py-2 px-4 text-sm font-medium relative z-100">
                 You are viewing as tenant: <strong>{{ \App\Models\Tenant::find(session('current_tenant_id'))?->name }}</strong>
@@ -717,6 +721,9 @@
             </div>
 
         </div>
+
+        @include('partials.tour-launcher')
+
         @stack('scripts')
         @auth
         <script>

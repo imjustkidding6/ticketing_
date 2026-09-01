@@ -5,7 +5,8 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "test:tour": "node tests/js/tour-runner.test.mjs"
     },
     "devDependencies": {
         "@playwright/test": "^1.58.2",

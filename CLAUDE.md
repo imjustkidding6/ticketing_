@@ -362,6 +362,19 @@ Uses `laravel/socialite`. Flow handled by `GoogleSocialiteController`:
 
 Google-registered users have `password = null` and `email_verified_at` pre-set. The `PasswordController` guards against setting a blank password on these accounts. Required `.env` keys: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`.
 
+### Guided Tours
+
+In-app guided tours: a dimming overlay walks the user through a real workflow on the live application. Definitions live in **`config/tours.php`** (not the database — steps reference selectors and permissions, and both deserve code review).
+
+- **Startable any time, by anyone, repeatedly.** There is deliberately no "has seen tour" flag; a tour is a reference tool, not a first-run greeting.
+- **Tours span pages.** Each step declares a `page` (route name, `tickets.*` wildcards allowed). Progress lives in `sessionStorage` keyed per tab and the runner resumes on the next page load. `TourRunner.run()` **saves progress as its first act, before the early return** for a page with no steps — tours are launched from pages where no step lives, so a save placed after that branch never runs and the tour dies at the first navigation.
+- **Two advance modes.** `advance: 'next'` when the step only explains; `advance: 'click'` when the step *causes* something (navigation, modal). A click-step whose target resolves to the current page is automatically downgraded to `next`, since clicking it would just reload.
+- **Anchors are `data-tour="…"` attributes only** — never a styling class or a script's id. `GuidedTourTest::test_every_step_targets_an_anchor_that_exists_in_a_template` scans `resources/views/` and fails the build if a step targets an anchor no template contains. Grep `data-tour` before deleting an element.
+- **Served from an endpoint** (`tours.index`, `tours.show`), so the permission check is server-side. A user who may not take a tour gets **403, not an empty tour**. `permission` names the action being *taught* (`create tickets`), not the page's own view permission, and `feature` hides the tour when the plan lacks it.
+- **Runner sequencing is covered by `npm run test:tour`** — hand-written DOM stubs in `tests/js/`, no browser rig. The PHP suite cannot see the state machine.
+
+Adding a tour: add anchors to the templates, add the definition to `config/tours.php`, run both test suites. Steps stay between 2 and 7 (asserted) — longer is really two tours.
+
 ### Controller Concerns
 
 `app/Http/Controllers/Concerns/HasSortableQuery.php` — reusable trait for controllers that support column sorting. Use it instead of duplicating sort logic.
