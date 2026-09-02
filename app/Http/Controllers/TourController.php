@@ -2,8 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\PlanFeature;
-use App\Services\PlanService;
+use App\Services\HelpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -11,26 +10,34 @@ use Illuminate\Support\Facades\Log;
 /**
  * Serves guided tour definitions.
  *
- * Tours are fetched by key rather than embedded in the page, because a tour
- * resumes on pages that know nothing about the tour system. Serving them also
- * puts the permission check on the server, where a curious user cannot delete
- * it from the DOM.
+ * Tours live inside their help topic in config/help.php and are filtered by
+ * HelpService, so a topic and its tour can never disagree about who may see
+ * them. They are fetched by key rather than embedded in the page because a
+ * tour resumes on pages that know nothing about the help centre — and serving
+ * them puts the permission check on the server, where a curious reader cannot
+ * delete it from the DOM.
  */
 class TourController extends Controller
 {
+    public function __construct(private HelpService $help) {}
+
     /**
-     * Tours the current user is allowed to take, for the launcher.
+     * Tours the current user is allowed to take, for the launcher and cards.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $tours = collect(config('tours', []))
-            ->filter(fn (array $tour) => $this->isAvailable($tour))
+        $tours = collect($this->help->toursFor($request->user()))
             ->map(fn (array $tour) => [
                 'key' => $tour['key'],
                 'title' => $tour['title'],
                 'summary' => $tour['summary'] ?? null,
                 'minutes' => $tour['minutes'] ?? null,
-                'steps' => count($tour['steps'] ?? []),
+                'steps' => count($tour['steps']),
+                'topic' => $tour['topic'],
+                'category' => $tour['category'] ?? null,
+                'icon' => $tour['icon'] ?? 'academic-cap',
+                'start_url' => $tour['start_url'] ?? null,
+                'start_hint' => $tour['start_hint'] ?? null,
             ])
             ->values();
 
@@ -40,26 +47,26 @@ class TourController extends Controller
     /**
      * One tour by key.
      *
-     * Returns 403 rather than an empty tour when the user may not take it:
-     * an empty tour looks like a broken feature, a 403 is an answer.
+     * Returns 403 rather than an empty tour when the user may not take it: an
+     * empty tour looks like a broken feature, a 403 is an answer.
      */
     public function show(Request $request, string $key): JsonResponse
     {
-        $tour = config("tours.{$key}");
-
-        if (! is_array($tour)) {
+        if (! is_array(config("help.topics.{$key}"))) {
             return response()->json(['message' => 'That tour does not exist.'], 404);
         }
 
-        if (! $this->isAvailable($tour)) {
+        $tour = $this->help->tourFor($request->user(), $key);
+
+        if ($tour === null) {
             return response()->json([
                 'message' => 'You do not have access to the steps this tour covers.',
             ], 403);
         }
 
-        // F5: the runner re-fetches on every resume, so logging here
-        // unconditionally would record a start per page load and make
-        // completion rates meaningless. Only an explicit start counts.
+        // The runner re-fetches on every resume, so logging here unconditionally
+        // would record a start per page load and make completion rates
+        // meaningless. Only an explicit start counts.
         if ($request->boolean('start')) {
             Log::info('Guided tour started', [
                 'tour' => $key,
@@ -69,25 +76,5 @@ class TourController extends Controller
         }
 
         return response()->json(['tour' => $tour]);
-    }
-
-    /**
-     * Whether the current user can both take and complete this tour.
-     *
-     * @param  array<string, mixed>  $tour
-     */
-    private function isAvailable(array $tour): bool
-    {
-        if (! empty($tour['feature'])) {
-            $feature = PlanFeature::tryFrom($tour['feature']);
-
-            if (! $feature || ! app(PlanService::class)->currentTenantHasFeature($feature)) {
-                return false;
-            }
-        }
-
-        // The permission named is the one for the action being taught, not for
-        // the page it happens to start on.
-        return empty($tour['permission']) || $this->userCan($tour['permission']);
     }
 }

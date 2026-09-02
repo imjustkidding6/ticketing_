@@ -267,7 +267,10 @@
                             
                             <!-- Header Meta Title Info -->
                             <div>
-                                <h2 class="text-3xl font-extrabold text-[var(--text-primary)] mb-2">{{ __($tutorial['title']) }}</h2>
+                                <div class="mb-2 flex flex-wrap items-start justify-between gap-3">
+                                    <h2 class="text-3xl font-extrabold text-[var(--text-primary)]">{{ __($tutorial['title']) }}</h2>
+                                    @include('tutorials.partials._topic-tours')
+                                </div>
                                 <p class="text-base text-[var(--text-secondary)] leading-relaxed">{{ __($tutorial['description']) }}</p>
                                 
                                 <div class="flex flex-wrap items-center gap-4 mt-4 text-xs font-medium text-[var(--text-secondary)] pb-6 border-b border-[var(--border-soft)]">

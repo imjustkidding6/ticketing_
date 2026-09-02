@@ -260,13 +260,17 @@ class Overlay {
     }
 
     /** A step that lives on another page: offer the way forward, don't guess. */
-    showOffPage(step, { href, onEnd }) {
+    showOffPage(step, { href, hint, onEnd }) {
         this.el('cutout').style.opacity = '0';
         this.el('pointer').style.display = 'none';
         this.el('title').textContent = 'Continue on another page';
-        this.el('body').textContent = `The next step, "${step.title}", is on a different screen.`;
+        this.el('body').textContent = href
+            ? `The next step, "${step.title}", is on a different screen.`
+            : hint || `The next step, "${step.title}", is on a screen we cannot open for you from here.`;
         this.el('next').textContent = href ? 'Take me there' : 'End tour';
         this.el('back').hidden = true;
+        // The tour navigates only when the user asks it to; progress is already
+        // saved, so the step resumes as soon as the page arrives.
         this.el('next').onclick = href ? () => { window.location.href = href; } : onEnd;
         this.el('close').onclick = onEnd;
         this.el('panel').style.top = '50%';
@@ -348,7 +352,10 @@ class TourRunner {
             if (!step) return this.end();
 
             this.overlay.showOffPage(step, {
-                href: null,
+                // Resolved server-side; null when the page needs a record id we
+                // cannot guess, in which case the tour says where to go instead.
+                href: step.url ?? null,
+                hint: tour.start_hint ?? null,
                 // F6: closing this prompt is an exit path too, so it clears.
                 onEnd: () => this.end(),
             });

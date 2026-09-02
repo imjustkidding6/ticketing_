@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\HelpService;
 use App\Services\OnboardingService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -48,6 +50,8 @@ class TutorialController extends Controller
         ],
     ];
 
+    public function __construct(private HelpService $help) {}
+
     public function index(OnboardingService $onboardingService): View
     {
         $user = Auth::user();
@@ -61,21 +65,41 @@ class TutorialController extends Controller
 
         $viewName = request()->routeIs('admin.*') ? 'admin.help.index' : 'tutorials.index';
 
+        $topics = $this->help->topicsFor($user);
+
         return view($viewName, [
             'tutorials' => self::TUTORIALS,
             'onboardingDismissed' => $onboardingDismissed,
+            // Everything below is scoped to this reader. The page, the contents
+            // list, the search index and the PDF all read the same result.
+            'topics' => $topics,
+            'groups' => $this->help->groupedTopicsFor($user),
+            'tours' => $this->help->toursFor($user),
+            'hiddenTopics' => $this->help->hiddenTopicsFor($user),
+            'totalMinutes' => $this->help->totalMinutesFor($user),
+            'searchText' => collect($topics)->map(fn ($t) => $this->help->searchTextFor($t))->all(),
         ]);
     }
 
-    public function show(string $tutorial): View
+    public function show(string $tutorial): View|RedirectResponse
     {
+        // The tenant help centre renders every topic on one page from
+        // HelpService, so a per-topic template would be a second copy of the
+        // content — and the two would disagree within a month. Send old links
+        // to the topic where it now lives.
+        if (! request()->routeIs('admin.*')) {
+            if (! array_key_exists($tutorial, config('help.topics', []))) {
+                abort(404);
+            }
+
+            return redirect()->to(route('tutorials.index').'#topic-'.$tutorial);
+        }
+
         if (! array_key_exists($tutorial, self::TUTORIALS)) {
             abort(404);
         }
 
-        $viewName = request()->routeIs('admin.*') ? 'admin.help.show' : 'tutorials.show';
-
-        return view($viewName, [
+        return view('admin.help.show', [
             'slug' => $tutorial,
             'tutorial' => self::TUTORIALS[$tutorial],
             'tutorials' => self::TUTORIALS,
@@ -87,10 +111,16 @@ class TutorialController extends Controller
      */
     public function downloadPdf(): Response
     {
-        $tenant = Auth::user()->currentTenant();
+        $user = Auth::user();
+        $tenant = $user->currentTenant();
 
+        // Generated from the same filtered content as the page. A static
+        // manual handed to everyone would undo the scoping entirely.
         $pdf = Pdf::loadView('tutorials.pdf', [
             'tutorials' => self::TUTORIALS,
+            'topics' => $this->help->topicsFor($user),
+            'groups' => $this->help->groupedTopicsFor($user),
+            'totalMinutes' => $this->help->totalMinutesFor($user),
             'tenant' => $tenant,
         ])->setPaper('a4');
 

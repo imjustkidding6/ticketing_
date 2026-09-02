@@ -148,19 +148,23 @@
 <div class="toc">
     <h2>{{ __('Contents') }}</h2>
     <ol>
-        @foreach($tutorials as $slug => $tutorial)
+        {{-- The same filtered topics the page shows. A manual covering
+             everything would undo the scoping the moment someone downloads it. --}}
+        @foreach($topics as $slug => $tutorial)
             <li>
                 {{ __($tutorial['title']) }}
-                <span class="desc">{{ __($tutorial['description']) }}</span>
+                <span class="desc">{{ __($tutorial['summary'] ?? '') }}</span>
             </li>
         @endforeach
     </ol>
 </div>
 
 {{-- Sections --}}
-@foreach($tutorials as $slug => $tutorial)
+@foreach($topics as $slug => $tutorial)
     <div class="tutorial-section">
-        @include('tutorials.partials.' . $slug)
+        <h2>{{ __($tutorial['title']) }}</h2>
+        <p class="desc">{{ __($tutorial['summary'] ?? '') }} &middot; ~{{ $tutorial['minutes'] }} {{ __('min') }}</p>
+        @include('tutorials.partials._blocks', ['blocks' => $tutorial['blocks']])
     </div>
 @endforeach
 

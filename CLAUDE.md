@@ -362,18 +362,27 @@ Uses `laravel/socialite`. Flow handled by `GoogleSocialiteController`:
 
 Google-registered users have `password = null` and `email_verified_at` pre-set. The `PasswordController` guards against setting a blank password on these accounts. Required `.env` keys: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`.
 
-### Guided Tours
+### Help Centre & Guided Tours
 
-In-app guided tours: a dimming overlay walks the user through a real workflow on the live application. Definitions live in **`config/tours.php`** (not the database — steps reference selectors and permissions, and both deserve code review).
+A permission-scoped help centre (`/{slug}/tutorials`) and the guided tours that run on the real screens. They are one feature: neither may ever mention something the reader cannot do.
 
-- **Startable any time, by anyone, repeatedly.** There is deliberately no "has seen tour" flag; a tour is a reference tool, not a first-run greeting.
-- **Tours span pages.** Each step declares a `page` (route name, `tickets.*` wildcards allowed). Progress lives in `sessionStorage` keyed per tab and the runner resumes on the next page load. `TourRunner.run()` **saves progress as its first act, before the early return** for a page with no steps — tours are launched from pages where no step lives, so a save placed after that branch never runs and the tour dies at the first navigation.
-- **Two advance modes.** `advance: 'next'` when the step only explains; `advance: 'click'` when the step *causes* something (navigation, modal). A click-step whose target resolves to the current page is automatically downgraded to `next`, since clicking it would just reload.
-- **Anchors are `data-tour="…"` attributes only** — never a styling class or a script's id. `GuidedTourTest::test_every_step_targets_an_anchor_that_exists_in_a_template` scans `resources/views/` and fails the build if a step targets an anchor no template contains. Grep `data-tour` before deleting an element.
-- **Served from an endpoint** (`tours.index`, `tours.show`), so the permission check is server-side. A user who may not take a tour gets **403, not an empty tour**. `permission` names the action being *taught* (`create tickets`), not the page's own view permission, and `feature` hides the tour when the plan lacks it.
-- **Runner sequencing is covered by `npm run test:tour`** — hand-written DOM stubs in `tests/js/`, no browser rig. The PHP suite cannot see the state machine.
+**Content is data, never markup.** Everything lives in `config/help.php`; `HelpService` reads and filters it. The page, the contents list, the search index, the PDF and the tour endpoint all call the same service methods — the moment one of them re-checks a permission itself they drift apart. Views render what the service returns and check nothing.
 
-Adding a tour: add anchors to the templates, add the definition to `config/tours.php`, run both test suites. Steps stay between 2 and 7 (asserted) — longer is really two tours.
+**Filtering is recursive.** A `permission` may sit on a topic, on one block inside a topic, on a single FAQ entry, or on a tour. Gating whole topics is the obvious half and the useless half: an agent who can update tickets but not merge them reads the status section and never sees "Merging duplicates". A topic whose blocks all filtered away is dropped, and so is a sub-heading left standing with nothing under it (`dropOrphanHeadings()`). Topics may also carry a `feature` — permission and plan are different questions.
+
+**Tours span pages.** Each step declares a `route`; progress lives in `sessionStorage` per tab; the runner resumes on the next page load. `TourRunner.run()` **saves progress as its first act, before the early return** for a page with no steps — tours start from the help centre where no step lives, so a save placed after that branch never runs and the tour dies silently at the first navigation. `HelpService` resolves each step's route to a URL so the runner can offer "take me there".
+
+**Anchors are `data-tour="…"` attributes only** — never a class or a script's id. `HelpCentreTest` scans `resources/views/` and fails the build if a step targets an anchor no template contains, or names an unregistered route.
+
+**Empty states must explain themselves.** A legitimate search returning nothing reads as a broken search box. `hiddenTopicsFor()` exposes the titles and required permissions of filtered-out topics, so a dead-end query names the module and the permission to ask for. Title matches rank above keyword matches.
+
+**Search filters every region** — topic bodies, tutorial cards, contents entries and their group labels — against `searchTextFor()`, or the page contradicts itself.
+
+**The PDF comes from the same filtered content.** A static manual covering everything undoes the scoping the moment someone downloads it; a test asserts two roles get different files.
+
+Adding a topic or tour: write it in `config/help.php`, add any `data-tour` anchors to the templates, then run `php artisan test --filter=HelpCentreTest` and `npm run test:tour`. Keep tours to 2–7 steps and teach the consequence, not the button.
+
+Reference implementation and the fuller rationale: `../projects/alstylehris/docs/scoped-help-and-tours.md`.
 
 ### Controller Concerns
 
