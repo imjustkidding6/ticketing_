@@ -269,6 +269,42 @@ class HelpPermissionSweepTest extends TestCase
         }
     }
 
+    public function test_the_admin_guide_is_unscoped_but_closed_to_everyone_else(): void
+    {
+        $tenant = $this->tenant();
+
+        // Platform staff hold no tenant role, so a permission filter would hand
+        // them an empty guide. They are cross-tenant by design and read it all.
+        $staff = User::factory()->create(['is_admin' => true]);
+        $this->actingAs($staff);
+
+        $html = $this->get(route('admin.help.index'))->assertOk()->getContent();
+
+        foreach (array_keys(config('help.topics')) as $key) {
+            $this->assertStringContainsString('data-help-topic="'.$key.'"', $html,
+                "the platform guide is unscoped and must contain '{$key}'");
+        }
+
+        // But it is not another way for a tenant user to read the whole thing.
+        $member = $this->reader($tenant, 'viewer');
+        $this->assertNotTrue($member->is_admin);
+        $this->get(route('admin.help.index'))->assertForbidden();
+    }
+
+    public function test_the_two_surfaces_read_the_same_content_store(): void
+    {
+        // A second copy of the content is how the two drift apart, so there is
+        // exactly one: config/help.php.
+        $this->assertFalse(
+            class_exists(\App\Http\Controllers\TutorialController::class)
+            && defined(\App\Http\Controllers\TutorialController::class.'::TUTORIALS'),
+            'The legacy hardcoded tutorial list must not come back'
+        );
+
+        $this->assertNull(config('tutorials'), 'config/tutorials.php was the old duplicate store');
+        $this->assertNotEmpty(config('help.topics'));
+    }
+
     public function test_a_user_outside_the_workspace_gets_nothing(): void
     {
         $tenant = $this->tenant();

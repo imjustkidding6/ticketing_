@@ -51,10 +51,11 @@ Route::post('/webhooks/github', [GitHubWebhookController::class, 'handle'])->nam
 
 Route::get('/register/check-slug', function (Request $request) {
     $slug = Str::slug($request->query('slug', ''));
-    $reserved = ['admin', 'www', 'mail', 'api', 'portal', 'app', 'support', 'help', 'status', 'login', 'register', 'profile', 'up', 'logout'];
+    // Same list the registration request validates against, or this endpoint
+    // tells someone a slug is free that registration will then reject.
     $available = $slug
         && strlen($slug) >= 3
-        && ! in_array($slug, $reserved)
+        && ! in_array($slug, Tenant::RESERVED_SLUGS, true)
         && ! Tenant::where('slug', $slug)->exists();
 
     return response()->json(['available' => $available]);

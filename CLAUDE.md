@@ -384,6 +384,8 @@ Current scope: **24 topics, 12 tours, 28 steps, 23 `data-tour` anchors**. Same c
 
 Adding a topic or tour: write it in `config/help.php`, add any `data-tour` anchors to the templates, then run `php artisan test --filter=HelpCentreTest` and `npm run test:tour`. Keep tours to 2–7 steps and teach the consequence, not the button.
 
+**One content store, two surfaces.** `/{slug}/tutorials` renders what the reader's role permits; `/admin/help` renders the same `config/help.php` unfiltered, because platform staff hold no tenant role and a permission filter would hand them an empty guide. The admin page labels each topic with the permission and plan feature it requires, which is what a customer will be told to ask for. There is no second copy of the content and no per-topic template — old links redirect to the topic anchor on whichever page applies.
+
 **The scoping is swept, not spot-checked.** `HelpPermissionSweepTest` walks every seeded role against every topic and every tour and asserts the page, the tour endpoint, the launcher listing and the PDF all agree with `HelpService`. It also proves a hidden topic's body never reaches the HTML, and that guessing a tour key is not a way round the launcher — the endpoint 403s and carries no payload.
 
 `hiddenTopicsFor()` deliberately exposes a hidden topic's title, search words and required permission names so the empty state can explain itself; a test pins that boundary so nothing else joins them.

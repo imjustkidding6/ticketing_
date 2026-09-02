@@ -46,6 +46,22 @@ class TenantSlugReservationTest extends TestCase
         ));
     }
 
+    public function test_the_availability_check_agrees_with_registration(): void
+    {
+        // These are two separate code paths asking the same question. When they
+        // disagree, the form says a slug is free and then registration rejects
+        // it — which reads as a bug in registration.
+        foreach (['connect-jude', 'webhooks', 'password', 'admin'] as $slug) {
+            $this->getJson('/register/check-slug?slug='.$slug)
+                ->assertOk()
+                ->assertJson(['available' => false], "'{$slug}' is reserved but the checker offered it");
+        }
+
+        $this->getJson('/register/check-slug?slug=acme-support')
+            ->assertOk()
+            ->assertJson(['available' => true]);
+    }
+
     public function test_registration_rejects_a_reserved_slug(): void
     {
         foreach (['connect-jude', 'webhooks', 'auth', 'admin'] as $slug) {

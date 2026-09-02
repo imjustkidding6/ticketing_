@@ -77,6 +77,53 @@ class HelpService
     }
 
     /**
+     * Every topic, unfiltered, for platform staff.
+     *
+     * Platform administrators hold no tenant role, so filtering by permission
+     * would hand them an empty guide. They are cross-tenant by design — the
+     * same exemption the admin controllers already carry.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function allTopics(): array
+    {
+        $all = [];
+
+        foreach (config('help.topics', []) as $key => $topic) {
+            $topic['key'] = $key;
+            $topic['blocks'] = $this->dropOrphanHeadings($topic['blocks'] ?? []);
+            $topic['tour'] = null;
+
+            $all[$key] = $topic;
+        }
+
+        return $all;
+    }
+
+    /**
+     * Groups for the unfiltered set.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function allGroupedTopics(): array
+    {
+        $groups = [];
+
+        foreach ($this->allTopics() as $key => $topic) {
+            $groupKey = $topic['group'] ?? 'basics';
+
+            if (! isset($groups[$groupKey])) {
+                $meta = config("help.groups.{$groupKey}", ['label' => ucfirst($groupKey), 'icon' => 'book-open']);
+                $groups[$groupKey] = $meta + ['topics' => []];
+            }
+
+            $groups[$groupKey]['topics'][$key] = $topic;
+        }
+
+        return $groups;
+    }
+
+    /**
      * One topic, filtered, or null when the reader may not see it.
      *
      * @return array<string, mixed>|null
