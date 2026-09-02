@@ -64,8 +64,6 @@
                 } catch {
                     /* the launcher simply does not appear */
                 }
-                // A tour in progress resumes itself once the page has settled.
-                window.GuidedTour?.resume();
             },
             start(key) {
                 this.open = false;

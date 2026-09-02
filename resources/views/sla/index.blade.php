@@ -3,7 +3,7 @@
         <div class="flex items-center justify-between w-full">
             <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('SLA Policies') }}</h2>
             @if(!$hasAny)
-                <form method="POST" action="{{ route('sla.seed-defaults') }}" data-tour="sla-seed">
+                <form method="POST" action="{{ route('sla.seed-defaults') }}">
                     @csrf
                     <button type="submit" class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -34,6 +34,8 @@
                 <p><span class="font-semibold">{{ __('Response hours') }}:</span> {{ __('target time from ticket creation until it is first moved to In Progress.') }}</p>
                 <p><span class="font-semibold">{{ __('Resolution hours') }}:</span> {{ __('target time from ticket creation until it is Closed.') }}</p>
             </div>
+
+            <div data-tour="sla-tiers">
 
             @foreach($tiers as $tier)
                 @php $tierRows = $grouped[$tier]; $hasRows = collect($tierRows)->filter()->isNotEmpty(); @endphp
@@ -100,6 +102,8 @@
                                         </td>
                                     </tr>
                                 @endforeach
+
+            </div>
                             </tbody>
                         </table>
                     @endif

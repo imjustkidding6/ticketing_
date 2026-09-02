@@ -254,7 +254,7 @@ return [
                 'minutes' => 3,
                 'permission' => ['create sla policies', 'update sla policies'],
                 'steps' => [
-                    ['route' => 'sla.index', 'selector' => '[data-tour="sla-seed"]', 'title' => 'Start from the defaults', 'body' => 'This writes a sensible policy for every tier and priority. Starting from nothing means tickets that cannot be given a priority at all.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'sla.index', 'selector' => '[data-tour="sla-tiers"]', 'title' => 'One set of targets per client tier', 'body' => 'Every client sits in a tier, and each tier carries its own response and resolution hours for each priority. On an empty workspace, seed the defaults first — a priority with no matching policy cannot be set at all.', 'advance' => 'next', 'side' => 'bottom'],
                     ['route' => 'sla.index', 'selector' => '[data-tour="sla-tier"]', 'title' => 'Targets are set per tier', 'body' => 'Each client tier has its own response and resolution hours for each priority. Open one to adjust it.', 'advance' => 'next', 'side' => 'bottom'],
                 ],
             ],
@@ -772,6 +772,9 @@ return [
             'title' => 'API Access',
             'icon' => 'code-bracket',
             'permission' => 'manage api tokens',
+            // API access is enabled per workspace; its page 404s otherwise, so
+            // the topic and its tour must follow the same switch.
+            'gate' => 'apiAccessEnabled',
             'minutes' => 3,
             'keywords' => 'api token rest integration bearer authentication webhook programmatic',
             'summary' => 'Tokens for integrating another system.',

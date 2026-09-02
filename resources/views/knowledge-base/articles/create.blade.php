@@ -46,8 +46,8 @@
                         </div>
 
                         <div class="flex items-center gap-2">
-                            <input type="hidden" name="is_published" data-tour="kb-publish" value="0">
-                            <input type="checkbox" name="is_published" id="is_published" value="1" {{ old('is_published') ? 'checked' : '' }} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            <input type="hidden" name="is_published" value="0">
+                            <input type="checkbox" name="is_published" id="is_published" data-tour="kb-publish" value="1" {{ old('is_published') ? 'checked' : '' }} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                             <label for="is_published" class="text-sm font-medium text-gray-700">{{ __('Publish immediately') }}</label>
                         </div>
                     </div>

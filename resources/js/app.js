@@ -17,6 +17,16 @@ window.GuidedTour = new TourRunner({
     endpoint: document.body?.dataset.tourEndpoint ?? '',
 });
 
+// A tour in progress resumes itself as soon as the page is ready. This used to
+// hang off the launcher's Alpine init, which meant resuming waited on that
+// component's fetch — so a tour could silently fail to pick up on any page
+// where the launcher was slow, and on any page that did not render it.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => window.GuidedTour.resume(), { once: true });
+} else {
+    window.GuidedTour.resume();
+}
+
 window.Alpine = Alpine;
 
 Alpine.start();

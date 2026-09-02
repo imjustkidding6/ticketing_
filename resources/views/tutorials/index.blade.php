@@ -59,8 +59,8 @@
             {{-- The honest empty state: a legitimate search returning nothing
                  reads as a broken search box unless it says why. --}}
             <div x-show="deadEnd" x-cloak class="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-5">
-                <p class="text-sm font-bold text-amber-900" x-text="deadEnd.heading"></p>
-                <p class="mt-1 text-sm text-amber-800" x-text="deadEnd.detail"></p>
+                <p class="text-sm font-bold text-amber-900" x-text="deadEnd?.heading"></p>
+                <p class="mt-1 text-sm text-amber-800" x-text="deadEnd?.detail"></p>
             </div>
 
             <div x-show="noResults" x-cloak class="mb-6 rounded-xl border border-[var(--border-soft)] bg-[var(--bg-card)] p-5">

@@ -56,7 +56,8 @@ class HelpService
 
         foreach (config('help.topics', []) as $key => $topic) {
             if (! $this->allows($user, $topic['permission'] ?? null)
-                || ! $this->planHas($topic['feature'] ?? null)) {
+                || ! $this->planHas($topic['feature'] ?? null)
+                || ! $this->tenantAllows($user, $topic['gate'] ?? null)) {
                 continue;
             }
 
@@ -144,7 +145,8 @@ class HelpService
 
         if ($topic === null
             || ! $this->allows($user, $topic['permission'] ?? null)
-            || ! $this->planHas($topic['feature'] ?? null)) {
+            || ! $this->planHas($topic['feature'] ?? null)
+            || ! $this->tenantAllows($user, $topic['gate'] ?? null)) {
             return null;
         }
 
@@ -397,6 +399,28 @@ class HelpService
         $case = PlanFeature::tryFrom($feature);
 
         return $case !== null && app(PlanService::class)->currentTenantHasFeature($case);
+    }
+
+    /**
+     * A workspace-level switch that is neither a permission nor a plan feature.
+     *
+     * Named as a string rather than held as a closure so config stays cacheable.
+     * API access, for instance, is enabled per workspace and its page 404s
+     * otherwise — offering a tour into a 404 is worse than offering nothing.
+     */
+    private function tenantAllows(?User $user, ?string $gate): bool
+    {
+        if ($gate === null) {
+            return true;
+        }
+
+        $tenant = $user?->currentTenant();
+
+        if ($tenant === null || ! method_exists($tenant, $gate)) {
+            return false;
+        }
+
+        return (bool) $tenant->{$gate}();
     }
 
     /**

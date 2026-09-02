@@ -372,6 +372,10 @@ A permission-scoped help centre (`/{slug}/tutorials`) and the guided tours that 
 
 **Tours span pages.** Each step declares a `route`; progress lives in `sessionStorage` per tab; the runner resumes on the next page load. `TourRunner.run()` **saves progress as its first act, before the early return** for a page with no steps — tours start from the help centre where no step lives, so a save placed after that branch never runs and the tour dies silently at the first navigation. `HelpService` resolves each step's route to a URL so the runner can offer "take me there".
 
+**A tour is only proven by running it.** `tests/e2e/guided-tour-walk.spec.ts` walks every offered tour to its last step. The anchor test only proves the attribute exists *in a template* — it cannot see that the element is a hidden input, that it renders only in one state, or that its page 404s for this workspace. All three shipped and all three were invisible to every other suite.
+
+**A topic may also carry a `gate`** — the name of a `Tenant` method (a string, so config stays cacheable). API access is switched on per workspace and its page 404s otherwise, which is neither a permission nor a plan feature.
+
 **Anchors are `data-tour="…"` attributes only** — never a class or a script's id. `HelpCentreTest` scans `resources/views/` and fails the build if a step targets an anchor no template contains, or names an unregistered route.
 
 **Empty states must explain themselves.** A legitimate search returning nothing reads as a broken search box. `hiddenTopicsFor()` exposes the titles and required permissions of filtered-out topics, so a dead-end query names the module and the permission to ask for. Title matches rank above keyword matches.
