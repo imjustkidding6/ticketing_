@@ -42,13 +42,13 @@
 
                     <form method="POST" action="{{ route('settings.api-tokens.store') }}" class="mt-4 flex gap-3">
                         @csrf
-                        <input type="text" name="name" placeholder="e.g. Pricing Calculator Chatbot"
+                        <input type="text" name="name" data-tour="token-name" placeholder="e.g. Pricing Calculator Chatbot"
                                class="flex-1 rounded-md border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                required maxlength="100">
                         <input type="number" name="expires_in_days" placeholder="Expires in (days)"
                                min="1" max="3650"
                                class="w-44 rounded-md border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Generate') }}</button>
+                        <button type="submit" data-tour="token-submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Generate') }}</button>
                     </form>
                     @error('name')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
                 </div>

@@ -2,7 +2,7 @@
     <x-slot name="header">
         <div class="flex items-center justify-between w-full">
             <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('Canned Responses') }}</h2>
-            <a href="{{ route('canned-responses.create') }}" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+            <a href="{{ route('canned-responses.create') }}" data-tour="canned-create" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
                 <svg class="-ml-0.5 mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>

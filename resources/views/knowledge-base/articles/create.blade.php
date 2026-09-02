@@ -23,7 +23,7 @@
 
                         <div>
                             <label for="title" class="block text-sm font-medium text-gray-700">{{ __('Title') }}</label>
-                            <input type="text" name="title" id="title" value="{{ old('title') }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <input type="text" name="title" data-tour="kb-title" id="title" value="{{ old('title') }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                             @error('title') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
 
@@ -46,7 +46,7 @@
                         </div>
 
                         <div class="flex items-center gap-2">
-                            <input type="hidden" name="is_published" value="0">
+                            <input type="hidden" name="is_published" data-tour="kb-publish" value="0">
                             <input type="checkbox" name="is_published" id="is_published" value="1" {{ old('is_published') ? 'checked' : '' }} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                             <label for="is_published" class="text-sm font-medium text-gray-700">{{ __('Publish immediately') }}</label>
                         </div>

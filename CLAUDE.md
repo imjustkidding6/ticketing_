@@ -380,6 +380,8 @@ A permission-scoped help centre (`/{slug}/tutorials`) and the guided tours that 
 
 **The PDF comes from the same filtered content.** A static manual covering everything undoes the scoping the moment someone downloads it; a test asserts two roles get different files.
 
+Current scope: **24 topics, 12 tours, 28 steps, 23 `data-tour` anchors**. Same code and content file, per role: admin 24/12, manager 23/10, supervisor 19/5, senior agent 16/3, agent 13/1, viewer 10/0, billing 5/0.
+
 Adding a topic or tour: write it in `config/help.php`, add any `data-tour` anchors to the templates, then run `php artisan test --filter=HelpCentreTest` and `npm run test:tour`. Keep tours to 2–7 steps and teach the consequence, not the button.
 
 Reference implementation and the fuller rationale: `../projects/alstylehris/docs/scoped-help-and-tours.md`.

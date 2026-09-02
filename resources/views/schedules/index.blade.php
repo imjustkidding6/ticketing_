@@ -17,7 +17,7 @@
             @if($canManageOthers && $manageableAgents->isNotEmpty())
                 <form method="GET" class="mb-4 flex items-center gap-3">
                     <label for="user_switch" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('Editing schedule for:') }}</label>
-                    <select name="user_id" id="user_switch" onchange="this.form.submit()" class="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <select name="user_id" data-tour="schedule-user" id="user_switch" onchange="this.form.submit()" class="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                         @foreach($manageableAgents as $agent)
                             <option value="{{ $agent->id }}" {{ $target->id === $agent->id ? 'selected' : '' }}>{{ $agent->name }}</option>
                         @endforeach

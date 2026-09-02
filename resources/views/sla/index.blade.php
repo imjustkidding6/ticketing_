@@ -3,7 +3,7 @@
         <div class="flex items-center justify-between w-full">
             <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('SLA Policies') }}</h2>
             @if(!$hasAny)
-                <form method="POST" action="{{ route('sla.seed-defaults') }}">
+                <form method="POST" action="{{ route('sla.seed-defaults') }}" data-tour="sla-seed">
                     @csrf
                     <button type="submit" class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -44,7 +44,7 @@
                             <p class="text-xs text-gray-500">{{ __('Applies to clients tagged as :tier.', ['tier' => $tier]) }}</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <a href="{{ route('sla.edit-tier', $tier) }}" class="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">
+                            <a href="{{ route('sla.edit-tier', $tier) }}" data-tour="sla-tier" class="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">
                                 @if($hasRows)
                                     {{ __('Edit policy') }}
                                 @else

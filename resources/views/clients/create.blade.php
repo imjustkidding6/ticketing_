@@ -12,7 +12,7 @@
                     <div class="space-y-6">
                         <div>
                             <label for="name" class="block text-sm font-medium text-gray-700">{{ __('Company / Client Name') }}</label>
-                            <input type="text" name="name" id="name" value="{{ old('name') }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <input type="text" name="name" data-tour="client-name" id="name" value="{{ old('name') }}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                             @error('name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
 
@@ -45,7 +45,7 @@
                             @php $hasSla = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement); @endphp
                             <div x-data="{ selectedTier: '{{ old('tier', 'basic') }}' }">
                                 <label for="tier" class="block text-sm font-medium text-gray-700">{{ $hasSla ? __('SLA Tier') : __('Tier') }}</label>
-                                <select name="tier" id="tier" required x-model="selectedTier" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <select name="tier" data-tour="client-tier" id="tier" required x-model="selectedTier" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                     <option value="basic">{{ __('Basic') }}</option>
                                     <option value="premium">{{ __('Premium') }}</option>
                                     <option value="enterprise">{{ __('Enterprise') }}</option>

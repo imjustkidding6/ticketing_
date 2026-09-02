@@ -37,7 +37,9 @@ return [
         'basics' => ['label' => 'Getting around', 'icon' => 'rocket-launch'],
         'work' => ['label' => 'Daily work', 'icon' => 'ticket'],
         'people' => ['label' => 'People & clients', 'icon' => 'users'],
+        'catalog' => ['label' => 'What you support', 'icon' => 'tag'],
         'service' => ['label' => 'Service levels', 'icon' => 'clock'],
+        'knowledge' => ['label' => 'Knowledge', 'icon' => 'book-open'],
         'insight' => ['label' => 'Reporting', 'icon' => 'chart-bar'],
         'admin' => ['label' => 'Administration', 'icon' => 'cog'],
     ],
@@ -194,6 +196,18 @@ return [
                     ['q' => 'Why does changing a tier not move existing deadlines?', 'a' => 'The SLA is chosen when the ticket is created or when its priority changes. Existing tickets keep the target they were given.'],
                 ]],
             ],
+
+            'tour' => [
+                'title' => 'Add a client and set their tier',
+                'summary' => 'The tier is a commercial setting, not a label.',
+                'minutes' => 2,
+                'permission' => 'create clients',
+                'steps' => [
+                    ['route' => 'clients.index', 'selector' => '[data-tour="client-create"]', 'title' => 'Start here', 'body' => 'Opens the new client form.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'clients.create', 'selector' => '[data-tour="client-name"]', 'title' => 'Use the name on the contract', 'body' => 'Agents pick the client from this name when raising a ticket. A trading name nobody recognises gets tickets filed against the wrong company.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'clients.create', 'selector' => '[data-tour="client-tier"]', 'title' => 'The tier decides their deadlines', 'body' => 'Tier plus priority selects the SLA policy. Setting this higher than what was sold commits you to response times you have not agreed to.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
+            ],
         ],
 
         /* ---------------------------------------------------------------- */
@@ -232,6 +246,17 @@ return [
                     ['q' => 'A ticket shows as overdue but the SLA report says it met its target.', 'a' => 'That should no longer happen: the deadline itself is extended when a hold ends, so the dashboard and the report now apply the same rule. If you still see it, the ticket is worth reporting.'],
                     ['q' => 'Does the SLA pause outside working hours?', 'a' => 'No. Targets are plain elapsed hours — a 24-hour target set on Friday evening expires on Saturday evening. Set targets that reflect that.'],
                 ]],
+            ],
+
+            'tour' => [
+                'title' => 'Set your SLA targets',
+                'summary' => 'Seed the defaults, then tune one tier at a time.',
+                'minutes' => 3,
+                'permission' => ['create sla policies', 'update sla policies'],
+                'steps' => [
+                    ['route' => 'sla.index', 'selector' => '[data-tour="sla-seed"]', 'title' => 'Start from the defaults', 'body' => 'This writes a sensible policy for every tier and priority. Starting from nothing means tickets that cannot be given a priority at all.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'sla.index', 'selector' => '[data-tour="sla-tier"]', 'title' => 'Targets are set per tier', 'body' => 'Each client tier has its own response and resolution hours for each priority. Open one to adjust it.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
             ],
         ],
 
@@ -302,6 +327,472 @@ return [
                 ['p' => 'Your logo and colours appear on the public portal and on generated documents.', 'permission' => 'manage branding'],
                 ['h' => 'API tokens', 'permission' => 'manage api tokens'],
                 ['warn' => 'A token is shown once, when you create it. It cannot be recovered afterwards — if it is lost, revoke it and issue another.', 'permission' => 'manage api tokens'],
+            ],
+        ],
+
+
+        /* ---------------------------------------------------------------- */
+
+        'dashboard' => [
+            'group' => 'basics',
+            'title' => 'Reading the Dashboard',
+            'icon' => 'chart-bar',
+            'permission' => null,
+            'minutes' => 2,
+            'keywords' => 'dashboard overview widget stats overdue queue my tickets activity',
+            'summary' => 'What each figure on the front page counts.',
+            'blocks' => [
+                ['p' => 'The dashboard answers two questions: what needs you now, and how the workspace is doing.'],
+                ['ul' => [
+                    '<strong>Open</strong> and <strong>in progress</strong> count tickets assigned to you.',
+                    '<strong>Overdue</strong> counts tickets past their resolution deadline. Tickets on hold are not counted — their clock is paused.',
+                    '<strong>Unassigned</strong> is the queue nobody has picked up yet.',
+                ]],
+                ['note' => 'Merged and spam tickets are excluded everywhere, so a total here will not match a raw count of rows.'],
+                ['tip' => 'Counts are grouped by day in your workspace timezone, so "today" means your today.'],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'ticket-collaboration' => [
+            'group' => 'work',
+            'title' => 'Working a Ticket',
+            'icon' => 'chat-bubble-left-right',
+            'permission' => 'view ticket comments',
+            'minutes' => 4,
+            'keywords' => 'comment reply internal note task checklist attachment canned response collaborate',
+            'summary' => 'Replies, internal notes, tasks and attachments.',
+            'blocks' => [
+                ['h' => 'Replies and internal notes'],
+                ['p' => 'A reply is part of the conversation. An <strong>internal note</strong> is not — it stays between colleagues and is never shown to the client.', 'permission' => 'create ticket comments'],
+                ['warn' => 'Internal notes are a UI distinction, not a redaction. Write them as though the customer might one day read them in an export.', 'permission' => 'create internal notes'],
+
+                ['h' => 'Tasks', 'permission' => 'manage ticket tasks'],
+                ['p' => 'Break a ticket into a checklist. This is not decoration: a ticket cannot be closed while any task is still outstanding, so the checklist is the closing condition.', 'permission' => 'manage ticket tasks'],
+                ['tip' => 'Cancel a task you no longer need rather than deleting it — a cancelled task still counts as resolved for closing, and the history keeps the decision.', 'permission' => 'manage ticket tasks'],
+
+                ['h' => 'Attachments', 'permission' => 'upload attachments'],
+                ['ul' => [
+                    'Up to five files per ticket, 10 MB each.',
+                    'Documents, images and archives only — scripts and pages are refused.',
+                ], 'permission' => 'upload attachments'],
+
+                ['faq' => [
+                    ['q' => 'Why will this ticket not close?', 'a' => 'A task is still open. Complete or cancel it first.', 'permission' => 'manage ticket tasks'],
+                ]],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'escalation' => [
+            'group' => 'work',
+            'title' => 'Escalating a Ticket',
+            'icon' => 'arrow-trending-up',
+            'permission' => 'escalate tickets',
+            'feature' => 'agent_escalation',
+            'minutes' => 2,
+            'keywords' => 'escalate tier senior second line handover',
+            'summary' => 'Moving a ticket up a tier, and who can receive it.',
+            'blocks' => [
+                ['p' => 'Agents sit in three tiers. Escalating hands a ticket to someone with more authority over it.'],
+                ['ul' => [
+                    'You can only escalate <strong>up</strong>. Same tier or lower is refused.',
+                    'The receiving agent must be at or above the tier you are escalating to.',
+                    'The workspace owner is exempt from the tier rules.',
+                ]],
+                ['note' => 'Escalating with an agent selected reassigns the ticket, and that shows in the assignment history like any other handover.'],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'spam' => [
+            'group' => 'work',
+            'title' => 'Spam',
+            'icon' => 'shield-exclamation',
+            'permission' => 'update tickets',
+            'feature' => 'spam_management',
+            'minutes' => 2,
+            'keywords' => 'spam junk mark unmark bulk delete portal abuse',
+            'summary' => 'Getting junk out of the queue without losing it.',
+            'blocks' => [
+                ['p' => 'The public portal is open to anyone, so some of what arrives is not a support request.'],
+                ['steps' => [
+                    'Mark a ticket as spam to take it out of every queue, count and report.',
+                    'Spam is kept, not deleted — review it in the spam list and unmark anything caught wrongly.',
+                    'Delete in bulk from that list once you are sure.',
+                ], 'minutes' => 2],
+                ['warn' => 'Marking spam is reversible; deleting from the spam list is not.'],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'members' => [
+            'group' => 'people',
+            'title' => 'Team Members',
+            'icon' => 'user-group',
+            'permission' => 'view members',
+            'minutes' => 4,
+            'keywords' => 'member agent user invite role department tier support access remove',
+            'summary' => 'Adding people, and the two settings that decide what they see.',
+            'blocks' => [
+                ['p' => 'Two separate settings decide what a member can do. Getting either wrong is the most common cause of "why can I not see this?".'],
+                ['ul' => [
+                    'Their <strong>role</strong> decides which actions they may take.',
+                    'Their <strong>departments</strong> decide which tickets they may see.',
+                ]],
+                ['warn' => 'A member with no departments sees only tickets assigned to them or raised by them — not everything. If someone reports an empty ticket list, check their departments first.'],
+                ['h' => 'Adding someone', 'permission' => 'invite members'],
+                ['steps' => [
+                    'Enter their name and email — the email is their login and must be unique.',
+                    'Pick a role. Start narrow; widening later is easy and safe.',
+                    'Assign the departments whose tickets they should see.',
+                    'On plans with agent tiers, set their support tier — a ticket above their tier cannot be assigned to them.',
+                ], 'minutes' => 3, 'permission' => 'invite members'],
+                ['h' => 'Removing someone', 'permission' => 'remove members'],
+                ['p' => 'Removing a member revokes their access to this workspace. Their name stays on the tickets they handled, so the history stays readable.', 'permission' => 'remove members'],
+            ],
+            'tour' => [
+                'title' => 'Add a team member',
+                'summary' => 'Role decides what they can do; departments decide what they can see.',
+                'minutes' => 3,
+                'permission' => 'invite members',
+                'steps' => [
+                    ['route' => 'members.index', 'selector' => '[data-tour="member-create"]', 'title' => 'Start here', 'body' => 'Opens the new member form.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'members.create', 'selector' => '[data-tour="member-email"]', 'title' => 'The email is the login', 'body' => 'It has to be unique across the whole system, and it is what they sign in with. Getting it wrong means an invitation that never arrives.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'roles' => [
+            'group' => 'people',
+            'title' => 'Roles & Permissions',
+            'icon' => 'key',
+            'permission' => 'view roles',
+            'minutes' => 4,
+            'keywords' => 'role permission custom access grant revoke owner admin agent viewer',
+            'summary' => 'The seven built-in roles, and when to make your own.',
+            'blocks' => [
+                ['p' => 'Every workspace starts with seven roles, in decreasing access: administrator, manager, supervisor, senior agent, agent, viewer and billing.'],
+                ['ul' => [
+                    'The <strong>workspace owner</strong> bypasses every permission check and cannot be locked out.',
+                    'An <strong>agent</strong> deliberately cannot browse the client directory — agents work tickets.',
+                    'A <strong>viewer</strong> holds view-only permissions and nothing else.',
+                ]],
+                ['h' => 'Custom roles', 'permission' => 'create roles'],
+                ['p' => 'Build a role from the individual permissions when none of the seven fits. Permissions are grouped by area to make the choice legible.', 'permission' => 'create roles'],
+                ['note' => 'One permission behaves differently from the rest: <strong>view all tickets</strong> decides how much someone sees rather than whether they get in. Without it a member is limited to their departments instead of being refused.', 'permission' => 'create roles'],
+            ],
+
+            'tour' => [
+                'title' => 'Build a custom role',
+                'summary' => 'Start narrow — widening later is the safe direction.',
+                'minutes' => 3,
+                'permission' => 'create roles',
+                'steps' => [
+                    ['route' => 'roles.index', 'selector' => '[data-tour="role-create"]', 'title' => 'Start here', 'body' => 'Opens the role builder.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'roles.create', 'selector' => '[data-tour="role-name"]', 'title' => 'Name it for the job', 'body' => 'Members are assigned this by name, so it should describe what someone does rather than which permissions it happens to hold.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'departments' => [
+            'group' => 'people',
+            'title' => 'Departments',
+            'icon' => 'building-office',
+            'permission' => 'view departments',
+            'feature' => 'department_management',
+            'minutes' => 3,
+            'keywords' => 'department team routing visibility scope queue split',
+            'summary' => 'Departments are the ticket visibility boundary.',
+            'blocks' => [
+                ['p' => 'A department is more than a label: it is what decides which tickets a member can see. Without the "view all tickets" permission, a member sees their departments\' tickets plus their own work.'],
+                ['h' => 'Creating one', 'permission' => 'create departments'],
+                ['steps' => [
+                    'Name it after the team that will work its tickets, not after the customer.',
+                    'Assign members to it, or their queue stays empty.',
+                ], 'minutes' => 2, 'permission' => 'create departments'],
+                ['tip' => 'Fewer, broader departments cause fewer support questions than many narrow ones.'],
+            ],
+
+            'tour' => [
+                'title' => 'Create a department',
+                'summary' => 'Departments decide who can see which tickets.',
+                'minutes' => 2,
+                'permission' => 'create departments',
+                'steps' => [
+                    ['route' => 'departments.index', 'selector' => '[data-tour="department-create"]', 'title' => 'Start here', 'body' => 'Opens the new department form.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'departments.create', 'selector' => '[data-tour="department-name"]', 'title' => 'Name it after the team', 'body' => 'This is a visibility boundary, not a label: members assigned here see its tickets, and members who are not do not. Name it after who works the tickets.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'categories' => [
+            'group' => 'catalog',
+            'title' => 'Ticket Categories',
+            'icon' => 'tag',
+            'permission' => 'view categories',
+            'minutes' => 2,
+            'keywords' => 'category type classification department reporting group',
+            'summary' => 'What a ticket is about, for routing and reporting.',
+            'blocks' => [
+                ['p' => 'Categories classify what a ticket is about. They drive the category breakdown in reports, so a tidy list is worth keeping.'],
+                ['note' => 'A category belongs to a department. Picking a department on the ticket form narrows the categories offered, so a category on the wrong department is effectively invisible.'],
+                ['h' => 'Adding one', 'permission' => 'create categories'],
+                ['steps' => [
+                    'Choose the department it belongs to first.',
+                    'Name it for what the customer experienced, not for the fix.',
+                ], 'minutes' => 2, 'permission' => 'create categories'],
+            ],
+
+            'tour' => [
+                'title' => 'Add a ticket category',
+                'summary' => 'A category on the wrong department is invisible.',
+                'minutes' => 2,
+                'permission' => 'create categories',
+                'steps' => [
+                    ['route' => 'categories.index', 'selector' => '[data-tour="category-create"]', 'title' => 'Start here', 'body' => 'Opens the new category form.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'categories.create', 'selector' => '[data-tour="category-department"]', 'title' => 'Pick the department first', 'body' => 'The ticket form only offers categories belonging to the department chosen on it. A category filed under the wrong department will never appear.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'products' => [
+            'group' => 'catalog',
+            'title' => 'Products & Services',
+            'icon' => 'cube',
+            'permission' => 'view products',
+            'minutes' => 2,
+            'keywords' => 'product service catalog asset item supported',
+            'summary' => 'The things you support, attached to tickets.',
+            'blocks' => [
+                ['p' => 'Products are what you support. A ticket can name several, which is what makes the per-product report meaningful.'],
+                ['h' => 'Adding one', 'permission' => 'create products'],
+                ['p' => 'Keep names as the customer says them. A product nobody recognises will not get picked, and the report will be empty.', 'permission' => 'create products'],
+            ],
+
+            'tour' => [
+                'title' => 'Add a product',
+                'summary' => 'Name it the way customers say it.',
+                'minutes' => 2,
+                'permission' => 'create products',
+                'steps' => [
+                    ['route' => 'products.index', 'selector' => '[data-tour="product-create"]', 'title' => 'Start here', 'body' => 'Opens the new product form.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'products.create', 'selector' => '[data-tour="product-name"]', 'title' => 'Use the customer\'s words', 'body' => 'Agents pick this from a list while a customer is on the phone. A part number nobody recognises will not get chosen, and the per-product report stays empty.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'knowledge-base' => [
+            'group' => 'knowledge',
+            'title' => 'Knowledge Base',
+            'icon' => 'book-open',
+            'permission' => 'view kb articles',
+            'feature' => 'knowledge_base',
+            'minutes' => 4,
+            'keywords' => 'knowledge base article kb publish draft portal public documentation',
+            'summary' => 'Articles for your customers, and what publishing means.',
+            'blocks' => [
+                ['p' => 'The knowledge base is customer-facing. Published articles appear on your public portal, where anyone with the link can read them.'],
+                ['warn' => 'Publishing is publishing. An article marked published is readable by the public without logging in — check it before you tick the box, not after.'],
+                ['h' => 'Writing one', 'permission' => 'create kb articles'],
+                ['steps' => [
+                    'Give it the title a customer would search for, not your internal name for the problem.',
+                    'Put it in a category so it is findable by browsing as well as searching.',
+                    'Leave it unpublished until it has been read by someone else.',
+                ], 'minutes' => 3, 'permission' => 'create kb articles'],
+                ['tip' => 'The AI assistant searches published articles when answering, so a good article reduces both tickets and wrong answers.'],
+            ],
+            'tour' => [
+                'title' => 'Publish a knowledge base article',
+                'summary' => 'Publishing puts it on the public portal — check before ticking.',
+                'minutes' => 3,
+                'permission' => 'create kb articles',
+                'steps' => [
+                    ['route' => 'knowledge-base.articles.index', 'selector' => '[data-tour="kb-create"]', 'title' => 'Start here', 'body' => 'Opens the article editor.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'knowledge-base.articles.create', 'selector' => '[data-tour="kb-title"]', 'title' => 'Title it as a customer would search', 'body' => 'This is what people match against on the portal and what the AI assistant retrieves. Your internal name for the fault will not be searched for.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'knowledge-base.articles.create', 'selector' => '[data-tour="kb-publish"]', 'title' => 'This makes it public', 'body' => 'A published article is readable by anyone with your portal link, without logging in. Leave it off until someone else has read it.', 'advance' => 'next', 'side' => 'top'],
+                ],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'canned-responses' => [
+            'group' => 'knowledge',
+            'title' => 'Canned Responses',
+            'icon' => 'chat-bubble-bottom-center-text',
+            'permission' => 'view canned responses',
+            'feature' => 'canned_responses',
+            'minutes' => 2,
+            'keywords' => 'canned response template saved reply macro boilerplate',
+            'summary' => 'Saved replies for the answers you give weekly.',
+            'blocks' => [
+                ['p' => 'A canned response is a saved reply you can drop into a ticket and then edit. It is inserted, not sent — nothing reaches the customer until you post it.'],
+                ['h' => 'Writing one', 'permission' => 'create canned responses'],
+                ['tip' => 'Write them to be edited. A response that reads as finished gets sent unchanged, and customers notice a form letter.', 'permission' => 'create canned responses'],
+            ],
+
+            'tour' => [
+                'title' => 'Save a canned response',
+                'summary' => 'Write it to be edited, not sent as-is.',
+                'minutes' => 2,
+                'permission' => 'create canned responses',
+                'steps' => [
+                    ['route' => 'canned-responses.index', 'selector' => '[data-tour="canned-create"]', 'title' => 'Start here', 'body' => 'Opens the response editor.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'canned-responses.create', 'selector' => '[data-tour="canned-content"]', 'title' => 'Leave room to edit', 'body' => 'This is inserted into a reply, not sent. A response that reads as finished gets posted unchanged, and customers can tell.', 'advance' => 'next', 'side' => 'top'],
+                ],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'schedules' => [
+            'group' => 'people',
+            'title' => 'Agent Schedules',
+            'icon' => 'calendar-days',
+            'permission' => 'view schedules',
+            'feature' => 'agent_schedule',
+            'minutes' => 3,
+            'keywords' => 'schedule shift roster working hours availability assignment refused',
+            'summary' => 'Working hours, and how they block assignment.',
+            'blocks' => [
+                ['p' => 'A schedule records when an agent works. It is not just information: assigning a ticket to someone outside their hours is refused.'],
+                ['note' => 'An agent with no schedule configured is treated as always available. No schedule means no rule, not no availability.'],
+                ['h' => 'Setting hours', 'permission' => 'manage schedules'],
+                ['warn' => 'If tickets suddenly cannot be assigned to someone, check their schedule before assuming a permission problem — the two produce similar-looking refusals.', 'permission' => 'manage schedules'],
+            ],
+
+            'tour' => [
+                'title' => 'Set an agent\'s working hours',
+                'summary' => 'Off-schedule assignment is refused, not just discouraged.',
+                'minutes' => 2,
+                'permission' => 'manage schedules',
+                'steps' => [
+                    ['route' => 'schedules.index', 'selector' => '[data-tour="schedule-user"]', 'title' => 'Pick the agent', 'body' => 'An agent with no schedule is treated as always available. Once you set one, assigning them a ticket outside those hours is refused — so set the hours you actually want enforced.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'service-reports' => [
+            'group' => 'service',
+            'title' => 'Service Reports',
+            'icon' => 'document-text',
+            'permission' => 'view service reports',
+            'feature' => 'service_reports',
+            'minutes' => 2,
+            'keywords' => 'service report document pdf closure customer sign off',
+            'summary' => 'The document generated when a ticket closes.',
+            'blocks' => [
+                ['p' => 'A service report is a customer-facing record of what was done on a ticket. One is generated automatically when a ticket closes, if the workspace has that switched on.'],
+                ['note' => 'It draws on the closing remarks. A closure with a blank remark produces a report with nothing useful in it, so write the remark for the customer.'],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'billing' => [
+            'group' => 'insight',
+            'title' => 'Billing',
+            'icon' => 'banknotes',
+            'permission' => 'view billing',
+            'feature' => 'billing',
+            'minutes' => 2,
+            'keywords' => 'billing billable invoice charge amount cost recover',
+            'summary' => 'Marking work billable, and what the report totals.',
+            'blocks' => [
+                ['p' => 'A ticket can be marked billable with an amount and a description. The billing report totals those across a period.'],
+                ['h' => 'Marking a ticket billable', 'permission' => 'manage billing'],
+                ['tip' => 'Fill the description as though it will be read by whoever queries the invoice, because it will be.', 'permission' => 'manage billing'],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'activity-logs' => [
+            'group' => 'insight',
+            'title' => 'Activity Log',
+            'icon' => 'clipboard-document-list',
+            'permission' => 'view activity logs',
+            'feature' => 'audit_logs',
+            'minutes' => 2,
+            'keywords' => 'audit activity log history who changed trail accountability',
+            'summary' => 'Who changed what, and when.',
+            'blocks' => [
+                ['p' => 'The activity log records creations, updates and deletions across the workspace, with the field-level before and after.'],
+                ['ul' => [
+                    'Noisy internal fields are deliberately excluded, so the log stays readable.',
+                    'Passwords and tokens are never recorded.',
+                ]],
+                ['tip' => 'Each ticket also carries its own history on the ticket page, which is usually the faster place to look.'],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'public-portal' => [
+            'group' => 'admin',
+            'title' => 'The Public Portal',
+            'icon' => 'globe-alt',
+            'permission' => 'view settings',
+            'minutes' => 3,
+            'keywords' => 'portal public submit track ticket customer self service landing qr link',
+            'summary' => 'The pages your customers use, without an account.',
+            'blocks' => [
+                ['p' => 'Your workspace has public pages where customers can submit a ticket and track it afterwards, with no login. They live under your workspace address.'],
+                ['ul' => [
+                    'A submitted ticket returns a tracking link the customer can keep.',
+                    'On Enterprise plans customers can also reply on a tracked ticket, and read your knowledge base.',
+                ]],
+                ['h' => 'Prefilled links'],
+                ['p' => 'Each client has a prefilled submit link, which you can hand out as a QR code — useful on a sticker beside the equipment you support.'],
+                ['warn' => 'Those links are not signed. Anyone can craft one, so treat every value arriving through the portal as customer-supplied.'],
+            ],
+        ],
+
+        /* ---------------------------------------------------------------- */
+
+        'api-access' => [
+            'group' => 'admin',
+            'title' => 'API Access',
+            'icon' => 'code-bracket',
+            'permission' => 'manage api tokens',
+            'minutes' => 3,
+            'keywords' => 'api token rest integration bearer authentication webhook programmatic',
+            'summary' => 'Tokens for integrating another system.',
+            'blocks' => [
+                ['p' => 'The REST API lets another system raise and read tickets. It authenticates with a bearer token that carries this workspace\'s identity — there is no workspace name in the URL.'],
+                ['warn' => 'A token is shown once, at the moment you create it. It cannot be recovered afterwards: if it is lost, revoke it and issue another.'],
+                ['steps' => [
+                    'Name the token after the system that will use it, so you know what you are revoking later.',
+                    'Copy it immediately and store it wherever that system keeps its secrets.',
+                    'Revoke tokens for integrations you have retired — an unused token is still a working key.',
+                ], 'minutes' => 2],
+            ],
+            'tour' => [
+                'title' => 'Create an API token',
+                'summary' => 'It is shown once and cannot be recovered.',
+                'minutes' => 2,
+                'permission' => 'manage api tokens',
+                'steps' => [
+                    ['route' => 'settings.api-tokens', 'selector' => '[data-tour="token-name"]', 'title' => 'Name it after the integration', 'body' => 'This is the only thing distinguishing one token from another when you come to revoke one.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'settings.api-tokens', 'selector' => '[data-tour="token-submit"]', 'title' => 'Copy it now', 'body' => 'The token appears once, on the next screen. It is stored hashed, so nobody — including support — can show it to you again.', 'advance' => 'next', 'side' => 'top'],
+                ],
             ],
         ],
 
