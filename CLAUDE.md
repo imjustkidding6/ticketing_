@@ -384,6 +384,10 @@ Current scope: **24 topics, 12 tours, 28 steps, 23 `data-tour` anchors**. Same c
 
 Adding a topic or tour: write it in `config/help.php`, add any `data-tour` anchors to the templates, then run `php artisan test --filter=HelpCentreTest` and `npm run test:tour`. Keep tours to 2–7 steps and teach the consequence, not the button.
 
+**The scoping is swept, not spot-checked.** `HelpPermissionSweepTest` walks every seeded role against every topic and every tour and asserts the page, the tour endpoint, the launcher listing and the PDF all agree with `HelpService`. It also proves a hidden topic's body never reaches the HTML, and that guessing a tour key is not a way round the launcher — the endpoint 403s and carries no payload.
+
+`hiddenTopicsFor()` deliberately exposes a hidden topic's title, search words and required permission names so the empty state can explain itself; a test pins that boundary so nothing else joins them.
+
 Reference implementation and the fuller rationale: `../projects/alstylehris/docs/scoped-help-and-tours.md`.
 
 ### Controller Concerns
