@@ -14,6 +14,7 @@
     <button
         type="button"
         @click="open = !open"
+        data-tour="help-launcher"
         class="relative rounded-full p-2 text-gray-400 hover:text-gray-600 focus:outline-none dark:hover:text-gray-200"
         :aria-expanded="open"
         aria-haspopup="true"

@@ -57,7 +57,8 @@ class HelpService
         foreach (config('help.topics', []) as $key => $topic) {
             if (! $this->allows($user, $topic['permission'] ?? null)
                 || ! $this->planHas($topic['feature'] ?? null)
-                || ! $this->tenantAllows($user, $topic['gate'] ?? null)) {
+                || ! $this->tenantAllows($user, $topic['gate'] ?? null)
+                || ! $this->enabled($topic['module'] ?? null)) {
                 continue;
             }
 
@@ -146,7 +147,8 @@ class HelpService
         if ($topic === null
             || ! $this->allows($user, $topic['permission'] ?? null)
             || ! $this->planHas($topic['feature'] ?? null)
-            || ! $this->tenantAllows($user, $topic['gate'] ?? null)) {
+            || ! $this->tenantAllows($user, $topic['gate'] ?? null)
+            || ! $this->enabled($topic['module'] ?? null)) {
             return null;
         }
 
@@ -399,6 +401,18 @@ class HelpService
         $case = PlanFeature::tryFrom($feature);
 
         return $case !== null && app(PlanService::class)->currentTenantHasFeature($case);
+    }
+
+    /**
+     * Whether the module this topic documents is switched on in the product.
+     *
+     * Separate from permissions and plans: a module can exist in the codebase,
+     * be included in the plan, and still not be part of the product a customer
+     * is using. See config/features.php.
+     */
+    private function enabled(?string $module): bool
+    {
+        return $module === null || (bool) config("features.{$module}", true);
     }
 
     /**

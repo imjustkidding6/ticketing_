@@ -157,7 +157,7 @@
         </form>
     </div>
 
-    <button type="button" @click="toggle()"
+    <button type="button" @click="toggle()" data-tour="ai-launcher"
             class="group relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30 transition hover:scale-105 hover:shadow-indigo-500/50"
             aria-label="{{ __('Open AI assistant') }}">
         <span x-show="!open" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-20"></span>

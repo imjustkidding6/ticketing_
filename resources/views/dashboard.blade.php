@@ -140,7 +140,7 @@
             @endif
 
             {{-- ── My Ticket Stats ── --}}
-            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-tour="dashboard-stats">
                 <div class="rounded-xl bg-white p-6 shadow-sm">
                     <div class="text-sm font-medium text-gray-500">{{ __('My Open Tickets') }}</div>
                     <div class="mt-2 text-3xl font-semibold text-blue-600">{{ $myTicketStats['open'] }}</div>

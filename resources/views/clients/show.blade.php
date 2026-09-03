@@ -79,7 +79,7 @@
 
                     @if($autofillData)
                     <!-- Autofill submit-ticket link -->
-                    <div class="mt-6 rounded-xl bg-white p-6 shadow-sm" x-data="autofillBuilder(@js($autofillData))">
+                    <div class="mt-6 rounded-xl bg-white p-6 shadow-sm" x-data="autofillBuilder data-tour="client-autofill"(@js($autofillData))">
                         <h3 class="text-lg font-semibold text-gray-900">{{ __('Quick-submit link') }}</h3>
                         <p class="mt-1 text-sm text-gray-500">{{ __('Share this link or QR code with the client. It opens the public ticket form with their name and email filled in and locked. Optionally pre-select a department, category, and products below.') }}</p>
 

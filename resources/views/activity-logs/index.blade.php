@@ -7,7 +7,7 @@
         <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6">
             {{-- Filters --}}
             <div class="mb-6 rounded-xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                <form method="GET" action="{{ route('activity-logs.index') }}" class="flex flex-wrap items-end gap-3">
+                <form method="GET" data-tour="activity-filters" action="{{ route('activity-logs.index') }}" class="flex flex-wrap items-end gap-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{{ __('Resource') }}</label>
                         <select name="subject_type" class="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">

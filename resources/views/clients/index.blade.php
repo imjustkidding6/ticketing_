@@ -19,7 +19,7 @@
                     <div class="flex-1 min-w-50">
                         <input type="text" name="search" value="{{ request('search') }}" placeholder="{{ __('Search clients...') }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400">
                     </div>
-                    <select name="tier" class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
+                    <select name="tier" data-tour="client-filters" class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
                         <option value="">{{ __('All Tiers') }}</option>
                         <option value="basic" {{ request('tier') === 'basic' ? 'selected' : '' }}>{{ __('Basic') }}</option>
                         <option value="premium" {{ request('tier') === 'premium' ? 'selected' : '' }}>{{ __('Premium') }}</option>

@@ -64,8 +64,28 @@ test('every offered tour runs to completion', async ({ page }) => {
                 break;
             }
 
-            const title = (await page.locator('[data-gt="title"]').textContent())?.trim() ?? '';
-            if (/not on this screen|another page/i.test(title)) {
+            let title = (await page.locator('[data-gt="title"]').textContent())?.trim() ?? '';
+
+            // A step on another page is not a failure: the tour offers the way
+            // there and resumes on arrival. Follow it, as a reader would.
+            if (/another page/i.test(title)) {
+                const cta = page.locator('[data-gt="next"]');
+                if ((await cta.textContent())?.match(/take me there/i)) {
+                    await cta.click();
+                    await page.waitForLoadState('networkidle');
+                    await page.waitForTimeout(1100);
+                    if (!(await page.locator('[data-gt="panel"]').count())) {
+                        failed = `step ${i + 1}: followed "take me there" and the tour did not resume`;
+                        break;
+                    }
+                    title = (await page.locator('[data-gt="title"]').textContent())?.trim() ?? '';
+                } else {
+                    failed = `step ${i + 1} (${def.steps[i].page}): offered no way to continue`;
+                    break;
+                }
+            }
+
+            if (/not on this screen/i.test(title)) {
                 failed = `stuck at step ${i + 1} (${def.steps[i].selector}): "${title}"`;
                 break;
             }
@@ -77,8 +97,16 @@ test('every offered tour runs to completion', async ({ page }) => {
                 await page.waitForLoadState('networkidle');
                 await page.waitForTimeout(1100);
             } else {
+                // waitForTarget gives a slow or missing element up to three
+                // seconds, so a fixed short wait reports a stuck tour as
+                // "panel still open" and hides which step actually failed.
                 await page.locator('[data-gt="next"]').click();
-                await page.waitForTimeout(500);
+                if (i < def.steps.length - 1) {
+                    await expect(page.locator('[data-gt="title"]'))
+                        .not.toHaveText(title, { timeout: 6000 });
+                } else {
+                    await page.waitForTimeout(1200);
+                }
             }
         }
 

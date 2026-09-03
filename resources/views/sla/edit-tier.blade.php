@@ -13,7 +13,7 @@
                 </div>
 
                 <div class="overflow-hidden rounded-md border border-gray-200">
-                    <table class="min-w-full divide-y divide-gray-200">
+                    <table data-tour="sla-targets" class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50 text-xs font-medium uppercase tracking-wider text-gray-500">
                             <tr>
                                 <th class="px-4 py-2 text-left">{{ __('Priority') }}</th>
@@ -56,7 +56,7 @@
 
                 <div class="mt-6 flex items-center justify-end gap-3">
                     <a href="{{ route('sla.index') }}" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">{{ __('Cancel') }}</a>
-                    <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Save Policy') }}</button>
+                    <button type="submit" data-tour="sla-save" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">{{ __('Save Policy') }}</button>
                 </div>
             </form>
         </div>

@@ -25,7 +25,7 @@
         <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6">
             {{-- Filters Bar --}}
             <div class="mb-4 rounded-xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                <form method="GET" action="{{ route('tickets.index') }}" class="flex flex-wrap items-center gap-3">
+                <form method="GET" action="{{ route('tickets.index') }}" data-tour="ticket-filters" class="flex flex-wrap items-center gap-3">
                     <div class="flex-1 min-w-50">
                         <input type="text" name="search" value="{{ request('search') }}" placeholder="{{ __('Search tickets...') }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400">
                     </div>
@@ -89,7 +89,7 @@
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors {{ $ticket->isOverdue() ? 'bg-red-50/60 dark:bg-red-950/20' : '' }}">
                             <td class="px-6 py-4">
                                 <div class="text-sm font-medium flex items-center gap-2 flex-wrap">
-                                    <a href="{{ route('tickets.show', $ticket) }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 transition-colors font-mono">{{ $ticket->ticket_number }}</a>
+                                    <a href="{{ route('tickets.show', $ticket) }}" data-tour="ticket-row" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 transition-colors font-mono">{{ $ticket->ticket_number }}</a>
                                     @if(($ticket->merged_tickets_count ?? 0) > 0)
                                         <span class="inline-flex items-center gap-1 rounded-full bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 text-[10px] font-medium text-purple-700 dark:text-purple-300" title="{{ __('Merged from other tickets') }}">
                                             <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">

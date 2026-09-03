@@ -23,7 +23,7 @@
 
     <div class="py-6">
         <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6">
-            @include('reports._filters', ['action' => route('reports.overview')])
+            <div data-tour="report-filters">@include('reports._filters', ['action' => route('reports.overview')])</div>
 
             {{-- Volume Stats --}}
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -123,7 +123,7 @@
                 </div>
             </div>
 
-            @include('reports._charts', ['topData' => $topDepartments, 'topLabel' => __('Departments')])
+            <div data-tour="report-charts">@include('reports._charts', ['topData' => $topDepartments, 'topLabel' => __('Departments')])</div>
 
             {{-- Top Clients & Top Agents --}}
             <div class="mt-6 grid gap-6 lg:grid-cols-2">

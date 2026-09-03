@@ -95,6 +95,22 @@ test('F3 · a click-step whose target leads back here is downgraded', () => {
     assert.equal(pointsAtCurrentPage(notALink), false);
 });
 
+test('a Next step whose page differs hands back to run(), not to a missing target', () => {
+    // activity-logs step 1 is on the log page and step 2 on the ticket list,
+    // joined by a Next button rather than a click. Advancing blindly made the
+    // runner look for the ticket-list anchor on the log page and report it as
+    // missing, which reads as a broken tour rather than a page change.
+    const steps = [
+        { page: 'activity-logs.index', title: 'a' },
+        { page: 'tickets.index', title: 'b' },
+    ];
+
+    assert.equal(matchesPage(steps[1].page, 'activity-logs.index'), false,
+        'the second step does not belong to the page the first one is on');
+    assert.deepEqual(stepsOnThisPage(steps, 1, 'activity-logs.index'), [],
+        'so run() must take the off-page branch and offer the way there');
+});
+
 /* ---------- F6: every exit path clears ---------------------------------- */
 
 test('F6 · clearing progress removes it entirely', () => {

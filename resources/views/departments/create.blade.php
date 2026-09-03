@@ -18,7 +18,7 @@
 
                         <div>
                             <label for="code" class="block text-sm font-medium text-gray-700">{{ __('Code') }}</label>
-                            <input type="text" name="code" id="code" value="{{ old('code') }}" maxlength="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <input type="text" name="code" data-tour="department-code" id="code" value="{{ old('code') }}" maxlength="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                             @error('code') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
 

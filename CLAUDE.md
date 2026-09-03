@@ -384,7 +384,11 @@ A permission-scoped help centre (`/{slug}/tutorials`) and the guided tours that 
 
 **The PDF comes from the same filtered content.** A static manual covering everything undoes the scoping the moment someone downloads it; a test asserts two roles get different files.
 
-Current scope: **24 topics, 12 tours, 28 steps, 23 `data-tour` anchors**. Same code and content file, per role: admin 24/12, manager 23/10, supervisor 19/5, senior agent 16/3, agent 13/1, viewer 10/0, billing 5/0.
+Current scope: **24 topics, 22 tours, 62 steps, 40 `data-tour` anchors** across 31 templates.
+
+**A tour step must target something every visit renders.** Anchors on a hidden input, on a block inside an `@if` that is usually false, or on a control that only appears for some records will pass the anchor test and still dead-end a reader — the attribute is in the template, just not on the page. Prefer a container that always renders; where the subject genuinely is conditional (the escalate box only exists below tier 3), write the topic instead of a tour.
+
+`config/features.php` switches a module off product-wide: routes stay live, but it is dropped from the help centre. The knowledge base is off there — it has views and routes but no navigation entry, so documenting it sent people somewhere they could not otherwise reach.
 
 Adding a topic or tour: write it in `config/help.php`, add any `data-tour` anchors to the templates, then run `php artisan test --filter=HelpCentreTest` and `npm run test:tour`. Keep tours to 2–7 steps and teach the consequence, not the button.
 

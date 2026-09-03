@@ -68,6 +68,18 @@ return [
                 ['p' => 'A guided tutorial walks you through the real screen: the page dims, the next thing to click is spotlighted, and a pointer shows you where to go. Start one any time — there is nothing to reset, and stopping halfway changes nothing.'],
                 ['tip' => 'A tutorial follows you across pages. When a step asks you to click something, click it for real — the tutorial picks up on the next screen.'],
             ],
+
+            'tour' => [
+                'title' => 'Find your way around',
+                'summary' => 'What the sidebar shows you, and where help lives.',
+                'minutes' => 2,
+                'permission' => null,
+                'steps' => [
+                    ['route' => 'dashboard', 'selector' => '[data-tour="nav-tickets"]', 'title' => 'The sidebar is your whole workspace', 'body' => 'What appears here depends on your role and the workspace plan. A menu you cannot see is a permission you do not hold, not a missing feature — so if a colleague has an item you lack, ask for the permission rather than reporting a bug.', 'advance' => 'click', 'side' => 'right'],
+                    ['route' => 'tickets.index', 'selector' => '[data-tour="ticket-filters"]', 'title' => 'Every list filters the same way', 'body' => 'Search plus the dropdowns narrow the list, and the filters stay in the address bar — so a filtered view is something you can bookmark or send to a colleague.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'tickets.index', 'selector' => '[data-tour="help-launcher"]', 'title' => 'Help is on every page', 'body' => 'This opens the guided tutorials from wherever you are. Starting one changes nothing, and stopping halfway leaves nothing behind.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
+            ],
         ],
 
         /* ---------------------------------------------------------------- */
@@ -205,6 +217,7 @@ return [
                 'steps' => [
                     ['route' => 'clients.index', 'selector' => '[data-tour="client-create"]', 'title' => 'Start here', 'body' => 'Opens the new client form.', 'advance' => 'click', 'side' => 'bottom'],
                     ['route' => 'clients.create', 'selector' => '[data-tour="client-name"]', 'title' => 'Use the name on the contract', 'body' => 'Agents pick the client from this name when raising a ticket. A trading name nobody recognises gets tickets filed against the wrong company.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'clients.create', 'selector' => '[data-tour="client-email"]', 'title' => 'The email is how the portal finds them', 'body' => 'A customer tracking a ticket on the public portal is matched on their ticket number and this address. Get it wrong and they cannot see their own ticket.', 'advance' => 'next', 'side' => 'bottom'],
                     ['route' => 'clients.create', 'selector' => '[data-tour="client-tier"]', 'title' => 'The tier decides their deadlines', 'body' => 'Tier plus priority selects the SLA policy. Setting this higher than what was sold commits you to response times you have not agreed to.', 'advance' => 'next', 'side' => 'bottom'],
                 ],
             ],
@@ -255,7 +268,9 @@ return [
                 'permission' => ['create sla policies', 'update sla policies'],
                 'steps' => [
                     ['route' => 'sla.index', 'selector' => '[data-tour="sla-tiers"]', 'title' => 'One set of targets per client tier', 'body' => 'Every client sits in a tier, and each tier carries its own response and resolution hours for each priority. On an empty workspace, seed the defaults first — a priority with no matching policy cannot be set at all.', 'advance' => 'next', 'side' => 'bottom'],
-                    ['route' => 'sla.index', 'selector' => '[data-tour="sla-tier"]', 'title' => 'Targets are set per tier', 'body' => 'Each client tier has its own response and resolution hours for each priority. Open one to adjust it.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'sla.index', 'selector' => '[data-tour="sla-tier"]', 'title' => 'Targets are set per tier', 'body' => 'Each client tier has its own response and resolution hours for each priority. Open one to adjust it.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'sla.edit-tier', 'selector' => '[data-tour="sla-targets"]', 'title' => 'Two clocks, not one', 'body' => 'Response is how long until someone replies; resolution is how long until it is closed. They are measured separately and breach separately.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'sla.edit-tier', 'selector' => '[data-tour="sla-save"]', 'title' => 'This changes new tickets only', 'body' => 'Tickets already open keep the deadline they were given. Changing a target here does not retroactively breach or rescue anything.', 'advance' => 'next', 'side' => 'top'],
                 ],
             ],
         ],
@@ -282,6 +297,17 @@ return [
                 ['h' => 'Exporting', 'permission' => 'export reports'],
                 ['p' => 'Reports export to CSV for anything you would rather do in a spreadsheet.', 'permission' => 'export reports'],
             ],
+
+            'tour' => [
+                'title' => 'Read a report without misreading it',
+                'summary' => 'What the totals exclude, and whose day they use.',
+                'minutes' => 3,
+                'permission' => 'view reports',
+                'steps' => [
+                    ['route' => 'reports.overview', 'selector' => '[data-tour="report-filters"]', 'title' => 'Every report shares these filters', 'body' => 'Dates here are your workspace timezone, not the server\'s — so "today" means your today, and a report you export at midnight still covers the day you meant.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'reports.overview', 'selector' => '[data-tour="report-charts"]', 'title' => 'Totals are not a row count', 'body' => 'Merged and spam tickets are excluded everywhere. Resolution time excludes hold, response time does not. A reassigned ticket is credited to whoever holds it now — so these figures will not match a raw count of the table.', 'advance' => 'next', 'side' => 'top'],
+                ],
+            ],
         ],
 
         /* ---------------------------------------------------------------- */
@@ -304,6 +330,17 @@ return [
                 ]],
                 ['note' => 'It is off unless your workspace has switched it on, and it is only available on Enterprise plans.'],
                 ['warn' => 'It drafts; you send. Nothing it writes reaches a customer until you post it.'],
+            ],
+
+            'tour' => [
+                'title' => 'Ask the assistant',
+                'summary' => 'What it can reach, and what it will not do.',
+                'minutes' => 2,
+                'permission' => 'use ai assistant',
+                'steps' => [
+                    ['route' => 'tickets.index', 'selector' => '[data-tour="ai-launcher"]', 'title' => 'It reads what you can read', 'body' => 'The assistant answers from this workspace only, and inherits your permissions rather than bypassing them — it cannot show you a ticket you could not open yourself.', 'advance' => 'next', 'side' => 'left'],
+                    ['route' => 'tickets.index', 'selector' => '[data-tour="ticket-row"]', 'title' => 'It drafts; you send', 'body' => 'On a ticket it can draft a reply or summarise a long thread. Nothing it writes reaches a customer until you post it yourself.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
             ],
         ],
 
@@ -328,6 +365,17 @@ return [
                 ['h' => 'API tokens', 'permission' => 'manage api tokens'],
                 ['warn' => 'A token is shown once, when you create it. It cannot be recovered afterwards — if it is lost, revoke it and issue another.', 'permission' => 'manage api tokens'],
             ],
+
+            'tour' => [
+                'title' => 'Set up a new workspace',
+                'summary' => 'The two settings that quietly affect everything else.',
+                'minutes' => 3,
+                'permission' => 'update settings',
+                'steps' => [
+                    ['route' => 'settings.general', 'selector' => '[data-tour="setting-company"]', 'title' => 'This name is customer-facing', 'body' => 'It appears on the public portal, on generated service reports and in notification emails — so use the name customers know you by, not an internal one.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'settings.general', 'selector' => '[data-tour="setting-timezone"]', 'title' => 'Set this before you trust a report', 'body' => 'Every report groups by day in this timezone and every timestamp is displayed in it. Changing it later moves which day existing tickets are counted in.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
+            ],
         ],
 
 
@@ -350,6 +398,17 @@ return [
                 ]],
                 ['note' => 'Merged and spam tickets are excluded everywhere, so a total here will not match a raw count of rows.'],
                 ['tip' => 'Counts are grouped by day in your workspace timezone, so "today" means your today.'],
+            ],
+
+            'tour' => [
+                'title' => 'Read the dashboard correctly',
+                'summary' => 'What the tiles count, and what they leave out.',
+                'minutes' => 2,
+                'permission' => null,
+                'steps' => [
+                    ['route' => 'dashboard', 'selector' => '[data-tour="dashboard-stats"]', 'title' => 'These are your tickets, not everyone\'s', 'body' => 'Open and in-progress count what is assigned to you. Overdue counts tickets past their resolution deadline — tickets on hold are excluded, because their clock is paused.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'dashboard', 'selector' => '[data-tour="nav-tickets"]', 'title' => 'The queue is the full picture', 'body' => 'Unassigned work does not appear in your tiles at all. The ticket list, filtered to unassigned, is where you find what nobody has picked up.', 'advance' => 'next', 'side' => 'right'],
+                ],
             ],
         ],
 
@@ -382,6 +441,19 @@ return [
                     ['q' => 'Why will this ticket not close?', 'a' => 'A task is still open. Complete or cancel it first.', 'permission' => 'manage ticket tasks'],
                 ]],
             ],
+
+            'tour' => [
+                'title' => 'Work a ticket to closure',
+                'summary' => 'Notes, tasks and replies — and what stops you closing.',
+                'minutes' => 4,
+                'permission' => 'create ticket comments',
+                'steps' => [
+                    ['route' => 'tickets.index', 'selector' => '[data-tour="ticket-row"]', 'title' => 'Open a ticket', 'body' => 'Pick any ticket to follow along — this tutorial only shows you around, it changes nothing.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'tickets.show', 'selector' => '[data-tour="ticket-status"]', 'title' => 'Status is a state machine', 'body' => 'Not every move is allowed. A closed ticket can only be reopened, never sent straight back to in progress — the system refuses invalid moves rather than recording them.', 'advance' => 'next', 'side' => 'left'],
+                    ['route' => 'tickets.show', 'selector' => '[data-tour="ticket-tasks"]', 'title' => 'Tasks are the closing condition', 'body' => 'This is not a notepad: while any task is outstanding the ticket cannot be closed. Cancel a task you no longer need rather than deleting it — the history keeps the decision.', 'advance' => 'next', 'side' => 'top'],
+                    ['route' => 'tickets.show', 'selector' => '[data-tour="ticket-history"]', 'title' => 'Everything is recorded', 'body' => 'Status changes, assignments, priority moves and reopens all land here with who did them. When something looks wrong, this is the first place to look.', 'advance' => 'next', 'side' => 'top'],
+                ],
+            ],
         ],
 
         /* ---------------------------------------------------------------- */
@@ -404,6 +476,7 @@ return [
                 ]],
                 ['note' => 'Escalating with an agent selected reassigns the ticket, and that shows in the assignment history like any other handover.'],
             ],
+
         ],
 
         /* ---------------------------------------------------------------- */
@@ -425,6 +498,18 @@ return [
                     'Delete in bulk from that list once you are sure.',
                 ], 'minutes' => 2],
                 ['warn' => 'Marking spam is reversible; deleting from the spam list is not.'],
+            ],
+
+            'tour' => [
+                'title' => 'Deal with junk',
+                'summary' => 'Marking spam is reversible; deleting is not.',
+                'minutes' => 2,
+                'permission' => 'update tickets',
+                'steps' => [
+                    ['route' => 'tickets.index', 'selector' => '[data-tour="ticket-filters"]', 'title' => 'Junk arrives through the portal', 'body' => 'The public submit form is open to anyone, so some of what lands here is not a support request.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'tickets.index', 'selector' => '[data-tour="ticket-row"]', 'title' => 'Open the offending ticket', 'body' => 'Spam is marked on the ticket itself.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'tickets.show', 'selector' => '[data-tour="ticket-status"]', 'title' => 'Marked spam, not deleted', 'body' => 'Marking spam takes a ticket out of every queue, count and report but keeps it, so anything caught wrongly can be put back. Deleting from the spam list is the step that cannot be undone.', 'advance' => 'next', 'side' => 'left'],
+                ],
             ],
         ],
 
@@ -462,6 +547,7 @@ return [
                 'permission' => 'invite members',
                 'steps' => [
                     ['route' => 'members.index', 'selector' => '[data-tour="member-create"]', 'title' => 'Start here', 'body' => 'Opens the new member form.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'members.create', 'selector' => '[data-tour="member-name"]', 'title' => 'This name goes on their tickets', 'body' => 'It is what customers and colleagues see against every ticket they handle, and it stays on those tickets after they leave.', 'advance' => 'next', 'side' => 'bottom'],
                     ['route' => 'members.create', 'selector' => '[data-tour="member-email"]', 'title' => 'The email is the login', 'body' => 'It has to be unique across the whole system, and it is what they sign in with. Getting it wrong means an invitation that never arrives.', 'advance' => 'next', 'side' => 'bottom'],
                 ],
             ],
@@ -530,6 +616,7 @@ return [
                 'steps' => [
                     ['route' => 'departments.index', 'selector' => '[data-tour="department-create"]', 'title' => 'Start here', 'body' => 'Opens the new department form.', 'advance' => 'click', 'side' => 'bottom'],
                     ['route' => 'departments.create', 'selector' => '[data-tour="department-name"]', 'title' => 'Name it after the team', 'body' => 'This is a visibility boundary, not a label: members assigned here see its tickets, and members who are not do not. Name it after who works the tickets.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'departments.create', 'selector' => '[data-tour="department-code"]', 'title' => 'The code shows up in reports', 'body' => 'Short and stable. Changing it later leaves older exports referring to something nobody recognises.', 'advance' => 'next', 'side' => 'bottom'],
                 ],
             ],
         ],
@@ -562,6 +649,7 @@ return [
                 'steps' => [
                     ['route' => 'categories.index', 'selector' => '[data-tour="category-create"]', 'title' => 'Start here', 'body' => 'Opens the new category form.', 'advance' => 'click', 'side' => 'bottom'],
                     ['route' => 'categories.create', 'selector' => '[data-tour="category-department"]', 'title' => 'Pick the department first', 'body' => 'The ticket form only offers categories belonging to the department chosen on it. A category filed under the wrong department will never appear.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'categories.create', 'selector' => '[data-tour="category-name"]', 'title' => 'Name it for the symptom', 'body' => 'Agents pick this while the customer is describing the problem, before anyone knows the cause. "Cannot log in" gets chosen; "LDAP misconfiguration" does not.', 'advance' => 'next', 'side' => 'bottom'],
                 ],
             ],
         ],
@@ -590,6 +678,7 @@ return [
                 'steps' => [
                     ['route' => 'products.index', 'selector' => '[data-tour="product-create"]', 'title' => 'Start here', 'body' => 'Opens the new product form.', 'advance' => 'click', 'side' => 'bottom'],
                     ['route' => 'products.create', 'selector' => '[data-tour="product-name"]', 'title' => 'Use the customer\'s words', 'body' => 'Agents pick this from a list while a customer is on the phone. A part number nobody recognises will not get chosen, and the per-product report stays empty.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'products.create', 'selector' => '[data-tour="product-price"]', 'title' => 'Price is a reference, not a charge', 'body' => 'Nothing here bills anyone. What a customer is charged comes from marking a ticket billable, which is a separate decision.', 'advance' => 'next', 'side' => 'bottom'],
                 ],
             ],
         ],
@@ -602,6 +691,8 @@ return [
             'icon' => 'book-open',
             'permission' => 'view kb articles',
             'feature' => 'knowledge_base',
+            // Switched off in the product — see config/features.php.
+            'module' => 'knowledge_base',
             'minutes' => 4,
             'keywords' => 'knowledge base article kb publish draft portal public documentation',
             'summary' => 'Articles for your customers, and what publishing means.',
@@ -653,6 +744,7 @@ return [
                 'permission' => 'create canned responses',
                 'steps' => [
                     ['route' => 'canned-responses.index', 'selector' => '[data-tour="canned-create"]', 'title' => 'Start here', 'body' => 'Opens the response editor.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'canned-responses.create', 'selector' => '[data-tour="canned-name"]', 'title' => 'Name it for the situation', 'body' => 'Agents pick from this name in a dropdown mid-reply. Name it for when you would reach for it, not for what it says.', 'advance' => 'next', 'side' => 'bottom'],
                     ['route' => 'canned-responses.create', 'selector' => '[data-tour="canned-content"]', 'title' => 'Leave room to edit', 'body' => 'This is inserted into a reply, not sent. A response that reads as finished gets posted unchanged, and customers can tell.', 'advance' => 'next', 'side' => 'top'],
                 ],
             ],
@@ -683,6 +775,7 @@ return [
                 'permission' => 'manage schedules',
                 'steps' => [
                     ['route' => 'schedules.index', 'selector' => '[data-tour="schedule-user"]', 'title' => 'Pick the agent', 'body' => 'An agent with no schedule is treated as always available. Once you set one, assigning them a ticket outside those hours is refused — so set the hours you actually want enforced.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'schedules.index', 'selector' => '[data-tour="schedule-team"]', 'title' => 'Check the week as a whole', 'body' => 'The team view is where gaps show up. An hour nobody covers is an hour tickets cannot be assigned to anyone.', 'advance' => 'next', 'side' => 'bottom'],
                 ],
             ],
         ],
@@ -720,6 +813,17 @@ return [
                 ['h' => 'Marking a ticket billable', 'permission' => 'manage billing'],
                 ['tip' => 'Fill the description as though it will be read by whoever queries the invoice, because it will be.', 'permission' => 'manage billing'],
             ],
+
+            'tour' => [
+                'title' => 'Make a ticket billable',
+                'summary' => 'What the billing report actually totals.',
+                'minutes' => 2,
+                'permission' => 'manage billing',
+                'steps' => [
+                    ['route' => 'tickets.index', 'selector' => '[data-tour="ticket-row"]', 'title' => 'Open the ticket you are charging for', 'body' => 'Billing is recorded per ticket, not per client.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'tickets.show', 'selector' => '[data-tour="ticket-billing"]', 'title' => 'The description is the invoice line', 'body' => 'Whoever queries the charge will read this, possibly months later and without the ticket in front of them. Write it for them, not as a note to yourself.', 'advance' => 'next', 'side' => 'left'],
+                ],
+            ],
         ],
 
         /* ---------------------------------------------------------------- */
@@ -740,6 +844,18 @@ return [
                     'Passwords and tokens are never recorded.',
                 ]],
                 ['tip' => 'Each ticket also carries its own history on the ticket page, which is usually the faster place to look.'],
+            ],
+
+            'tour' => [
+                'title' => 'Find out who changed something',
+                'summary' => 'Where to look, and where to look first.',
+                'minutes' => 2,
+                'permission' => 'view activity logs',
+                'steps' => [
+                    ['route' => 'activity-logs.index', 'selector' => '[data-tour="activity-filters"]', 'title' => 'Narrow before you read', 'body' => 'This log covers the whole workspace, so it is long by design. Filter to the person or the day you are asking about.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'tickets.index', 'selector' => '[data-tour="ticket-row"]', 'title' => 'For one ticket, start on the ticket', 'body' => 'Each ticket carries its own history, which is almost always the faster answer. Come here when the question spans more than one record.', 'advance' => 'click', 'side' => 'bottom'],
+                    ['route' => 'tickets.show', 'selector' => '[data-tour="ticket-history"]', 'title' => 'This is the same trail, scoped', 'body' => 'Status changes, assignments and reopens with who did them and when — without you having to filter a workspace-wide log down to one ticket.', 'advance' => 'next', 'side' => 'top'],
+                ],
             ],
         ],
 
@@ -762,6 +878,17 @@ return [
                 ['h' => 'Prefilled links'],
                 ['p' => 'Each client has a prefilled submit link, which you can hand out as a QR code — useful on a sticker beside the equipment you support.'],
                 ['warn' => 'Those links are not signed. Anyone can craft one, so treat every value arriving through the portal as customer-supplied.'],
+            ],
+
+            'tour' => [
+                'title' => 'Give a client a submit link',
+                'summary' => 'A prefilled link and QR code, and why it is not a password.',
+                'minutes' => 3,
+                'permission' => 'view clients',
+                'steps' => [
+                    ['route' => 'clients.index', 'selector' => '[data-tour="client-filters"]', 'title' => 'Find the client', 'body' => 'Each client has their own prefilled submit link, so start from the client rather than from the portal.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'clients.index', 'selector' => '[data-tour="client-create"]', 'title' => 'Open a client to find their link', 'body' => 'The quick-submit link lives on the client record. Open any client from the list to see it.', 'advance' => 'next', 'side' => 'bottom'],
+                ],
             ],
         ],
 

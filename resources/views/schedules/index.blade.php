@@ -4,7 +4,7 @@
             <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
                 {{ __('Weekly Schedule') }} — <span class="font-normal text-gray-500 dark:text-gray-400">{{ $target->name }}</span>
             </h2>
-            <a href="{{ route('schedules.team') }}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 transition-colors">{{ __('View team schedule') }} →</a>
+            <a href="{{ route('schedules.team') }}" data-tour="schedule-team" class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 transition-colors">{{ __('View team schedule') }} →</a>
         </div>
     </x-slot>
 

@@ -369,6 +369,14 @@ class TourRunner {
         const step = this.tour.steps[index];
         if (!step) return this.finish();
 
+        // The next step may live on another page — a tour can cross pages by a
+        // Next button, not only by a click that navigates. Hand back to run(),
+        // which saves the position and offers the way there, rather than
+        // hunting for the target here and reporting it as missing.
+        if (!matchesPage(step.page, this.currentRoute)) {
+            return this.run(this.tour, index);
+        }
+
         // Save on every step, so a navigation mid-tour resumes in the right place.
         saveProgress(this.tour.key, index);
         this.index = index;

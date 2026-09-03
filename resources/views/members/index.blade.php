@@ -19,7 +19,7 @@
             <!-- Filters -->
             <div class="mb-6 rounded-xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-transparent dark:border-gray-700">
                 <form method="GET" action="{{ route('members.index') }}" class="flex flex-wrap items-center gap-3">
-                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Search by name or email..." class="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 placeholder-gray-400 dark:placeholder-gray-500">
+                    <input type="text" name="search" data-tour="member-filters" value="{{ request('search') }}" placeholder="Search by name or email..." class="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 placeholder-gray-400 dark:placeholder-gray-500">
                     <select name="role" class="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="">{{ __('All Roles') }}</option>
                         @foreach($roles as $role)

@@ -171,7 +171,7 @@
                     </div>
 
                     {{-- Task Checklist --}}
-                    <div id="ticket-tasks" data-fragment="tasks" data-live-forms>
+                    <div id="ticket-tasks" data-tour="ticket-tasks" data-fragment="tasks" data-live-forms>
                         @include('tickets.partials._tasks')
                     </div>
 
@@ -299,7 +299,7 @@
                                 {{-- Canned Response Insertion --}}
                                 @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::CannedResponses) && $cannedResponses->isNotEmpty())
                                     <div class="mb-3">
-                                        <select id="canned-response-select" class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" onchange="if(this.value){document.getElementById('comment_content').value+=this.options[this.selectedIndex].dataset.content;this.value='';}">
+                                        <select id="canned-response-select" data-tour="ticket-canned" class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" onchange="if(this.value){document.getElementById('comment_content').value+=this.options[this.selectedIndex].dataset.content;this.value='';}">
                                             <option value="">{{ __('Insert canned response...') }}</option>
                                             @php $grouped = $cannedResponses->groupBy('category'); @endphp
                                             @foreach($grouped as $category => $responses)
@@ -321,7 +321,7 @@
                                         </div>
                                     @endif
                                     <div class="flex items-center justify-between">
-                                        <select name="type" class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        <select name="type" data-tour="ticket-note-type" class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                             <option value="public">{{ __('Public') }}</option>
                                             <option value="internal">{{ __('Internal Note') }}</option>
                                         </select>
@@ -353,7 +353,7 @@
                                 @endif
                             </div>
 
-                            <form method="POST" action="{{ route('tickets.billing', $ticket) }}" class="mt-4 space-y-3">
+                            <form method="POST" action="{{ route('tickets.billing', $ticket) }}" data-tour="ticket-billing" class="mt-4 space-y-3">
                                 @csrf
                                 <label class="flex items-start gap-3">
                                     <input type="checkbox" name="is_billable" value="1" x-model="isBillable" {{ $ticket->is_billable ? 'checked' : '' }} class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
@@ -496,7 +496,7 @@
                         </div>
                     </div>
 
-                    <div id="ticket-status-card" data-fragment="status" data-live-forms>
+                    <div id="ticket-status-card" data-tour="ticket-status" data-fragment="status" data-live-forms>
                         @include('tickets.partials._status-card')
                     </div>
 
@@ -534,7 +534,7 @@
                             @endphp
 
                             @if($currentTierLevel < 3)
-                            <form method="POST" action="{{ route('tickets.escalate', $ticket) }}" class="space-y-3"
+                            <form method="POST" action="{{ route('tickets.escalate', $ticket) }}" data-tour="ticket-escalate" class="space-y-3"
                                   x-data="escalationForm()"
                             >
                                 @csrf
