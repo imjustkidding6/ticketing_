@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Exceptions\TicketAlreadyAssignedException;
 use App\Exceptions\InvalidStatusTransitionException;
+use App\Exceptions\TicketAlreadyAssignedException;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Support\TenantTime;
@@ -166,6 +166,7 @@ class TicketWorkflowService
             'assigned' => $base()->where('status', 'assigned')->count(),
             'in_progress' => $base()->where('status', 'in_progress')->count(),
             'on_hold' => $base()->where('status', 'on_hold')->count(),
+            'pending' => $base()->where('status', 'pending')->count(),
             'closed_today' => $base()->where('status', 'closed')->whereBetween('closed_at', TenantTime::dayRange())->count(),
             'closed_this_week' => $base()->where('status', 'closed')->where('closed_at', '>=', TenantTime::startOfWeek())->count(),
             'overdue' => $base()->whereNotNull('resolution_due_at')->where('resolution_due_at', '<', now())->whereNotIn('status', ['closed', 'cancelled'])->count(),

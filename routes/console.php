@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\AutoClosePendingTickets;
 use App\Console\Commands\CheckLicenseExpirations;
 use App\Console\Commands\SendSlaBreachWarnings;
 use Illuminate\Foundation\Inspiring;
@@ -14,6 +15,9 @@ Artisan::command('inspire', function () {
 // runs every 15 minutes and is the likelier of the two to overrun.
 Schedule::command(SendSlaBreachWarnings::class)->everyFifteenMinutes()->withoutOverlapping();
 Schedule::command(CheckLicenseExpirations::class)->dailyAt('02:00')->withoutOverlapping();
+// Closes tickets left waiting on the customer. A no-op for every tenant that has
+// not set auto_close_pending_days, which is all of them until they opt in.
+Schedule::command(AutoClosePendingTickets::class)->hourly()->withoutOverlapping();
 // Fallback for bug reports whose PR webhook never arrived; no-op when GitHub
 // is unconfigured.
 Schedule::command('bugs:reconcile-prs')->everyTenMinutes()->withoutOverlapping();

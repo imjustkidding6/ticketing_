@@ -45,6 +45,12 @@
                             </div>
                         </div>
 
+                        <div>
+                            <label for="auto_close_pending_days" class="block text-sm font-medium text-gray-700">{{ __('Auto-close pending tickets after (days)') }}</label>
+                            <input type="number" min="0" max="365" name="auto_close_pending_days" id="auto_close_pending_days" value="{{ old('auto_close_pending_days', $settings['auto_close_pending_days'] ?? 0) }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <p class="mt-1 text-xs text-gray-500">{{ __('A ticket marked Pending is waiting on the customer. Leave at 0 to never close them automatically.') }}</p>
+                        </div>
+
                     </div>
 
                     <div class="mt-6 flex justify-end">

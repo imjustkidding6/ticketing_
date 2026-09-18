@@ -52,6 +52,7 @@
                             <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium
                                 @if(in_array($ticket->status, ['open', 'assigned', 'in_progress'])) bg-blue-100 text-blue-800
                                 @elseif($ticket->status === 'on_hold') bg-yellow-100 text-yellow-800
+                                @elseif($ticket->status === 'pending') bg-slate-100 text-slate-700
                                 @elseif($ticket->status === 'closed') bg-green-100 text-green-800
                                 @else bg-gray-100 text-gray-800
                                 @endif">
@@ -114,6 +115,9 @@
                                             @break
                                         @case('on_hold')
                                             {{ __('Your ticket is temporarily on hold. We will resume work as soon as possible.') }}
+                                            @break
+                                        @case('pending')
+                                            {{ __('We are waiting for your reply before we can continue.') }}
                                             @break
                                         @case('closed')
                                             {{ __('This ticket has been completed and closed.') }}
@@ -204,6 +208,7 @@
                             <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
                                 @if(in_array($ticket->status, ['open', 'assigned', 'in_progress'])) bg-blue-100 text-blue-800
                                 @elseif($ticket->status === 'on_hold') bg-yellow-100 text-yellow-800
+                                @elseif($ticket->status === 'pending') bg-slate-100 text-slate-700
                                 @elseif($ticket->status === 'closed') bg-green-100 text-green-800
                                 @else bg-gray-100 text-gray-800
                                 @endif">

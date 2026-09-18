@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\TenantTime;
 use App\Models\AppSetting;
 use App\Models\Client;
 use App\Models\Department;
@@ -11,7 +10,7 @@ use App\Models\TicketCategory;
 use App\Models\User;
 use App\Services\ReportService;
 use App\Services\SlaService;
-use Carbon\Carbon;
+use App\Support\TenantTime;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
@@ -129,6 +128,7 @@ class ReportController extends Controller
             ['Closed Tickets', $volume['closed']],
             ['In Progress', $volume['in_progress']],
             ['On Hold', $volume['on_hold']],
+            ['Pending (awaiting customer)', $volume['pending']],
             ['Critical', $volume['by_priority']['critical']],
             ['High', $volume['by_priority']['high']],
             ['Medium', $volume['by_priority']['medium']],

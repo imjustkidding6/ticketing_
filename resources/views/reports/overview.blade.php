@@ -105,7 +105,7 @@
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ __('Tickets by Status') }}</h3>
                     <div class="mt-4 space-y-3">
                         @php
-                            $statusColors = ['open' => 'bg-blue-500', 'assigned' => 'bg-indigo-500', 'in_progress' => 'bg-purple-500', 'on_hold' => 'bg-yellow-500', 'closed' => 'bg-green-500', 'cancelled' => 'bg-gray-500'];
+                            $statusColors = ['open' => 'bg-blue-500', 'assigned' => 'bg-indigo-500', 'in_progress' => 'bg-purple-500', 'on_hold' => 'bg-yellow-500', 'pending' => 'bg-slate-400', 'closed' => 'bg-green-500', 'cancelled' => 'bg-gray-500'];
                             $maxStatus = max(1, max($volume['by_status']));
                         @endphp
                         @foreach($volume['by_status'] as $status => $count)

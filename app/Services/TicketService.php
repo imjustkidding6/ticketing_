@@ -413,19 +413,36 @@ class TicketService
             $updates['closed_at'] = null;
         }
 
+        // 'pending' is a labelled hold: it pauses through the same machinery as
+        // 'on_hold' so there is exactly one pause implementation, and the SLA
+        // maths downstream does not learn a new concept.
         $wasPaused = in_array($oldStatus, Ticket::PAUSED_STATUSES, true);
         $isPaused = in_array($status, Ticket::PAUSED_STATUSES, true);
 
-        if ($isPaused) {
-            $updates['hold_started_at'] = now();
-        }
-
         $holdMinutes = 0;
 
-        if ($wasPaused && ! $isPaused && $ticket->hold_started_at) {
+        // Close out the running segment whenever the status moves off the one that
+        // started it — including on_hold to pending, or that segment would be lost
+        // when an agent relabels a pause.
+        if ($wasPaused && $oldStatus !== $status && $ticket->hold_started_at) {
             $holdMinutes = max(0, (int) $ticket->hold_started_at->diffInMinutes(now()));
             $updates['total_hold_time_minutes'] = ($ticket->total_hold_time_minutes ?? 0) + $holdMinutes;
             $updates['hold_started_at'] = null;
+
+            // Informational split only — this is a subset of the hold total above,
+            // so it must never be subtracted from an SLA figure a second time.
+            if ($oldStatus === 'pending') {
+                $updates['total_pending_time_minutes'] = ($ticket->total_pending_time_minutes ?? 0) + $holdMinutes;
+                $updates['pending_since'] = null;
+            }
+        }
+
+        if ($isPaused) {
+            $updates['hold_started_at'] = now();
+
+            if ($status === 'pending' && $oldStatus !== 'pending') {
+                $updates['pending_since'] = now();
+            }
         }
 
         DB::transaction(function () use ($ticket, $updates, $holdMinutes, $oldStatus, $status) {

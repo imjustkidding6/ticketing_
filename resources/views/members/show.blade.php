@@ -210,7 +210,7 @@
                             <div>
                                 <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{{ __('By Status') }}</h4>
                                 <div class="space-y-1.5">
-                                    @foreach(['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled'] as $status)
+                                    @foreach(\App\Models\Ticket::STATUSES as $status)
                                         @php $count = $performance['by_status'][$status] ?? 0; @endphp
                                         @if($count > 0)
                                         <div class="flex items-center justify-between">

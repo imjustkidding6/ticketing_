@@ -67,6 +67,9 @@ class ServiceReportService
         ];
 
         $report = ServiceReport::create([
+            // Stamped from the ticket rather than left to the global scope: this is
+            // also reached from the auto-close sweep, which has no tenant session.
+            'tenant_id' => $ticket->tenant_id,
             'ticket_id' => $ticket->id,
             'client_id' => $ticket->client_id,
             'report_data' => $reportData,
