@@ -177,7 +177,11 @@ Defined in `routes/console.php`:
 
 ### Ticket Status Lifecycle (CRITICAL)
 
-Statuses are `open`, `assigned`, `in_progress`, `on_hold`, `closed`, `cancelled`. There is **no `resolved` status** — resolution and closure are the same event.
+Statuses are `open`, `assigned`, `in_progress`, `on_hold`, `pending`, `closed`, `cancelled`, enumerated on the model as **`Ticket::STATUSES`** (plus `OPEN_STATUSES`, `PAUSED_STATUSES`, `CLOSED_STATUSES`). Use those constants — the literal array used to be copied into a dozen files, and a status added without updating all of them rolls out silently half-applied.
+
+There is **no `resolved` status** — resolution and closure are the same event. This diverges from Zendesk's solved/closed split deliberately: their closed tickets are locked, while ours can be reopened (`closed → open`), and `reopened_count` / `first_closed_at` give a reopen-rate metric the split has to reconstruct. `pending` means *waiting on the customer* and is what the solved/closed split is usually reached for.
+
+`tickets.status` is a **varchar, not a MySQL ENUM** (changed 2026-09-18). The database will therefore store any string, so `Ticket::STATUSES` is the only enumeration and every entry point validates against it — `TicketService::changeStatus()`, `UpdateTicketRequest`, the status endpoint, the API filter and the Jude connector's `UpdateStatus` tool. Adding a status is now a code change with no migration; removing one still needs a data plan.
 
 The allowed moves live in **`Ticket::TRANSITIONS`**, with `allowedTransitions()` and `canTransitionTo()` on the model. The map is enforced inside **`TicketService::changeStatus()`**, which throws `InvalidStatusTransitionException` (an `InvalidArgumentException`, so existing catch blocks handle it). It is enforced there — rather than in a controller — so that every entry point obeys it: the web controller, the edit form, the REST API and the assistant tools. **Never bypass `changeStatus()` to write `status` directly.**
 
@@ -189,7 +193,11 @@ The allowed moves live in **`Ticket::TRANSITIONS`**, with `allowedTransitions()`
 
 ### Ticket Hold Time & SLA
 
-Tickets track hold time via `startHold()`, `endHold()`, and `getTotalHoldTimeMinutes()`. Hold time is excluded from SLA calculations: `getEffectiveResolutionTimeHours()` and `getEffectiveResponseTimeHours()` subtract hold duration. This is critical for accurate SLA compliance reporting. **Resolution-time figures in every report path must use `getEffectiveResolutionTimeHours()`** (not raw `created_at → closed_at`) so hold time is excluded — this includes `ReportService`, `SlaService::getComplianceReport`, `AgentPerformanceService`, `TicketWorkflowService`, and `ServiceReportService`. Response time is reported raw (`created_at → first_response_at`); do NOT subtract hold from it, because `getEffectiveResponseTimeHours()` subtracts *total* hold (including holds after the first response) and would under-report.
+Hold time is banked **inline in `TicketService::changeStatus()`**, which closes the running segment whenever the status moves off a `Ticket::PAUSED_STATUSES` value and clears `hold_started_at`. `Ticket::startHold()` / `endHold()` exist but **nothing calls them** — do not reach for them assuming they are the entry point, and do not add a second pause mechanism beside the one in `changeStatus()`.
+
+`getTotalHoldTimeMinutes()` adds the *currently running* segment (`hold_started_at → now()`) to the banked total. That is correct for a live ticket and wrong for any ticket that reached a terminal state with `hold_started_at` still set — its resolution time then shrinks a little every day. `changeStatus()` never leaves that field set, but any path writing `status` directly does (the Jude connector's `UpdateStatus` tool is one, see the connector caveat below), which is one more reason nothing may bypass the service.
+
+Hold time is excluded from SLA calculations: `getEffectiveResolutionTimeHours()` and `getEffectiveResponseTimeHours()` subtract hold duration. This is critical for accurate SLA compliance reporting. **Resolution-time figures in every report path must use `getEffectiveResolutionTimeHours()`** (not raw `created_at → closed_at`) so hold time is excluded — this includes `ReportService`, `SlaService::getComplianceReport`, `AgentPerformanceService`, `TicketWorkflowService`, and `ServiceReportService`. Response time is reported raw (`created_at → first_response_at`); do NOT subtract hold from it, because `getEffectiveResponseTimeHours()` subtracts *total* hold (including holds after the first response) and would under-report.
 
 **SLA due dates are recomputed, not set once.** `SlaService::assignSla()` runs on creation *and* after any priority change (`changePriority()` and the priority path of `updateTicket()`), because targets differ per priority — a ticket triaged up to critical must not keep its low-priority deadline.
 
