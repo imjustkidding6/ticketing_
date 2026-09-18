@@ -374,6 +374,15 @@ class TicketService
     {
         $oldStatus = $ticket->status;
 
+        // tickets.status is a varchar, so the database will store any string we
+        // hand it. Ticket::STATUSES is the only enumeration left, and this is
+        // the one write path every caller funnels through, so it is where an
+        // unknown status has to be refused — before it is persisted and starts
+        // silently dropping the ticket out of every status-keyed query.
+        if (! in_array($status, Ticket::STATUSES, true)) {
+            throw new \InvalidArgumentException("Unknown ticket status: {$status}");
+        }
+
         // The transition map is enforced here rather than in a caller, so that
         // every entry point — controller, edit form, API, assistant tools —
         // is covered by the same rule.

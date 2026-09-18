@@ -10,9 +10,6 @@ class UpdateStatus extends AssistantTool
 {
     use AuthorizesTenantUser;
 
-    /** Statuses that count as closing a ticket. */
-    private const CLOSED_STATUSES = ['closed', 'cancelled'];
-
     public function name(): string
     {
         return 'update_status';
@@ -49,16 +46,25 @@ class UpdateStatus extends AssistantTool
         }
 
         $target = $input['status'];
-        $wasClosed = in_array($ticket->status, self::CLOSED_STATUSES, true);
+
+        // The inputSchema enum is advice to the Hub's model, not a constraint —
+        // and this tool writes status directly (see the connector caveat in
+        // CLAUDE.md), so nothing downstream would catch a made-up status now
+        // that the column is a varchar.
+        if (! in_array($target, Ticket::STATUSES, true)) {
+            return ['error' => 'Unknown status. Valid statuses: '.implode(', ', Ticket::STATUSES)];
+        }
+
+        $wasClosed = in_array($ticket->status, Ticket::CLOSED_STATUSES, true);
 
         // Closing and reopening carry their own permissions in the UI.
-        if (in_array($target, self::CLOSED_STATUSES, true) && ! $wasClosed) {
+        if (in_array($target, Ticket::CLOSED_STATUSES, true) && ! $wasClosed) {
             if ($denied = $this->denyUnless($user, 'close tickets')) {
                 return $denied;
             }
         }
 
-        if ($wasClosed && ! in_array($target, self::CLOSED_STATUSES, true)) {
+        if ($wasClosed && ! in_array($target, Ticket::CLOSED_STATUSES, true)) {
             if ($denied = $this->denyUnless($user, 'reopen tickets')) {
                 return $denied;
             }
