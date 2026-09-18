@@ -242,6 +242,97 @@ def extract_up_method(source: str) -> str | None:
     return None  # unbalanced braces; treat as unparseable
 
 
+# Table name is captured deliberately. Matching on the column name alone is a
+# safety bug: `status` exists on several tables here, and comparing a widening
+# of tickets.status against service_reports.status could demote a real
+# narrowing. Anything we cannot attribute to a table is left blocking.
+ENUM_MODIFY_RE = re.compile(
+    r"ALTER\s+TABLE\s+[`\"']?(\w+)[`\"']?\s+MODIFY\s+(?:COLUMN\s+)?"
+    r"[`\"']?(\w+)[`\"']?\s+ENUM\s*\(([^)]*)\)",
+    re.I | re.S,
+)
+ENUM_DECL_RE = re.compile(r"enum\s*\(\s*['\"](\w+)['\"]\s*,\s*\[([^\]]*)\]", re.I)
+SCHEMA_BLOCK_RE = re.compile(r"Schema::\s*(?:create|table)\s*\(\s*['\"](\w+)['\"]", re.I)
+APPROVAL_RE = re.compile(r"@gate-approved:\s*(.+?)\s*(?:\*/|$)", re.I | re.M)
+
+
+def enum_values(blob: str) -> set[str]:
+    return {m.group(1) for m in re.finditer(r"['\"]([^'\"]+)['\"]", blob)}
+
+
+def known_enum_values(table: str, column: str, root: Path) -> set[str] | None:
+    """The values `table`.`column` currently allows, per the migration history.
+
+    Each enum declaration is attributed to the nearest preceding
+    Schema::create/table block, so we compare like with like. Returns None when
+    no prior declaration is found, which the caller treats as "cannot prove
+    this is safe" -- the conservative direction.
+    """
+    found: set[str] | None = None
+
+    for mig in sorted((root / MIGRATION_DIR).glob("*.php")):
+        try:
+            text = strip_comments(mig.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+
+        blocks = [(m.start(), m.group(1)) for m in SCHEMA_BLOCK_RE.finditer(text)]
+
+        def owning_table(pos: int) -> str | None:
+            candidate = None
+            for start, name in blocks:
+                if start < pos:
+                    candidate = name
+                else:
+                    break
+            return candidate
+
+        for m in ENUM_DECL_RE.finditer(text):
+            if m.group(1) == column and owning_table(m.start()) == table:
+                found = enum_values(m.group(2))
+
+        # A later raw ALTER supersedes the original declaration.
+        for m in ENUM_MODIFY_RE.finditer(text):
+            if m.group(1) == table and m.group(2) == column:
+                found = enum_values(m.group(3))
+
+    return found
+
+
+def additive_enum_lines(up_body: str, root: Path) -> set[int]:
+    """Line numbers belonging to ENUM MODIFY statements that only ADD values.
+
+    Widening an enum cannot destroy data -- no existing row's value stops being
+    representable. Narrowing one silently truncates every row holding a removed
+    value. A gate that cannot tell these apart stops the safe case as often as
+    the dangerous one, and a gate that fires on safe changes is one people learn
+    to wave through -- which is how the dangerous case gets waved through too.
+
+    Returning lines rather than a yes/no keeps this precise: a file that widens
+    an enum *and* drops a column still blocks on the drop, because only the
+    widening's own lines are eligible for demotion.
+    """
+    safe: set[int] = set()
+
+    for m in ENUM_MODIFY_RE.finditer(up_body):
+        table, column, new_values = m.group(1), m.group(2), enum_values(m.group(3))
+        current = known_enum_values(table, column, root)
+        if current is None or not current.issubset(new_values):
+            continue
+
+        # Cover the whole enclosing PHP statement, not just the SQL: the
+        # `DB::statement(` wrapper trips a blocking rule of its own and sits on
+        # the same line.
+        start = up_body.rfind("\n", 0, m.start()) + 1
+        end = up_body.find(";", m.end())
+        end = len(up_body) if end == -1 else end
+        safe.update(
+            range(up_body.count("\n", 0, start) + 1, up_body.count("\n", 0, end) + 2)
+        )
+
+    return safe
+
+
 def scan(path: Path, root: Path) -> tuple[list[str], list[str]]:
     rel = path.relative_to(root) if path.is_relative_to(root) else path
 
@@ -261,13 +352,36 @@ def scan(path: Path, root: Path) -> tuple[list[str], list[str]]:
     lines = up_body.splitlines()
     blocking: list[str] = []
     warnings: list[str] = []
+    safe_lines = additive_enum_lines(up_body, root)
 
     for rules, bucket in ((BLOCKING_RULES, blocking), (WARNING_RULES, warnings)):
         for pattern, label in rules:
             for n, line in enumerate(lines, start=1):
-                if pattern.search(line):
-                    bucket.append(f"{rel}:{n}  {label}\n      {line.strip()[:120]}")
-                    break  # one finding per rule per file is enough to stop
+                if not pattern.search(line):
+                    continue
+                entry = f"{rel}:{n}  {label}\n      {line.strip()[:120]}"
+                if bucket is blocking and n in safe_lines:
+                    # Provably additive ENUM widening -- report it, don't stop on it.
+                    warnings.append(
+                        f"{entry}\n      (demoted: ENUM only gains values, "
+                        f"no existing row becomes unrepresentable)"
+                    )
+                else:
+                    bucket.append(entry)
+                break  # one finding per rule per file is enough to stop
+
+    # An explicit, human-granted exception. It has to live in the migration
+    # itself so it shows up in the diff the reviewer reads -- an approval that
+    # is invisible at review time is not an approval, it is a bypass.
+    approval = APPROVAL_RE.search(raw)
+    if blocking and approval:
+        reason = approval.group(1).strip()
+        warnings.append(
+            f"{rel}  GATE OVERRIDDEN by @gate-approved: {reason}\n"
+            f"      {len(blocking)} blocking finding(s) downgraded. A human owns this."
+        )
+        warnings.extend(f"(overridden) {f}" for f in blocking)
+        blocking = []
 
     return blocking, warnings
 
