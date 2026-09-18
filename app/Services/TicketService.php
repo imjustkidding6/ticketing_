@@ -3,13 +3,13 @@
 namespace App\Services;
 
 use App\Enums\PlanFeature;
+use App\Exceptions\InvalidStatusTransitionException;
+use App\Exceptions\TicketAlreadyAssignedException;
 use App\Models\AppSetting;
 use App\Models\Client;
 use App\Models\Scopes\TenantScope;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
-use App\Exceptions\InvalidStatusTransitionException;
-use App\Exceptions\TicketAlreadyAssignedException;
 use App\Models\Ticket;
 use App\Models\TicketAssignment;
 use App\Models\TicketHistory;
@@ -413,13 +413,16 @@ class TicketService
             $updates['closed_at'] = null;
         }
 
-        if ($status === 'on_hold') {
+        $wasPaused = in_array($oldStatus, Ticket::PAUSED_STATUSES, true);
+        $isPaused = in_array($status, Ticket::PAUSED_STATUSES, true);
+
+        if ($isPaused) {
             $updates['hold_started_at'] = now();
         }
 
         $holdMinutes = 0;
 
-        if ($ticket->status === 'on_hold' && $status !== 'on_hold' && $ticket->hold_started_at) {
+        if ($wasPaused && ! $isPaused && $ticket->hold_started_at) {
             $holdMinutes = max(0, (int) $ticket->hold_started_at->diffInMinutes(now()));
             $updates['total_hold_time_minutes'] = ($ticket->total_hold_time_minutes ?? 0) + $holdMinutes;
             $updates['hold_started_at'] = null;

@@ -9,6 +9,7 @@ use App\Models\Ticket;
 use App\Services\TicketService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class TicketController extends Controller
 {
@@ -78,7 +79,7 @@ class TicketController extends Controller
     public function index(Request $request): JsonResponse
     {
         $request->validate([
-            'status' => ['nullable', 'in:open,assigned,in_progress,on_hold,closed,cancelled'],
+            'status' => ['nullable', Rule::in(Ticket::STATUSES)],
             'priority' => ['nullable', 'in:low,medium,high,critical'],
             'client_email' => ['nullable', 'email'],
             'created_after' => ['nullable', 'date'],

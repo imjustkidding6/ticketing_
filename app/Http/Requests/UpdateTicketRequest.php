@@ -3,8 +3,10 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ScopesRulesToTenant;
+use App\Models\Ticket;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateTicketRequest extends FormRequest
 {
@@ -29,7 +31,7 @@ class UpdateTicketRequest extends FormRequest
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
             'priority' => ['required', 'in:low,medium,high,critical'],
-            'status' => ['required', 'in:open,assigned,in_progress,on_hold,closed,cancelled'],
+            'status' => ['required', Rule::in(Ticket::STATUSES)],
             'client_id' => ['required', $this->tenantExists('clients')],
             'category_id' => ['nullable', $this->tenantExists('ticket_categories')],
             'department_id' => ['nullable', $this->tenantExists('departments')],

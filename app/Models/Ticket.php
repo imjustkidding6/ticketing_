@@ -143,6 +143,38 @@ class Ticket extends Model
     }
 
     /**
+     * Every status a ticket may hold.
+     *
+     * The list used to be spelled out at each call site; a new status then had to be
+     * remembered in a dozen places and was silently omitted from whichever one was
+     * missed. Consult these constants instead of writing the literal again.
+     *
+     * @var list<string>
+     */
+    public const STATUSES = ['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled'];
+
+    /**
+     * Statuses that count as live work — everything that is neither closed nor cancelled.
+     *
+     * @var list<string>
+     */
+    public const OPEN_STATUSES = ['open', 'assigned', 'in_progress', 'on_hold'];
+
+    /**
+     * Statuses whose SLA clock is paused, so they are excluded from the breach sweep.
+     *
+     * @var list<string>
+     */
+    public const PAUSED_STATUSES = ['on_hold'];
+
+    /**
+     * Terminal statuses.
+     *
+     * @var list<string>
+     */
+    public const CLOSED_STATUSES = ['closed', 'cancelled'];
+
+    /**
      * Allowed status moves, keyed by current status.
      *
      * This lives on the model rather than in a service because every write path —
@@ -159,6 +191,14 @@ class Ticket extends Model
         'cancelled' => ['open'],
         'closed' => ['open'],
     ];
+
+    /**
+     * The lifecycle order of the statuses as a SQL FIELD() argument list, for sorting.
+     */
+    public static function statusOrderSql(string $column = 'status'): string
+    {
+        return 'FIELD('.$column.", '".implode("', '", self::STATUSES)."')";
+    }
 
     /**
      * Statuses a ticket in this state may move to.
@@ -322,7 +362,7 @@ class Ticket extends Model
      */
     public function scopeOpen(Builder $query): Builder
     {
-        return $query->whereIn('status', ['open', 'assigned', 'in_progress', 'on_hold']);
+        return $query->whereIn('status', self::OPEN_STATUSES);
     }
 
     /**
@@ -331,7 +371,7 @@ class Ticket extends Model
      */
     public function scopeClosed(Builder $query): Builder
     {
-        return $query->whereIn('status', ['closed', 'cancelled']);
+        return $query->whereIn('status', self::CLOSED_STATUSES);
     }
 
     /**

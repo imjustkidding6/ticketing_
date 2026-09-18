@@ -27,7 +27,7 @@ class UpdateStatus extends AssistantTool
     {
         return ['type' => 'object', 'properties' => [
             'ticket_number' => ['type' => 'string'],
-            'status' => ['type' => 'string', 'enum' => ['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled']],
+            'status' => ['type' => 'string', 'enum' => Ticket::STATUSES],
         ], 'required' => ['ticket_number', 'status']];
     }
 

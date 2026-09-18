@@ -6,6 +6,7 @@ use App\Models\SlaPolicy;
 use App\Models\Ticket;
 use App\Support\TenantTime;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 class SlaService
@@ -71,7 +72,7 @@ class SlaService
     {
         return Ticket::withoutGlobalScopes()
             ->open()
-            ->where('status', '!=', 'on_hold')
+            ->whereNotIn('status', Ticket::PAUSED_STATUSES)
             ->notMerged()
             ->notSpam()
             ->where(function ($q) {
@@ -99,13 +100,13 @@ class SlaService
      * The breach-warning set as a query, so callers can chunk rather than load
      * every overdue ticket across every tenant into memory at once.
      *
-     * @return \Illuminate\Database\Eloquent\Builder<Ticket>
+     * @return Builder<Ticket>
      */
-    public function breachWarningQuery(): \Illuminate\Database\Eloquent\Builder
+    public function breachWarningQuery(): Builder
     {
         return Ticket::withoutGlobalScopes()
             ->open()
-            ->where('status', '!=', 'on_hold')
+            ->whereNotIn('status', Ticket::PAUSED_STATUSES)
             ->notMerged()
             ->notSpam()
             ->whereNull('sla_breach_notified_at')

@@ -58,7 +58,7 @@ class AgentPerformanceService
         return [
             'agent' => $agent,
             'total_assigned' => $assignedTickets->count(),
-            'open' => $assignedTickets->whereIn('status', ['open', 'assigned', 'in_progress', 'on_hold'])->count(),
+            'open' => $assignedTickets->whereIn('status', Ticket::OPEN_STATUSES)->count(),
             'closed' => $closedTickets->count(),
             'cancelled' => $assignedTickets->where('status', 'cancelled')->count(),
             'avg_resolution_hours' => round($avgResolutionHours ?? 0, 1),

@@ -94,7 +94,7 @@ class ReportService
 
         return [
             'total' => (clone $query)->count(),
-            'open' => (clone $query)->whereIn('status', ['open', 'assigned', 'in_progress', 'on_hold'])->count(),
+            'open' => (clone $query)->whereIn('status', Ticket::OPEN_STATUSES)->count(),
             'closed' => (clone $query)->whereIn('status', ['closed', 'cancelled'])->count(),
             'in_progress' => (clone $query)->where('status', 'in_progress')->count(),
             'on_hold' => (clone $query)->where('status', 'on_hold')->count(),
@@ -540,7 +540,7 @@ class ReportService
         return Product::query()
             ->withCount([
                 'tickets as total_tickets' => fn ($q) => $ticketFilter($q),
-                'tickets as open_tickets' => fn ($q) => $ticketFilter($q->whereIn('tickets.status', ['open', 'assigned', 'in_progress', 'on_hold'])),
+                'tickets as open_tickets' => fn ($q) => $ticketFilter($q->whereIn('tickets.status', Ticket::OPEN_STATUSES)),
                 'tickets as closed_tickets' => fn ($q) => $ticketFilter($q->whereIn('tickets.status', ['closed', 'cancelled'])),
             ])
             ->get()
