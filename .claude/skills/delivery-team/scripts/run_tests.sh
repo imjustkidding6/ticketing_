@@ -18,6 +18,12 @@ CONTAINER="${TICKETING_APP_CONTAINER:-ticketing-app}"
 DB_HOST="${TEST_DB_HOST:-mysql}"
 DB_PORT="${TEST_DB_PORT:-3306}"
 
+# Two agents running the suite at once against the same database tear each
+# other's schema down mid-run; it surfaces as "table users already exists",
+# which reads like a broken branch rather than a collision. Set TEST_DB_NAME
+# to give your run its own database when anyone else might be testing.
+DB_NAME="${TEST_DB_NAME:-ticketing_test}"
+
 if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
     echo "error: container '$CONTAINER' is not running." >&2
     echo "Start it with 'make up' (or docker compose up -d), or set" >&2
@@ -43,11 +49,23 @@ if [ ${#ARGS[@]} -eq 0 ]; then
     ARGS=(--compact)
 fi
 
-echo "Running: artisan test ${ARGS[*]}  (db ${DB_HOST}:${DB_PORT} in ${CONTAINER})"
+# Create the database when it is not the shared default, so TEST_DB_NAME needs
+# no setup step of its own.
+if [ "$DB_NAME" != "ticketing_test" ]; then
+    DB_C=$(docker ps --filter ancestor=mysql:8.0 --format '{{.Names}}' | grep -i ticketing | head -1)
+    if [ -n "$DB_C" ]; then
+        docker exec "$DB_C" mysql -uroot -p"$DB_PASSWORD" \
+            -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\`;" 2>/dev/null \
+            && echo "Using isolated test database: ${DB_NAME}"
+    fi
+fi
+
+echo "Running: artisan test ${ARGS[*]}  (db ${DB_NAME} on ${DB_HOST}:${DB_PORT} in ${CONTAINER})"
 
 docker exec \
     -e DB_HOST="$DB_HOST" \
     -e DB_PORT="$DB_PORT" \
+    -e DB_DATABASE="$DB_NAME" \
     -e DB_PASSWORD="$DB_PASSWORD" \
     "$CONTAINER" php artisan test "${ARGS[@]}"
 
