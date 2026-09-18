@@ -8,6 +8,7 @@ use App\Services\OpenAiService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Laravel\Horizon\Horizon;
 use Throwable;
 
 class AiDoctorCommand extends Command
@@ -67,6 +68,18 @@ class AiDoctorCommand extends Command
         $queueDriver = config('queue.default', 'sync');
         $this->line("  [PASS] Queue Connection: Configured (Driver: {$queueDriver})");
 
+        try {
+            $failedJobs = DB::table('failed_jobs')->count();
+            if ($failedJobs === 0) {
+                $this->line('  [PASS] Failed Jobs: none');
+            } else {
+                $this->error("  [FAIL] Failed Jobs: {$failedJobs} in the failed_jobs table");
+                $allPassed = false;
+            }
+        } catch (Throwable $e) {
+            $this->warn("  [SKIP] Failed Jobs: table unavailable ({$e->getMessage()})");
+        }
+
         // 5. Storage Directory Permissions
         $storagePath = storage_path();
         if (is_writable($storagePath)) {
@@ -76,13 +89,14 @@ class AiDoctorCommand extends Command
             $allPassed = false;
         }
 
-        // 6. Horizon Configuration
-        $horizonConfigured = file_exists(config_path('horizon.php'));
-        if ($horizonConfigured) {
-            $this->line('  [PASS] Horizon Configuration: Present (config/horizon.php)');
+        // 6. Horizon — checked by class, not by config file. The previous
+        // file_exists(config_path('horizon.php')) check passed while the package
+        // was not installed at all, which is the worst kind of health check.
+        // Production runs SQS, where Horizon does nothing, so absence is a SKIP.
+        if (class_exists(Horizon::class)) {
+            $this->line('  [PASS] Horizon: installed');
         } else {
-            $this->error('  [FAIL] Horizon Configuration: Missing config/horizon.php');
-            $allPassed = false;
+            $this->warn('  [SKIP] Horizon: not installed (queue driver is '.$queueDriver.'; Horizon only supports redis)');
         }
 
         $this->newLine();

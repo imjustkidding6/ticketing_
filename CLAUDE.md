@@ -230,7 +230,7 @@ Dev default (`.env.example`): `QUEUE_CONNECTION=database`, `CACHE_STORE=database
 
 - **PHPUnit:** Uses MySQL (not SQLite), `RefreshDatabase` trait, test database `ticketing_test`. The dev box is **dockerized** (containers `ticketing-app`/`ticketing-mysql`/`ticketing-nginx`/`ticketing-redis`; Sail's `laravel.test` service is not used). MySQL is published on host port **3320**; tests run from the host against `127.0.0.1` also work via `phpunit.xml`. Run the suite either way: `php artisan test --compact` on the host, or inside the container with `docker exec ticketing-app php artisan test`.
 - **Testing-disk permission gotcha:** if you run tests *inside* the container (as root) and later on the host, branding/logo tests fail with `UnexpectedValueException: FilesystemIterator … Permission denied` because `storage/framework/testing/disks/public/tenant-logos` was created `root:root 0700`. Clear it through the container: `docker exec ticketing-app rm -rf storage/framework/testing/disks/public/tenant-logos`. (Passwordless `sudo` is not available on the host.)
-- **Playwright E2E:** Config in `playwright.config.ts`. Tests in `tests/e2e/`. Runs with `headless: false` and `slowMo: 500` for visibility.
+- **Playwright E2E:** Config in `playwright.config.ts`. Tests in `tests/e2e/`. Runs **headless**, chromium only, 1920x1080, `baseURL` `http://localhost:8005`, `screenshot: 'only-on-failure'`, `video: 'retain-on-failure'`, 180s timeout.
 - **Test helpers** in `tests/TestCase.php`: `withTenant($tenant)` sets test context, `tenantUrl($path)` generates tenant-prefixed URLs.
 - **Common test pattern** (used across all feature tests):
 ```php
@@ -311,6 +311,28 @@ OpenAI-powered assistant gated by the **`ai_chatbot`** feature (**Enterprise onl
 
 **Deploy notes:** `composer install` (pdfparser); `npm run build` (charts/markdown JS — ApexCharts is already a dependency); set `OPENAI_API_KEY` + optional `OPENAI_MODEL` (default `gpt-5`)/`OPENAI_REASONING_EFFORT`/`OPENAI_MAX_OUTPUT_TOKENS`/`OPENAI_SEARCH_MODEL`/`OPENAI_EMBED_MODEL` — confirm the chosen model is enabled on the OpenAI account, or `chat()` 404s; `migrate` (adds `chat_conversations`, `chat_messages`, `tickets.solution_embedding`, `learned_snippets`); re-apply `PlanFeature::forPlan('enterprise')` to existing Enterprise plans' `features` so `ai_chatbot` is present; ensure the scheduler runs `ai:embed:tickets`; `config:cache`.
 
+### AI Platform Infrastructure (guardrails, cost, admin console)
+
+The services around `OpenAiService`/`AiAssistantService` are the operational layer: guardrails, cost accounting and the cross-tenant admin console. Any new AI call path must go through them, or it is unmoderated and uncosted.
+
+**Request path for a tenant chat turn** (`AiAssistantService::converse()`):
+1. `PromptInjectionService::isInjection()` — refuses the turn and writes an `AiModerationLog` (`type=prompt_injection`).
+2. `ModerationService::isFlagged($text, 'balanced', …)` — same log table, `type=moderation`.
+3. `OpenAiService::post()` wraps *every* endpoint in `CircuitBreakerService::ensureAvailable()` / `recordFailure()` / `recordSuccess()` (cache-backed). A tripped breaker throws `OpenAiException` before any HTTP call, so an OpenAI outage fails fast instead of timing out per request.
+4. `AiUsageTrackerService::log()` writes an `ai_usage_logs` row per call — model, prompt/completion tokens, `estimated_cost`, `latency_ms`, `response_status` (`success|failed|rate_limited|moderated`) and `feature` (`chat|copilot|embed|web_search`). This table is the only cost record; a path that bypasses it is invisible to the analytics screens.
+
+**`SemanticCacheService` is misnamed on purpose** — keys are `md5()` of the exact query string, so it is a *lexical* cache. Two paraphrases of the same question are separate entries. Its own docblock says so; don't "fix" callers on the assumption that it dedupes by meaning.
+
+**`EmbeddingService`** owns all vector work (`embedKbArticle()`, ticket/snippet embedding, cosine search) and is what the `ai:embed:*` commands drive. `AiProfileService` supplies the named parameter presets in `ai_profiles` (Fast / Balanced / Cheap / High Accuracy / Vision / Reasoning — model, temperature, max_tokens, top_p, penalties, `enabled_tools`, one `is_default`).
+
+**Rate limiters** are declared in `AppServiceProvider` (not in route files): `ai-chat` (public portal bot), `portal-ai`, `agent-ai`, `admin-ai`. Every AI route should carry one.
+
+**Three assistant surfaces, three controllers** — `Portal\PortalAiAssistantController` (`portal.ai.*`), `App\AppAiAssistantController` (`app.ai.*`), and the admin ones below. They are separate from the `assistant.*` widget endpoints.
+
+**Admin AI console (`/admin/ai`, platform staff, cross-tenant)** — `AiDashboardController` (dashboard), `AiAdminManagerController` (settings, prompt templates in `ai_prompt_templates`, conversation browser + export, feedback in `chat_message_feedbacks`, playground, analytics via `AiMetricsService`, health/circuit-breaker state), `AdminAiCopilotController` + `AdminAiCopilotService` (a copilot that answers over Tenant/License/Plan/Distributor/Ticket/User — cross-tenant by design), `AiChatbotController` + `AiChatbotService` (admin chat with conversation CRUD) and `AiConversationExportService` (`exportJson()` / `exportCsv()`).
+
+**`ai:maintenance --mode=hourly|daily|weekly`** prunes `ai_usage_logs`, warms caches and recalculates the metric counters `AiMetricsService` reads.
+
 ### AI Bug Fixing ("AI Programmer" = Claude Code)
 
 A closed loop where a user reports a product bug to the AI Assistant and an autonomous coding agent (Claude Code, via the GitHub Action) opens a fix PR.
@@ -347,7 +369,7 @@ Agent tiering (Enterprise only): 3 tiers (tier_1, tier_2, tier_3). Escalation en
 
 `RegisteredUserController::store()` runs everything inside a single DB transaction: creates the tenant (with a user-chosen slug), activates the license, creates the owner user, calls `DepartmentSeeder::seedForTenant($tenant)` and `TenantRoleService::setupDefaultRoles($tenant)`, then redirects directly to the new tenant's dashboard. When modifying onboarding, keep all of this inside the transaction.
 
-**Slug reserved words** — tenant slugs are validated against a blocklist in registration: `admin`, `www`, `mail`, `api`, `portal`, `app`, `support`, `help`, `status`, `login`, `register`, `profile`, `up`, `logout`. Add new reserved route prefixes here if they conflict with the `{slug}` wildcard. **Known gaps:** `connect-jude`, `webhooks`, and `auth` are top-level route prefixes but are NOT yet in the blocklist — a tenant registering one of those slugs would be shadowed by the static route.
+**Slug reserved words** — tenant slugs are validated in registration against `Tenant::RESERVED_SLUGS` (`app/Models/Tenant.php:24`), enforced via `Rule::notIn()` in both `RegisteredUserController` and `GoogleSocialiteController`. Add new top-level route prefixes there when they would collide with the `{slug}` wildcard — `health` matters in particular now that the ALB health check points at `/health`.
 
 ### Google Sign-In (Socialite)
 

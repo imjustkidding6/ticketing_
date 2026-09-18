@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     environment: production
+    outputs:
+      previous_web: ${{ steps.current.outputs.web }}
+      previous_worker: ${{ steps.current.outputs.worker }}
 
     steps:
       - uses: actions/checkout@v4
@@ -39,16 +42,47 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Run database migrations
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+      # Captured BEFORE anything is changed, so the rollback job below has a
+      # concrete revision to return to rather than guessing at "previous".
+      - name: Record currently deployed task definitions
+        id: current
         run: |
-          aws ecs run-task \
+          echo "web=$(aws ecs describe-services --cluster ticketing --services ticketing-web \
+            --query 'services[0].taskDefinition' --output text --region ${{ vars.AWS_REGION }})" >> "$GITHUB_OUTPUT"
+          echo "worker=$(aws ecs describe-services --cluster ticketing --services ticketing-worker \
+            --query 'services[0].taskDefinition' --output text --region ${{ vars.AWS_REGION }})" >> "$GITHUB_OUTPUT"
+
+      # run-task is asynchronous. Without waiting on it and checking the exit
+      # code, a failed migration still let the new code roll out against the
+      # old schema.
+      - name: Run database migrations
+        run: |
+          set -euo pipefail
+          TASK_ARN=$(aws ecs run-task \
             --cluster ticketing \
             --task-definition ticketing-web \
             --overrides '{"containerOverrides":[{"name":"ticketing-web","command":["php","artisan","migrate","--force"]}]}' \
-            --region ${{ vars.AWS_REGION }}
+            --query 'tasks[0].taskArn' --output text \
+            --region ${{ vars.AWS_REGION }})
+
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+            echo "::error::Migration task failed to start."
+            exit 1
+          fi
+          echo "Migration task: $TASK_ARN"
+
+          aws ecs wait tasks-stopped --cluster ticketing --tasks "$TASK_ARN" --region ${{ vars.AWS_REGION }}
+
+          EXIT_CODE=$(aws ecs describe-tasks --cluster ticketing --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text --region ${{ vars.AWS_REGION }})
+          REASON=$(aws ecs describe-tasks --cluster ticketing --tasks "$TASK_ARN" \
+            --query 'tasks[0].stoppedReason' --output text --region ${{ vars.AWS_REGION }})
+
+          echo "Migration exit code: $EXIT_CODE ($REASON)"
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error::Migrations failed - aborting deploy before any service is updated."
+            exit 1
+          fi
 
       - name: Deploy web service
         run: |
@@ -66,9 +100,48 @@ jobs:
             --force-new-deployment \
             --region ${{ vars.AWS_REGION }}
 
-      - name: Wait for web service stability
+      # Both services are waited on. The worker was previously never checked,
+      # so a crash-looping worker counted as a successful deploy.
+      - name: Wait for service stability
         run: |
           aws ecs wait services-stable \
             --cluster ticketing \
-            --services ticketing-web \
+            --services ticketing-web ticketing-worker \
             --region ${{ vars.AWS_REGION }}
+
+  # Returns both services to the task definitions captured before the deploy.
+  # Deliberately does NOT touch the database: rolling code back underneath a
+  # migrated schema is how an incident becomes data loss. If migrations ran,
+  # a human decides.
+  rollback:
+    needs: deploy
+    if: failure()
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Roll back to previous task definitions
+        run: |
+          set -euo pipefail
+          WEB="${{ needs.deploy.outputs.previous_web }}"
+          WORKER="${{ needs.deploy.outputs.previous_worker }}"
+
+          if [ -z "$WEB" ]; then
+            echo "::error::No previous revision recorded; deploy failed before capture. Manual intervention required."
+            exit 1
+          fi
+
+          echo "::warning::Rolling back web to $WEB and worker to $WORKER"
+          aws ecs update-service --cluster ticketing --service ticketing-web \
+            --task-definition "$WEB" --region ${{ vars.AWS_REGION }}
+          aws ecs update-service --cluster ticketing --service ticketing-worker \
+            --task-definition "$WORKER" --region ${{ vars.AWS_REGION }}
+          aws ecs wait services-stable --cluster ticketing \
+            --services ticketing-web ticketing-worker --region ${{ vars.AWS_REGION }}
+          echo "::warning::Rollback complete. Schema was NOT reverted - verify migration state by hand."

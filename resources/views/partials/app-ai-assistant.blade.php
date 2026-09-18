@@ -222,6 +222,9 @@
             // Surface reported-bug updates as assistant messages, then acknowledge them.
             async surfaceBugUpdates() {
                 if (! this.pendingBugUpdates.length) return;
+                // Acknowledge exactly what we displayed, so an update we never
+                // showed is not marked as seen.
+                const shown = this.pendingBugUpdates.map(u => u.reference).filter(Boolean);
                 for (const u of this.pendingBugUpdates) {
                     this.messages.push(this.tag({ role: 'assistant', text: u.message, system: true }));
                 }
@@ -229,7 +232,11 @@
                 this.hasBugUpdates = false;
                 this.$nextTick(() => this.scrollToEnd());
                 try {
-                    await fetch(this.bugAckUrl, { method: 'POST', headers: { 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' } });
+                    await fetch(this.bugAckUrl, {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ references: shown }),
+                    });
                 } catch (e) { /* ignore */ }
             },
 
