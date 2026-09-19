@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Enums\PlanFeature;
+use App\Http\Controllers\Concerns\HasSortableQuery;
 use App\Http\Controllers\Concerns\PreventsDuplicateSubmissions;
 use App\Http\Controllers\Concerns\ScopesTicketsToDepartments;
-use App\Http\Controllers\Concerns\HasSortableQuery;
 use App\Http\Requests\StoreTicketRequest;
 use App\Http\Requests\UpdateTicketRequest;
 use App\Models\CannedResponse;
@@ -20,7 +20,6 @@ use App\Services\PlanService;
 use App\Services\TicketMergeService;
 use App\Services\TicketService;
 use App\Services\TicketWorkflowService;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,10 +32,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TicketController extends Controller
 {
+    use HasSortableQuery;
     use PreventsDuplicateSubmissions;
     use ScopesTicketsToDepartments;
-
-    use HasSortableQuery;
 
     public function __construct(
         private TicketService $ticketService,
@@ -120,11 +118,11 @@ class TicketController extends Controller
                     $tickets->orderBy($sort, $direction);
                     break;
                 default:
-                    $tickets->orderByRaw("FIELD(status, 'open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled')")
+                    $tickets->orderByRaw(Ticket::statusOrderSql())
                         ->latest();
             }
         } else {
-            $tickets->orderByRaw("FIELD(status, 'open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled')")
+            $tickets->orderByRaw(Ticket::statusOrderSql())
                 ->latest();
         }
 
@@ -408,7 +406,7 @@ class TicketController extends Controller
         $this->authorizeTicketAccess($ticket);
 
         $validated = $request->validate([
-            'status' => ['required', 'in:open,assigned,in_progress,on_hold,closed,cancelled'],
+            'status' => ['required', Rule::in(Ticket::STATUSES)],
             'closing_remarks' => [
                 Rule::requiredIf(fn () => $request->input('status') === 'closed' && $ticket->status !== 'closed'),
                 'nullable', 'string', 'max:2000',

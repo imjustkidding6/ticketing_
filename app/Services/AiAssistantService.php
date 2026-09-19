@@ -1000,7 +1000,7 @@ class AiAssistantService
                         'type' => 'object',
                         'properties' => [
                             'assigned_to' => ['type' => 'string', 'enum' => ['me', 'unassigned', 'anyone'], 'description' => 'Whose tickets (default anyone)'],
-                            'status' => ['type' => 'string', 'enum' => ['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled']],
+                            'status' => ['type' => 'string', 'enum' => Ticket::STATUSES],
                             'priority' => ['type' => 'string', 'enum' => ['low', 'medium', 'high', 'critical']],
                             'client' => ['type' => 'string', 'description' => 'Filter by client name or email'],
                             'search' => ['type' => 'string', 'description' => 'Text to match in subject, description, or ticket number'],

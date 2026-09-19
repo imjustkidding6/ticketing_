@@ -96,7 +96,7 @@ return [
                 ['p' => 'Tickets arrive from the public portal, the REST API, or an agent creating one here.'],
 
                 ['h' => 'Statuses'],
-                ['p' => 'There are six: <strong>open</strong>, <strong>assigned</strong>, <strong>in progress</strong>, <strong>on hold</strong>, <strong>closed</strong> and <strong>cancelled</strong>. There is deliberately no separate "resolved" — resolving and closing are the same event.'],
+                ['p' => 'There are seven: <strong>open</strong>, <strong>assigned</strong>, <strong>in progress</strong>, <strong>on hold</strong>, <strong>pending</strong>, <strong>closed</strong> and <strong>cancelled</strong>. There is deliberately no separate "resolved" — resolving and closing are the same event.'],
                 ['warn' => 'Not every move between statuses is allowed. A closed ticket can only be reopened; it cannot jump straight back to in progress. The system refuses invalid moves rather than recording them.'],
 
                 ['h' => 'Priority', 'permission' => 'update tickets'],
@@ -116,6 +116,10 @@ return [
 
                 ['h' => 'Putting a ticket on hold', 'permission' => 'update tickets'],
                 ['p' => 'Use <strong>on hold</strong> when you are waiting on someone else. Time on hold is not counted against you: when the hold ends, the SLA deadline moves out by however long it lasted.', 'permission' => 'update tickets'],
+
+                ['h' => 'Waiting on the customer', 'permission' => 'update tickets'],
+                ['p' => 'Use <strong>pending</strong> when the ball is in the customer\'s court. It pauses the SLA clock exactly as on hold does — the difference is what it tells your reports: how much of the wait was theirs, not yours.', 'permission' => 'update tickets'],
+                ['note' => 'A workspace can set pending tickets to close automatically after a number of days in Settings → Tickets. It is off until someone sets it.', 'permission' => 'update tickets'],
 
                 ['h' => 'Merging duplicates', 'permission' => 'merge tickets'],
                 ['steps' => [
@@ -377,7 +381,6 @@ return [
                 ],
             ],
         ],
-
 
         /* ---------------------------------------------------------------- */
 

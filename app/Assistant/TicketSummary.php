@@ -28,7 +28,7 @@ class TicketSummary extends AssistantTool
 
         $byStatus = Ticket::selectRaw('status, count(*) as c')->groupBy('status')->pluck('c', 'status');
 
-        $open = collect(['open', 'assigned', 'in_progress', 'on_hold'])->sum(fn ($s) => (int) $byStatus->get($s, 0));
+        $open = collect(Ticket::OPEN_STATUSES)->sum(fn ($s) => (int) $byStatus->get($s, 0));
         $closed = collect(['closed', 'cancelled'])->sum(fn ($s) => (int) $byStatus->get($s, 0));
 
         return [

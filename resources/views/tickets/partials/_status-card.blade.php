@@ -31,7 +31,7 @@
                             @else
                                 {{-- Quick status update (one click; close/cancel stay in the dropdown below) --}}
                                 @php
-                                    $quickStatuses = ['open', 'assigned', 'in_progress'];
+                                    $quickStatuses = ['open', 'assigned', 'in_progress', 'pending'];
                                     if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement)) {
                                         $quickStatuses[] = 'on_hold';
                                     }
@@ -40,6 +40,7 @@
                                         'assigned' => 'bg-blue-100 text-blue-700 hover:bg-blue-200',
                                         'in_progress' => 'bg-amber-100 text-amber-800 hover:bg-amber-200',
                                         'on_hold' => 'bg-purple-100 text-purple-700 hover:bg-purple-200',
+                                        'pending' => 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                                     ];
                                 @endphp
                                 <div class="mb-3">
@@ -66,9 +67,9 @@
                                     @csrf
                                     <select name="status" id="sidebar_status" x-model="status" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                         @php
-                                            $availableStatuses = ['open', 'assigned', 'in_progress', 'closed', 'cancelled'];
+                                            $availableStatuses = ['open', 'assigned', 'in_progress', 'pending', 'closed', 'cancelled'];
                                             if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement)) {
-                                                $availableStatuses = ['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled'];
+                                                $availableStatuses = ['open', 'assigned', 'in_progress', 'on_hold', 'pending', 'closed', 'cancelled'];
                                             }
                                         @endphp
                                         @foreach($availableStatuses as $status)

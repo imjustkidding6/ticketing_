@@ -31,6 +31,8 @@ class Ticket extends Model
         'in_progress_at',
         'hold_started_at',
         'total_hold_time_minutes',
+        'total_pending_time_minutes',
+        'pending_since',
     ];
 
     /**
@@ -69,6 +71,8 @@ class Ticket extends Model
         'reopened_count',
         'hold_started_at',
         'total_hold_time_minutes',
+        'total_pending_time_minutes',
+        'pending_since',
         'current_tier',
         'escalation_count',
         'last_escalated_at',
@@ -105,6 +109,7 @@ class Ticket extends Model
             'billed_at' => 'datetime',
             'merged_at' => 'datetime',
             'hold_started_at' => 'datetime',
+            'pending_since' => 'datetime',
             'last_escalated_at' => 'datetime',
             'sla_breach_notified_at' => 'datetime',
             'solution_embedded_at' => 'datetime',
@@ -122,6 +127,7 @@ class Ticket extends Model
             'solution_embedding' => 'array',
             'reopened_count' => 'integer',
             'total_hold_time_minutes' => 'integer',
+            'total_pending_time_minutes' => 'integer',
             'escalation_count' => 'integer',
         ];
     }
@@ -143,6 +149,42 @@ class Ticket extends Model
     }
 
     /**
+     * Every status a ticket may hold.
+     *
+     * The list used to be spelled out at each call site; a new status then had to be
+     * remembered in a dozen places and was silently omitted from whichever one was
+     * missed. Consult these constants instead of writing the literal again.
+     *
+     * @var list<string>
+     */
+    public const STATUSES = ['open', 'assigned', 'in_progress', 'on_hold', 'pending', 'closed', 'cancelled'];
+
+    /**
+     * Statuses that count as live work — everything that is neither closed nor cancelled.
+     *
+     * @var list<string>
+     */
+    public const OPEN_STATUSES = ['open', 'assigned', 'in_progress', 'on_hold', 'pending'];
+
+    /**
+     * Statuses whose SLA clock is paused, so they are excluded from the breach sweep.
+     *
+     * 'pending' is a labelled hold — the customer owes us a reply — and pauses
+     * through the same machinery as 'on_hold' so there is one pause
+     * implementation and the SLA maths learns nothing new.
+     *
+     * @var list<string>
+     */
+    public const PAUSED_STATUSES = ['on_hold', 'pending'];
+
+    /**
+     * Terminal statuses.
+     *
+     * @var list<string>
+     */
+    public const CLOSED_STATUSES = ['closed', 'cancelled'];
+
+    /**
      * Allowed status moves, keyed by current status.
      *
      * This lives on the model rather than in a service because every write path —
@@ -152,13 +194,22 @@ class Ticket extends Model
      * @var array<string, list<string>>
      */
     public const TRANSITIONS = [
-        'open' => ['assigned', 'in_progress', 'on_hold', 'cancelled', 'closed'],
-        'assigned' => ['in_progress', 'on_hold', 'cancelled', 'closed', 'open'],
-        'in_progress' => ['on_hold', 'closed', 'cancelled', 'open'],
-        'on_hold' => ['open', 'in_progress', 'closed', 'cancelled'],
+        'open' => ['assigned', 'in_progress', 'on_hold', 'pending', 'cancelled', 'closed'],
+        'assigned' => ['in_progress', 'on_hold', 'pending', 'cancelled', 'closed', 'open'],
+        'in_progress' => ['on_hold', 'pending', 'closed', 'cancelled', 'open'],
+        'on_hold' => ['open', 'in_progress', 'pending', 'closed', 'cancelled'],
+        'pending' => ['open', 'in_progress', 'on_hold', 'closed', 'cancelled'],
         'cancelled' => ['open'],
         'closed' => ['open'],
     ];
+
+    /**
+     * The lifecycle order of the statuses as a SQL FIELD() argument list, for sorting.
+     */
+    public static function statusOrderSql(string $column = 'status'): string
+    {
+        return 'FIELD('.$column.", '".implode("', '", self::STATUSES)."')";
+    }
 
     /**
      * Statuses a ticket in this state may move to.
@@ -322,7 +373,18 @@ class Ticket extends Model
      */
     public function scopeOpen(Builder $query): Builder
     {
-        return $query->whereIn('status', ['open', 'assigned', 'in_progress', 'on_hold']);
+        return $query->whereIn('status', self::OPEN_STATUSES);
+    }
+
+    /**
+     * Tickets waiting on the customer.
+     *
+     * @param  Builder<Ticket>  $query
+     * @return Builder<Ticket>
+     */
+    public function scopePending(Builder $query): Builder
+    {
+        return $query->where('status', 'pending');
     }
 
     /**
@@ -331,7 +393,7 @@ class Ticket extends Model
      */
     public function scopeClosed(Builder $query): Builder
     {
-        return $query->whereIn('status', ['closed', 'cancelled']);
+        return $query->whereIn('status', self::CLOSED_STATUSES);
     }
 
     /**
@@ -373,7 +435,7 @@ class Ticket extends Model
     {
         return $this->resolution_due_at
             && now()->gt($this->resolution_due_at)
-            && ! in_array($this->status, ['closed', 'cancelled']);
+            && ! in_array($this->status, self::CLOSED_STATUSES, true);
     }
 
     /**
@@ -384,7 +446,7 @@ class Ticket extends Model
         return $this->response_due_at
             && now()->gt($this->response_due_at)
             && $this->first_response_at === null
-            && ! in_array($this->status, ['closed', 'cancelled']);
+            && ! in_array($this->status, self::CLOSED_STATUSES, true);
     }
 
     /**
@@ -401,7 +463,7 @@ class Ticket extends Model
     {
         $total = $this->total_hold_time_minutes ?? 0;
 
-        if ($this->hold_started_at && ! in_array($this->status, ['closed', 'cancelled'])) {
+        if ($this->hold_started_at && ! in_array($this->status, self::CLOSED_STATUSES, true)) {
             $total += max(0, (int) $this->hold_started_at->diffInMinutes(now()));
         }
 

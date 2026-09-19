@@ -72,7 +72,7 @@ class SlaService
     {
         return Ticket::withoutGlobalScopes()
             ->open()
-            ->where('status', '!=', 'on_hold')
+            ->whereNotIn('status', Ticket::PAUSED_STATUSES)
             ->notMerged()
             ->notSpam()
             ->where(function ($q) {
@@ -106,7 +106,7 @@ class SlaService
     {
         return Ticket::withoutGlobalScopes()
             ->open()
-            ->where('status', '!=', 'on_hold')
+            ->whereNotIn('status', Ticket::PAUSED_STATUSES)
             ->notMerged()
             ->notSpam()
             ->whereNull('sla_breach_notified_at')

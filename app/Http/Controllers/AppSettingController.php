@@ -74,11 +74,15 @@ class AppSettingController extends Controller
             'default_priority' => ['nullable', 'in:low,medium,high,critical'],
             'auto_assignment' => ['nullable', 'string'],
             'ticket_prefix' => ['nullable', 'string', 'max:10'],
+            'auto_close_pending_days' => ['nullable', 'integer', 'min:0', 'max:365'],
         ]);
 
         AppSetting::set('default_priority', $validated['default_priority'] ?? 'medium', 'string', 'ticket');
         AppSetting::set('auto_assignment', isset($validated['auto_assignment']) ? '1' : '0', 'boolean', 'ticket');
         AppSetting::set('ticket_prefix', $validated['ticket_prefix'] ?? 'TKT', 'string', 'ticket');
+        // 0 means never auto-close, and is the default: no workspace starts closing
+        // its customers' tickets without saying so.
+        AppSetting::set('auto_close_pending_days', (string) ($validated['auto_close_pending_days'] ?? 0), 'string', 'ticket');
 
         return redirect()->route('settings.ticket')
             ->with('success', 'Ticket settings saved.');

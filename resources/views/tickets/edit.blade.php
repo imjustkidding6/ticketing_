@@ -58,9 +58,9 @@
                             <div>
                                 <label for="status" class="block text-sm font-medium text-gray-700">{{ __('Status') }}</label>
                                 @php
-                                    $editStatuses = ['open', 'assigned', 'in_progress', 'closed', 'cancelled'];
+                                    $editStatuses = ['open', 'assigned', 'in_progress', 'pending', 'closed', 'cancelled'];
                                     if (app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::SlaManagement)) {
-                                        $editStatuses = ['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled'];
+                                        $editStatuses = ['open', 'assigned', 'in_progress', 'on_hold', 'pending', 'closed', 'cancelled'];
                                     }
                                 @endphp
                                 <select name="status" id="status" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">

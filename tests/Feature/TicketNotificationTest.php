@@ -279,6 +279,74 @@ class TicketNotificationTest extends TestCase
         });
     }
 
+    /**
+     * Renders the status-change email body for a given status.
+     */
+    private function renderStatusEmail(Ticket $ticket, string $newStatus): string
+    {
+        $notification = new ClientTicketStatusChangedNotification($ticket, 'in_progress', $newStatus);
+
+        return (string) $notification->toMail(new AnonymousNotifiable)->render();
+    }
+
+    public function test_pending_email_asks_the_customer_to_reply(): void
+    {
+        // This email is the channel that reaches the customer at the moment they
+        // have to act. Falling through to "our team continues to work on your
+        // request" is how a pending ticket sits unanswered until the auto-close
+        // sweep closes it — the customer was told nothing was needed from them.
+        $tenant = $this->createBusinessTenant();
+        $this->setupTenantContext($tenant);
+
+        [$client, $department, $category] = $this->createTicketDependencies($tenant);
+
+        $ticket = app(TicketService::class)->createTicket([
+            'tenant_id' => $tenant->id,
+            'subject' => 'Pending copy',
+            'description' => 'Test description',
+            'priority' => 'medium',
+            'department_id' => $department->id,
+            'category_id' => $category->id,
+            'client_id' => $client->id,
+        ]);
+
+        $body = $this->renderStatusEmail($ticket, 'pending');
+
+        $this->assertStringContainsString('waiting for your reply', $body);
+        $this->assertStringContainsString('closed automatically', $body);
+        $this->assertStringNotContainsString('Our team continues to work on your request', $body);
+        $this->assertStringNotContainsString("We've made progress", $body);
+    }
+
+    public function test_every_status_has_its_own_email_copy(): void
+    {
+        // The generic fallback is only honest for 'open'. Any other status landing
+        // on it means a status shipped without copy — which is exactly how the
+        // pending arm was missed.
+        $tenant = $this->createBusinessTenant();
+        $this->setupTenantContext($tenant);
+
+        [$client, $department, $category] = $this->createTicketDependencies($tenant);
+
+        $ticket = app(TicketService::class)->createTicket([
+            'tenant_id' => $tenant->id,
+            'subject' => 'Status copy sweep',
+            'description' => 'Test description',
+            'priority' => 'medium',
+            'department_id' => $department->id,
+            'category_id' => $category->id,
+            'client_id' => $client->id,
+        ]);
+
+        foreach (array_diff(Ticket::STATUSES, ['open']) as $status) {
+            $this->assertStringNotContainsString(
+                'Our team continues to work on your request',
+                $this->renderStatusEmail($ticket, $status),
+                "The status-change email has no copy for '{$status}' and falls through to the generic line.",
+            );
+        }
+    }
+
     public function test_via_returns_only_mail_for_anonymous_notifiable(): void
     {
         $notification = new TicketCreatedNotification(

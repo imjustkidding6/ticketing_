@@ -94,10 +94,11 @@ class ReportService
 
         return [
             'total' => (clone $query)->count(),
-            'open' => (clone $query)->whereIn('status', ['open', 'assigned', 'in_progress', 'on_hold'])->count(),
-            'closed' => (clone $query)->whereIn('status', ['closed', 'cancelled'])->count(),
+            'open' => (clone $query)->whereIn('status', Ticket::OPEN_STATUSES)->count(),
+            'closed' => (clone $query)->whereIn('status', Ticket::CLOSED_STATUSES)->count(),
             'in_progress' => (clone $query)->where('status', 'in_progress')->count(),
             'on_hold' => (clone $query)->where('status', 'on_hold')->count(),
+            'pending' => (clone $query)->where('status', 'pending')->count(),
             'initially_resolved' => $initiallyResolved,
             'finally_closed' => $finallyClosed,
             'reopened' => $everReopened,
@@ -116,6 +117,7 @@ class ReportService
                 'assigned' => (clone $query)->where('status', 'assigned')->count(),
                 'in_progress' => (clone $query)->where('status', 'in_progress')->count(),
                 'on_hold' => (clone $query)->where('status', 'on_hold')->count(),
+                'pending' => (clone $query)->where('status', 'pending')->count(),
                 'closed' => (clone $query)->where('status', 'closed')->count(),
                 'cancelled' => (clone $query)->where('status', 'cancelled')->count(),
             ],
@@ -540,7 +542,7 @@ class ReportService
         return Product::query()
             ->withCount([
                 'tickets as total_tickets' => fn ($q) => $ticketFilter($q),
-                'tickets as open_tickets' => fn ($q) => $ticketFilter($q->whereIn('tickets.status', ['open', 'assigned', 'in_progress', 'on_hold'])),
+                'tickets as open_tickets' => fn ($q) => $ticketFilter($q->whereIn('tickets.status', Ticket::OPEN_STATUSES)),
                 'tickets as closed_tickets' => fn ($q) => $ticketFilter($q->whereIn('tickets.status', ['closed', 'cancelled'])),
             ])
             ->get()

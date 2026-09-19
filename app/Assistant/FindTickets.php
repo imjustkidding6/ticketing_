@@ -23,7 +23,7 @@ class FindTickets extends AssistantTool
     public function inputSchema(): array
     {
         return ['type' => 'object', 'properties' => [
-            'status' => ['type' => 'string', 'enum' => ['open', 'assigned', 'in_progress', 'on_hold', 'closed', 'cancelled']],
+            'status' => ['type' => 'string', 'enum' => Ticket::STATUSES],
             'priority' => ['type' => 'string', 'enum' => ['low', 'medium', 'high', 'critical']],
             'search' => ['type' => 'string', 'description' => 'Keyword to match in the ticket subject.'],
             'limit' => ['type' => 'integer', 'description' => 'Max tickets to return (default 10).'],

@@ -373,7 +373,7 @@
         var statusData = @json($myTicketsByStatus);
         var statusLabels = Object.keys(statusData).map(function(s) { return s.replace('_', ' '); });
         var statusValues = Object.values(statusData).map(Number);
-        var statusColors = { open: '#3b82f6', assigned: '#6366f1', in_progress: '#8b5cf6', on_hold: '#f59e0b', closed: '#10b981', cancelled: '#6b7280' };
+        var statusColors = { open: '#3b82f6', assigned: '#6366f1', in_progress: '#8b5cf6', on_hold: '#f59e0b', pending: '#94a3b8', closed: '#10b981', cancelled: '#6b7280' };
         var sColors = Object.keys(statusData).map(function(s) { return statusColors[s] || '#6b7280'; });
 
         if (statusValues.length > 0) {

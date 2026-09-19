@@ -3,13 +3,13 @@
 namespace App\Services;
 
 use App\Enums\PlanFeature;
+use App\Exceptions\InvalidStatusTransitionException;
+use App\Exceptions\TicketAlreadyAssignedException;
 use App\Models\AppSetting;
 use App\Models\Client;
 use App\Models\Scopes\TenantScope;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
-use App\Exceptions\InvalidStatusTransitionException;
-use App\Exceptions\TicketAlreadyAssignedException;
 use App\Models\Ticket;
 use App\Models\TicketAssignment;
 use App\Models\TicketHistory;
@@ -374,6 +374,15 @@ class TicketService
     {
         $oldStatus = $ticket->status;
 
+        // tickets.status is a varchar, so the database will store any string we
+        // hand it. Ticket::STATUSES is the only enumeration left, and this is
+        // the one write path every caller funnels through, so it is where an
+        // unknown status has to be refused — before it is persisted and starts
+        // silently dropping the ticket out of every status-keyed query.
+        if (! in_array($status, Ticket::STATUSES, true)) {
+            throw new \InvalidArgumentException("Unknown ticket status: {$status}");
+        }
+
         // The transition map is enforced here rather than in a caller, so that
         // every entry point — controller, edit form, API, assistant tools —
         // is covered by the same rule.
@@ -413,16 +422,36 @@ class TicketService
             $updates['closed_at'] = null;
         }
 
-        if ($status === 'on_hold') {
-            $updates['hold_started_at'] = now();
-        }
+        // 'pending' is a labelled hold: it pauses through the same machinery as
+        // 'on_hold' so there is exactly one pause implementation, and the SLA
+        // maths downstream does not learn a new concept.
+        $wasPaused = in_array($oldStatus, Ticket::PAUSED_STATUSES, true);
+        $isPaused = in_array($status, Ticket::PAUSED_STATUSES, true);
 
         $holdMinutes = 0;
 
-        if ($ticket->status === 'on_hold' && $status !== 'on_hold' && $ticket->hold_started_at) {
+        // Close out the running segment whenever the status moves off the one that
+        // started it — including on_hold to pending, or that segment would be lost
+        // when an agent relabels a pause.
+        if ($wasPaused && $oldStatus !== $status && $ticket->hold_started_at) {
             $holdMinutes = max(0, (int) $ticket->hold_started_at->diffInMinutes(now()));
             $updates['total_hold_time_minutes'] = ($ticket->total_hold_time_minutes ?? 0) + $holdMinutes;
             $updates['hold_started_at'] = null;
+
+            // Informational split only — this is a subset of the hold total above,
+            // so it must never be subtracted from an SLA figure a second time.
+            if ($oldStatus === 'pending') {
+                $updates['total_pending_time_minutes'] = ($ticket->total_pending_time_minutes ?? 0) + $holdMinutes;
+                $updates['pending_since'] = null;
+            }
+        }
+
+        if ($isPaused) {
+            $updates['hold_started_at'] = now();
+
+            if ($status === 'pending' && $oldStatus !== 'pending') {
+                $updates['pending_since'] = now();
+            }
         }
 
         DB::transaction(function () use ($ticket, $updates, $holdMinutes, $oldStatus, $status) {

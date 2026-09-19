@@ -38,7 +38,11 @@
 
         <p style="color:#64748b;margin:0 0 20px;font-size:15px;">Dear <strong style="color:#1f2937;">{{ $clientName }}</strong>,</p>
         <p style="color:#64748b;margin:0 0 25px;font-size:15px;line-height:1.7;">
-            We've made progress on your support ticket. The status has been updated.
+            @if($newStatus === 'pending')
+                Your support ticket is waiting on you. The status has been updated.
+            @else
+                We've made progress on your support ticket. The status has been updated.
+            @endif
         </p>
 
         {{-- Status Transition --}}
@@ -70,6 +74,12 @@
                     Your ticket has been assigned to a specialist who will begin working on it shortly.
                 @elseif($newStatus === 'in_progress')
                     Our team is actively working on resolving your issue. We'll keep you updated.
+                @elseif($newStatus === 'pending')
+                    {{-- Pending means the ball is in the customer's court, and this email is the
+                         channel that reaches them at the moment they have to act. Telling them the
+                         team is working on it is how a ticket sits unanswered until the auto-close
+                         sweep closes it. --}}
+                    We're waiting for your reply before we can continue. Please reply to this ticket with the information we've asked for — if we don't hear back from you, the ticket may be closed automatically.
                 @elseif($newStatus === 'on_hold')
                     Your ticket is temporarily on hold. We will resume work as soon as possible.
                 @elseif($newStatus === 'closed')

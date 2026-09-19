@@ -128,6 +128,7 @@ class ReportController extends Controller
             ['Closed Tickets', $volume['closed']],
             ['In Progress', $volume['in_progress']],
             ['On Hold', $volume['on_hold']],
+            ['Pending (awaiting customer)', $volume['pending']],
             ['Critical', $volume['by_priority']['critical']],
             ['High', $volume['by_priority']['high']],
             ['Medium', $volume['by_priority']['medium']],

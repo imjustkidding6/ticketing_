@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\PlanFeature;
+use App\Http\Controllers\ClientPortalController;
 use App\Models\Client;
 use App\Models\Department;
 use App\Models\License;
@@ -12,6 +13,7 @@ use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Tests\TestCase;
 
 class ClientPortalTest extends TestCase
@@ -27,6 +29,39 @@ class ClientPortalTest extends TestCase
         $license = License::factory()->active()->forPlan($plan)->create();
 
         return Tenant::factory()->create(['license_id' => $license->id]);
+    }
+
+    public function test_portal_open_count_includes_every_live_status(): void
+    {
+        // A paused ticket is still live work. Counting only open/assigned/
+        // in_progress told the customer their on_hold — and later their pending —
+        // ticket had vanished. Ticket::OPEN_STATUSES is the one list.
+        $tenant = $this->createTenant('business');
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+
+        foreach (Ticket::STATUSES as $status) {
+            Ticket::factory()->create([
+                'tenant_id' => $tenant->id,
+                'client_id' => $client->id,
+                // The department factory has only a handful of unique names and
+                // this loop would exhaust them; the count under test does not
+                // look at the department.
+                'department_id' => null,
+                'category_id' => null,
+                'status' => $status,
+                'is_spam' => false,
+            ]);
+        }
+
+        // dashboard() is not routed today, so it is exercised directly rather
+        // than over HTTP.
+        $request = Request::create("/{$tenant->slug}/portal");
+        $request->merge(['portal_client' => $client]);
+
+        $stats = app(ClientPortalController::class)->dashboard($request, $tenant)->getData()['stats'];
+
+        $this->assertSame(count(Ticket::OPEN_STATUSES), $stats['open']);
+        $this->assertSame(count(Ticket::STATUSES), $stats['total']);
     }
 
     public function test_landing_page_starter_gets_404(): void
