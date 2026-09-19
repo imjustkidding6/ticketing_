@@ -21,7 +21,8 @@
         { "name": "FILESYSTEM_DISK", "value": "s3" },
         { "name": "MAIL_MAILER", "value": "ses" },
         { "name": "ENABLE_QUEUE_WORKER", "value": "true" },
-        { "name": "ENABLE_SCHEDULER", "value": "true" }
+        { "name": "ENABLE_SCHEDULER", "value": "true" },
+        { "name": "RUN_MIGRATIONS_ON_BOOT", "value": "false" }
       ],
       "secrets": [
         { "name": "APP_KEY", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/APP_KEY" },

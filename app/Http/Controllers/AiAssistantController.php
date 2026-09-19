@@ -253,16 +253,41 @@ class AiAssistantController extends Controller
 
     /**
      * Acknowledge the surfaced bug updates so they aren't shown again.
+     *
+     * Scoped to the references the client actually displayed. Acknowledging
+     * every user-facing bug silently swallowed any update beyond the ten
+     * bugUpdates() returns — the user would never be told about those.
      */
     public function ackBugUpdates(Request $request): JsonResponse
     {
         $tenant = Tenant::findOrFail(session('current_tenant_id'));
 
-        BugReport::where('tenant_id', $tenant->id)
+        $validated = $request->validate([
+            'references' => ['sometimes', 'array', 'max:50'],
+            'references.*' => ['string', 'max:64'],
+        ]);
+
+        $query = BugReport::where('tenant_id', $tenant->id)
             ->where('reported_by', $request->user()->id)
-            ->whereIn('status', BugReport::USER_FACING_STATUSES)
-            ->get()
-            ->each(fn (BugReport $b) => $b->update(['user_notified_status' => $b->status]));
+            ->whereIn('status', BugReport::USER_FACING_STATUSES);
+
+        // No references given (older client): fall back to the same window
+        // bugUpdates() surfaces, rather than the whole history.
+        if (filled($validated['references'] ?? null)) {
+            // BugReport::reference() is "BUG-{year}-{id padded to 6}"; the id is
+            // the trailing segment, not the year.
+            $ids = collect($validated['references'])
+                ->map(fn (string $ref) => preg_match('/-(\d+)$/', $ref, $m) === 1 ? (int) $m[1] : 0)
+                ->filter()
+                ->all();
+            $query->whereIn('id', $ids);
+        } else {
+            $query->where(fn ($q) => $q->whereNull('user_notified_status')->orWhereColumn('user_notified_status', '!=', 'status'))
+                ->latest('updated_at')
+                ->limit(10);
+        }
+
+        $query->get()->each(fn (BugReport $b) => $b->update(['user_notified_status' => $b->status]));
 
         return response()->json(['ok' => true]);
     }

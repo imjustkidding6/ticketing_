@@ -5,6 +5,16 @@ on:
     branches: ['*']
   pull_request:
     branches: [main]
+  # deploy.yml reuses this workflow via `jobs.test.uses`. Without workflow_call
+  # that reference cannot resolve and the whole deploy fails at its first job.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:

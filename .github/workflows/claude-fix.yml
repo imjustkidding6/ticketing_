@@ -17,9 +17,15 @@ on:
 jobs:
   claude-fix:
     # Only run for the ai-fix label, or an @claude mention on an ai-fix issue.
+    # The comment path must re-check the label: without it, any commenter on any
+    # issue could invoke a write-capable agent holding the repo's API key.
+    # The author association check keeps drive-by comments from outsiders out.
     if: >-
       (github.event_name == 'issues' && github.event.label.name == 'ai-fix') ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
+      (github.event_name == 'issue_comment' &&
+       contains(github.event.comment.body, '@claude') &&
+       contains(github.event.issue.labels.*.name, 'ai-fix') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     permissions:
       contents: write

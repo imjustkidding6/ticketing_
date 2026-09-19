@@ -1,7 +1,7 @@
 # =============================================================================
 # Development Stage
 # =============================================================================
-FROM php:8.2-fpm AS development
+FROM php:8.3-fpm AS development
 
 # Match www-data to the host user's UID/GID so bind-mounted files are writable.
 # Pass --build-arg HOST_UID=$(id -u) --build-arg HOST_GID=$(id -g) at build time,
@@ -61,7 +61,7 @@ CMD ["php-fpm"]
 # =============================================================================
 # Production Stage
 # =============================================================================
-FROM php:8.2-fpm-alpine AS production
+FROM php:8.3-fpm-alpine AS production
 
 # Install system dependencies
 RUN apk add --no-cache \

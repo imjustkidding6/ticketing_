@@ -30,7 +30,8 @@
         { "name": "SESSION_SECURE_COOKIE", "value": "true" },
         { "name": "TRUSTED_PROXIES", "value": "*" },
         { "name": "ENABLE_QUEUE_WORKER", "value": "false" },
-        { "name": "ENABLE_SCHEDULER", "value": "false" }
+        { "name": "ENABLE_SCHEDULER", "value": "false" },
+        { "name": "RUN_MIGRATIONS_ON_BOOT", "value": "false" }
       ],
       "secrets": [
         { "name": "APP_KEY", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/APP_KEY" },
@@ -47,7 +48,7 @@
         { "name": "SQS_QUEUE", "valueFrom": "arn:aws:ssm:REGION:ACCOUNT:parameter/ticketing/SQS_QUEUE" }
       ],
       "healthCheck": {
-        "command": ["CMD-SHELL", "curl -f http://localhost/up || exit 1"],
+        "command": ["CMD-SHELL", "curl -f http://localhost/health || exit 1"],
         "interval": 30,
         "timeout": 5,
         "retries": 3,
