@@ -3,98 +3,20 @@
 @section('title', 'SLA Policies')
 
 @section('content')
-    @inject('slaService', 'App\Services\SlaService')
     @php
-        $overdueTickets = $slaService->getOverdueTickets();
-        $breachWarnings = $slaService->getTicketsNeedingBreachWarning();
-        $complianceReport = $slaService->getComplianceReport();
-        
-        // Query tickets near breach (due in the next 4 hours)
-        $nearBreachTickets = \App\Models\Ticket::withoutGlobalScopes()
-            ->open()
-            ->notMerged()
-            ->notSpam()
-            ->where(function ($q) {
-                $q->whereBetween('resolution_due_at', [now(), now()->addHours(4)])
-                    ->orWhere(function ($q2) {
-                        $q2->whereNull('first_response_at')
-                            ->whereBetween('response_due_at', [now(), now()->addHours(2)]);
-                    });
-            })
-            ->with(['client', 'assignee', 'department'])
-            ->get();
+        // Everything ticket-derived is built by SlaPolicyController::adminOps() and
+        // arrives in $adminOps. This view calls no service and computes no figure:
+        // the page used to call SlaService itself, which is how it ended up showing
+        // whichever tenants happened to be in session.
+        $overdueTickets = $adminOps['overdue'];
+        $nearBreachTickets = $adminOps['near_breach'];
+        $alpineNearBreach = $adminOps['near_breach_alpine'];
+        $complianceReport = $adminOps['compliance'];
+        $weeks = $adminOps['weeks'];
+        $weeklyCompliance = $adminOps['weekly_compliance'];
+        $weeklyResp = $adminOps['weekly_resp'];
+        $weeklyRes = $adminOps['weekly_res'];
 
-        $allPolicies = collect($grouped)->flatMap(function($priorities) {
-            return collect($priorities)->values()->filter();
-        });
-        
-        $activeCount = $allPolicies->where('is_active', true)->count();
-        $inactiveCount = $allPolicies->where('is_active', false)->count();
-        
-        // SLA averages & compliance
-        $avgResponse = $complianceReport['avg_response_hours'] ?? ($allPolicies->count() > 0 ? round($allPolicies->avg('response_time_hours'), 1) : 0);
-        $avgResolution = $complianceReport['avg_resolution_hours'] ?? ($allPolicies->count() > 0 ? round($allPolicies->avg('resolution_time_hours'), 1) : 0);
-        
-        $responseCompliance = $complianceReport['response_compliance'] ?? 98.4;
-        $resolutionCompliance = $complianceReport['resolution_compliance'] ?? 97.8;
-        
-        $coverage = round(($allPolicies->count() / 12) * 100);
-
-        // Tier stats calculations
-        $tierCompleteness = [];
-        $tierAvgResponse = [];
-        $tierAvgResolution = [];
-        $tierActiveCount = [];
-        $tierCompliance = [];
-        foreach ($tiers as $tier) {
-            $tierPolicies = collect($grouped[$tier])->filter();
-            $totalForTier = $tierPolicies->count();
-            $tierActiveCount[$tier] = $tierPolicies->where('is_active', true)->count();
-            $tierCompleteness[$tier] = round(($totalForTier / 4) * 100);
-            $tierAvgResponse[$tier] = $totalForTier > 0 ? round($tierPolicies->avg('response_time_hours'), 1) : 0;
-            $tierAvgResolution[$tier] = $totalForTier > 0 ? round($tierPolicies->avg('resolution_time_hours'), 1) : 0;
-            $tierCompliance[$tier] = $complianceReport['by_tier'][$tier]['resolution_rate'] ?? 100.0;
-        }
-
-        // Mapped near breach tickets for live countdown in Alpine
-        $alpineNearBreach = $nearBreachTickets->map(function($t) {
-            $due = $t->resolution_due_at ?? $t->response_due_at;
-            return [
-                'id' => $t->id,
-                'number' => $t->ticket_number,
-                'subject' => $t->subject,
-                'priority' => $t->priority,
-                'client' => $t->client?->name ?? 'N/A',
-                'agent' => $t->assignee?->name ?? 'Unassigned',
-                'due_timestamp' => $due ? $due->timestamp : 0,
-                'due_formatted' => $due ? $due->format('H:i:s') : 'N/A'
-            ];
-        })->all();
-        
-        // Group closed tickets by week for trend analytics
-        $weeklyStats = $complianceReport['rows']->groupBy(function($row) {
-            return $row['ticket']->closed_at->format('Y-W');
-        })->sortKeys()->take(6);
-
-        $weeks = [];
-        $weeklyCompliance = [];
-        $weeklyResp = [];
-        $weeklyRes = [];
-
-        foreach ($weeklyStats as $weekKey => $group) {
-            $met = $group->where('resolution_status', 'met')->count();
-            $missed = $group->where('resolution_status', 'missed')->count();
-            $rate = ($met + $missed) > 0 ? round(($met / ($met + $missed)) * 100, 1) : 100;
-            
-            $avgResp = $group->pluck('response_hours')->filter(fn($v) => $v !== null)->avg() ?? 0;
-            $avgRes = $group->pluck('resolution_hours')->filter(fn($v) => $v !== null)->avg() ?? 0;
-
-            $weeks[] = "Wk " . substr($weekKey, 5);
-            $weeklyCompliance[] = $rate;
-            $weeklyResp[] = round($avgResp, 1);
-            $weeklyRes[] = round($avgRes, 1);
-        }
-        
         $getTicketsUrl = function(array $params = []) {
             if (! \Illuminate\Support\Facades\Route::has('tickets.index')) {
                 return '#';
@@ -591,7 +513,7 @@
                 if (prioEl) {
                     const prioData = @json($complianceReport['by_priority'] ?? []);
                     const priorities = ['low', 'medium', 'high', 'critical'];
-                    const prioRates = priorities.map(p => (prioData && prioData[p]) ? prioData[p].resolution_rate : 100.0);
+                    const prioRates = priorities.map(p => (prioData && prioData[p]) ? prioData[p].resolution_rate : null);
 
                     this.priorityRateChart = new ApexCharts(prioEl, {
                         chart: {
@@ -630,7 +552,7 @@
                 if (tierEl) {
                     const tierData = @json($complianceReport['by_tier'] ?? []);
                     const tierNames = ['basic', 'premium', 'enterprise'];
-                    const tierRates = tierNames.map(t => (tierData && tierData[t]) ? tierData[t].resolution_rate : 100.0);
+                    const tierRates = tierNames.map(t => (tierData && tierData[t]) ? tierData[t].resolution_rate : null);
 
                     this.tierRateChart = new ApexCharts(tierEl, {
                         chart: {
@@ -879,6 +801,56 @@
                         <span class="text-[10px] font-bold">tickets</span>
                     </div>
                 </div>
+            </div>
+
+            <!-- Platform SLA compliance (scope stated, never guessed) -->
+            <div class="premium-card p-6 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-base font-extrabold text-[var(--text-primary)]">Platform SLA Compliance</h3>
+                        <p class="text-xs text-[var(--text-secondary)] mt-1">
+                            {{ $adminOps['scope_label'] }} &middot; {{ $adminOps['window_from'] }} to {{ $adminOps['window_to'] }} (UTC)
+                        </p>
+                    </div>
+                    <span class="sla-pill sla-badge-low">{{ $adminOps['workspaces_total'] }} workspaces</span>
+                </div>
+
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-[var(--text-secondary)]">Response Compliance</span>
+                        <div class="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight">
+                            {{ $adminOps['response_compliance'] !== null ? $adminOps['response_compliance'].'%' : '—' }}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-[var(--text-secondary)]">Resolution Compliance</span>
+                        <div class="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight">
+                            {{ $adminOps['resolution_compliance'] !== null ? $adminOps['resolution_compliance'].'%' : '—' }}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-[var(--text-secondary)]">Avg Response</span>
+                        <div class="text-2xl font-extrabold text-indigo-500 tracking-tight">
+                            {{ $adminOps['avg_response_hours'] !== null ? $adminOps['avg_response_hours'].'h' : '—' }}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-[var(--text-secondary)]">Avg Resolution</span>
+                        <div class="text-2xl font-extrabold text-blue-500 tracking-tight">
+                            {{ $adminOps['avg_resolution_hours'] !== null ? $adminOps['avg_resolution_hours'].'h' : '—' }}
+                        </div>
+                    </div>
+                </div>
+
+                @if($adminOps['response_compliance'] === null && $adminOps['resolution_compliance'] === null)
+                    <p class="text-xs text-[var(--text-secondary)]">No closed tickets with an SLA in this window</p>
+                @endif
+
+                <p class="text-xs text-[var(--text-secondary)]">
+                    {{ $adminOps['closed_without_sla'] }} closed tickets excluded (no SLA policy)
+                    &middot; {{ $adminOps['workspaces_fully_covered'] }} of {{ $adminOps['workspaces_total'] }} workspaces have a complete SLA matrix
+                    ({{ \App\Models\SlaPolicy::matrixSlotCount() }} slots)
+                </p>
             </div>
 
             <!-- Live Health & Analytics Panel -->
@@ -1147,9 +1119,13 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 @foreach($tiers as $tier)
                     @php
-                        $completeness = $tierCompleteness[$tier];
-                        $tierRows = $grouped[$tier];
-                        $hasRows = collect($tierRows)->filter()->isNotEmpty();
+                        // Cross-tenant, there is no single policy per (tier, priority) —
+                        // $grouped would show whichever workspace sorts first. Show how
+                        // many workspaces define the slot and the mean target instead.
+                        $cells = $adminOps['tier_cells'][$tier];
+                        $definedSlots = collect($cells)->where('workspaces', '>', 0)->count();
+                        $completeness = (int) round(($definedSlots / count($priorities)) * 100);
+                        $hasRows = $definedSlots > 0;
                     @endphp
                     <div class="premium-card p-6 flex flex-col justify-between space-y-6">
                         <div>
@@ -1192,13 +1168,15 @@
                             <!-- Dynamic Priorities target summaries -->
                             <div class="mt-6 space-y-2.5">
                                 @foreach($priorities as $priority)
-                                    @php $p = $tierRows[$priority] ?? null; @endphp
+                                    @php $cell = $cells[$priority]; @endphp
                                     <div class="flex items-center justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800/50 last:border-0">
                                         <span class="sla-pill {{ 'sla-badge-'.$priority }}">{{ $priority }}</span>
                                         <div class="flex items-center gap-3 text-[var(--text-secondary)]">
-                                            <span>Resp: <strong class="font-bold text-[var(--text-primary)]">{{ $p ? $p->response_time_hours.'h' : '—' }}</strong></span>
+                                            <span>{{ $cell['workspaces'] }} ws</span>
                                             <span class="text-slate-300 dark:text-slate-700">|</span>
-                                            <span>Res: <strong class="font-bold text-[var(--text-primary)]">{{ $p ? $p->resolution_time_hours.'h' : '—' }}</strong></span>
+                                            <span>Avg resp: <strong class="font-bold text-[var(--text-primary)]">{{ $cell['avg_response'] !== null ? $cell['avg_response'].'h' : '—' }}</strong></span>
+                                            <span class="text-slate-300 dark:text-slate-700">|</span>
+                                            <span>Avg res: <strong class="font-bold text-[var(--text-primary)]">{{ $cell['avg_resolution'] !== null ? $cell['avg_resolution'].'h' : '—' }}</strong></span>
                                         </div>
                                     </div>
                                 @endforeach

@@ -82,7 +82,12 @@ class SlaService
                             ->where('response_due_at', '<', now());
                     });
             })
-            ->with(['client', 'assignee'])
+            // Cross-tenant query, so the eager loads must be too — a scoped
+            // relation on an unscoped row resolves to null for every other tenant.
+            ->with([
+                'client' => fn ($q) => $q->withoutGlobalScopes(),
+                'assignee',
+            ])
             ->get();
     }
 
@@ -125,15 +130,30 @@ class SlaService
      *
      * @return array<string, mixed>
      */
-    public function getComplianceReport(?Carbon $from = null, ?Carbon $to = null): array
+    public function getComplianceReport(?Carbon $from, ?Carbon $to, ?int $tenantId): array
     {
         $from = $from ?? TenantTime::startOfDaysAgo(30);
         $to = $to ?? TenantTime::now();
 
-        $closedTickets = Ticket::query()
+        // $tenantId is required, not defaulted: the caller must state the scope it
+        // wants. Reading it from the ambient TenantScope is the defect this fixes —
+        // an unset session silently widened the report to every tenant.
+        $closedTickets = Ticket::withoutGlobalScopes()
+            ->when($tenantId !== null, fn ($q) => $q->where('tenant_id', $tenantId))
             ->notMerged()
             ->notSpam()
-            ->with(['client', 'department', 'assignee', 'slaPolicy'])
+            // The eager loads carry each related model's own global scope, so on the
+            // platform path a foreign tenant's policy would resolve to null and its
+            // ticket would silently score "na" instead of met/missed — rows right,
+            // percentage wrong.
+            ->with($tenantId === null
+                ? [
+                    'client' => fn ($q) => $q->withoutGlobalScopes(),
+                    'department' => fn ($q) => $q->withoutGlobalScopes(),
+                    'assignee',
+                    'slaPolicy' => fn ($q) => $q->withoutGlobalScopes(),
+                ]
+                : ['client', 'department', 'assignee', 'slaPolicy'])
             ->where('status', 'closed')
             ->whereNotNull('sla_policy_id')
             ->whereBetween('closed_at', [$from, $to])
@@ -144,7 +164,8 @@ class SlaService
         // inventing a commitment; hiding them makes compliance read better than the
         // service actually was, which is the complaint this report attracted. So the
         // denominator is unchanged and the exclusion is reported alongside it.
-        $withoutSla = Ticket::query()
+        $withoutSla = Ticket::withoutGlobalScopes()
+            ->when($tenantId !== null, fn ($q) => $q->where('tenant_id', $tenantId))
             ->notMerged()
             ->notSpam()
             ->where('status', 'closed')
@@ -253,6 +274,8 @@ class SlaService
             'rows' => $rows,
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
+            'scope' => $tenantId === null ? 'platform' : 'tenant',
+            'tenant_id' => $tenantId,
         ];
     }
 }

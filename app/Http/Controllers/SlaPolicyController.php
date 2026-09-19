@@ -3,10 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\SlaPolicy;
+use App\Models\Tenant;
 use App\Models\Ticket;
+use App\Services\SlaService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -17,26 +21,21 @@ class SlaPolicyController extends Controller
     /**
      * Display SLA dashboard, health panel, registry, and tier workstations.
      */
-    public function index(Request $request): View
+    public function index(Request $request, SlaService $slaService): View
     {
         $this->checkPermission('view sla policies');
 
-        $tenantId = session('current_tenant_id');
+        // The one place scope is chosen. Admin is cross-tenant by intent (CLAUDE.md:
+        // "Admin controllers intentionally operate across tenants"); previously it was
+        // cross-tenant only by accident, because TenantScope adds no WHERE clause when
+        // session('current_tenant_id') is unset — so the page changed with the admin's
+        // browsing history. Every bypass below is inside this branch; the tenant branch
+        // is the ordinary scoped query and must stay that way.
+        $isAdmin = $request->routeIs('admin.*');
 
         // 1. Query policies with ticket usage counts
-        $query = SlaPolicy::query()
-            ->withCount([
-                'tickets as total_tickets_count',
-                'tickets as active_tickets_count' => fn ($q) => $q->open(),
-                'tickets as closed_tickets_count' => fn ($q) => $q->closed(),
-                'tickets as breached_tickets_count' => fn ($q) => $q->where(function ($q2) {
-                    $q2->where('resolution_due_at', '<', now())
-                        ->orWhere(function ($q3) {
-                            $q3->whereNull('first_response_at')
-                                ->where('response_due_at', '<', now());
-                        });
-                }),
-            ]);
+        $query = ($isAdmin ? SlaPolicy::withoutGlobalScopes() : SlaPolicy::query())
+            ->withCount($this->ticketUsageCounts($isAdmin));
 
         // Filter: Search Name or Description
         if ($request->filled('search')) {
@@ -98,17 +97,9 @@ class SlaPolicyController extends Controller
         $policies = $query->get();
 
         // 2. Compute Health Panel Stats across all policies
-        $allPolicies = SlaPolicy::query()
-            ->withCount([
-                'tickets as total_tickets_count',
-                'tickets as breached_tickets_count' => fn ($q) => $q->where(function ($q2) {
-                    $q2->where('resolution_due_at', '<', now())
-                        ->orWhere(function ($q3) {
-                            $q3->whereNull('first_response_at')
-                                ->where('response_due_at', '<', now());
-                        });
-                }),
-            ])->get();
+        $allPolicies = ($isAdmin ? SlaPolicy::withoutGlobalScopes() : SlaPolicy::query())
+            ->withCount($this->ticketUsageCounts($isAdmin, full: false))
+            ->get();
 
         $totalPoliciesCount = $allPolicies->count();
         $activePoliciesCount = $allPolicies->where('is_active', true)->count();
@@ -175,7 +166,8 @@ class SlaPolicyController extends Controller
             ];
         })->values()->all();
 
-        return view($request->routeIs('admin.*') ? 'admin.sla.index' : 'sla.index', [
+        return view($isAdmin ? 'admin.sla.index' : 'sla.index', [
+            'adminOps' => $isAdmin ? $this->adminOps($slaService, $allPolicies) : null,
             'grouped' => $grouped,
             'tiers' => SlaPolicy::TIERS,
             'priorities' => SlaPolicy::PRIORITIES,
@@ -202,6 +194,173 @@ class SlaPolicyController extends Controller
                 'direction' => $sortDirection,
             ],
         ]);
+    }
+
+    /**
+     * The withCount() selects for policy ticket usage.
+     *
+     * The relation query inside a withCount() closure carries Ticket's own global
+     * scope, so bypassing the scope on the outer SlaPolicy query alone would leave
+     * deterministic rows beside session-dependent counts — which looks fixed and
+     * isn't.
+     */
+    private function ticketUsageCounts(bool $isAdmin, bool $full = true): array
+    {
+        $scoped = fn ($q) => $isAdmin ? $q->withoutGlobalScopes() : $q;
+
+        $breached = fn ($q) => $scoped($q)->where(function ($q2) {
+            $q2->where('resolution_due_at', '<', now())
+                ->orWhere(function ($q3) {
+                    $q3->whereNull('first_response_at')
+                        ->where('response_due_at', '<', now());
+                });
+        });
+
+        if (! $full) {
+            return [
+                'tickets as total_tickets_count' => $scoped,
+                'tickets as breached_tickets_count' => $breached,
+            ];
+        }
+
+        return [
+            'tickets as total_tickets_count' => $scoped,
+            'tickets as active_tickets_count' => fn ($q) => $scoped($q)->open(),
+            'tickets as closed_tickets_count' => fn ($q) => $scoped($q)->closed(),
+            'tickets as breached_tickets_count' => $breached,
+        ];
+    }
+
+    /**
+     * Everything the admin SLA page shows that is derived from tickets.
+     *
+     * Built here rather than in the Blade view: the view used to call SlaService
+     * itself, which is why the controller's payload looked complete while the page
+     * was showing figures nobody had chosen the scope of.
+     *
+     * @param  Collection<int, SlaPolicy>  $allPolicies
+     */
+    private function adminOps(SlaService $slaService, $allPolicies): array
+    {
+        // Explicit UTC, not TenantTime: TenantTime::timezone() branches on
+        // session('current_tenant_id') too, so the default 30-day window was a second
+        // copy of the same bug. The page prints the window it used.
+        $to = Carbon::now('UTC');
+        $from = $to->copy()->subDays(30);
+
+        $report = $slaService->getComplianceReport($from, $to, null);
+
+        // A percentage over an empty denominator is as invented as the 98.4 that used
+        // to be hard-coded here. Uncomputable is reported as uncomputable.
+        $rate = fn (int $met, int $missed) => ($met + $missed) > 0
+            ? round(($met / ($met + $missed)) * 100, 1)
+            : null;
+
+        $slots = SlaPolicy::matrixSlotCount();
+        $workspacesTotal = Tenant::count();
+        $workspacesCovered = SlaPolicy::withoutGlobalScopes()
+            ->whereNotNull('client_tier')
+            ->whereNotNull('priority')
+            ->selectRaw('tenant_id, COUNT(DISTINCT client_tier, priority) as slots')
+            ->groupBy('tenant_id')
+            ->having('slots', '>=', $slots)
+            ->get()
+            ->count();
+
+        // Cross-tenant, "the premium/high policy" is not a thing: $grouped would pick
+        // whichever workspace sorts first. Report the aggregate that is actually true.
+        $tierCells = [];
+        foreach (SlaPolicy::TIERS as $tier) {
+            foreach (SlaPolicy::PRIORITIES as $priority) {
+                $cell = $allPolicies->filter(
+                    fn (SlaPolicy $p) => $p->client_tier === $tier && $p->priority === $priority
+                );
+
+                $tierCells[$tier][$priority] = [
+                    'workspaces' => $cell->pluck('tenant_id')->unique()->count(),
+                    'avg_response' => $cell->isNotEmpty() ? round($cell->avg('response_time_hours'), 1) : null,
+                    'avg_resolution' => $cell->isNotEmpty() ? round($cell->avg('resolution_time_hours'), 1) : null,
+                ];
+            }
+        }
+
+        // Weekly trend buckets group an already-fetched collection in PHP, so no SQL
+        // date boundary is involved.
+        $weeks = [];
+        $weeklyCompliance = [];
+        $weeklyResp = [];
+        $weeklyRes = [];
+
+        $weekly = $report['rows']
+            ->groupBy(fn (array $row) => $row['ticket']->closed_at->format('Y-W'))
+            ->sortKeys()
+            ->take(6);
+
+        foreach ($weekly as $weekKey => $group) {
+            $met = $group->where('resolution_status', 'met')->count();
+            $missed = $group->where('resolution_status', 'missed')->count();
+
+            $weeks[] = 'Wk '.substr((string) $weekKey, 5);
+            $weeklyCompliance[] = $rate($met, $missed);
+            $weeklyResp[] = round($group->pluck('response_hours')->filter(fn ($v) => $v !== null)->avg() ?? 0, 1);
+            $weeklyRes[] = round($group->pluck('resolution_hours')->filter(fn ($v) => $v !== null)->avg() ?? 0, 1);
+        }
+
+        $nearBreach = Ticket::withoutGlobalScopes()
+            ->open()
+            ->notMerged()
+            ->notSpam()
+            ->where(function ($q) {
+                $q->whereBetween('resolution_due_at', [now(), now()->addHours(4)])
+                    ->orWhere(function ($q2) {
+                        $q2->whereNull('first_response_at')
+                            ->whereBetween('response_due_at', [now(), now()->addHours(2)]);
+                    });
+            })
+            // Same trap as the compliance report's eager loads: an unscoped ticket
+            // query with scoped relations shows a foreign tenant's client as N/A
+            // once an admin has a tenant in session.
+            ->with([
+                'client' => fn ($q) => $q->withoutGlobalScopes(),
+                'assignee',
+                'department' => fn ($q) => $q->withoutGlobalScopes(),
+            ])
+            ->get();
+
+        return [
+            'scope_label' => 'All workspaces',
+            'window_from' => $from->toDateString(),
+            'window_to' => $to->toDateString(),
+            'compliance' => $report,
+            'response_compliance' => $rate($report['response_met'], $report['response_missed']),
+            'resolution_compliance' => $rate($report['resolution_met'], $report['resolution_missed']),
+            'avg_response_hours' => $report['avg_response_hours'],
+            'avg_resolution_hours' => $report['avg_resolution_hours'],
+            'closed_without_sla' => $report['closed_without_sla'],
+            'workspaces_total' => $workspacesTotal,
+            'workspaces_fully_covered' => $workspacesCovered,
+            'tier_cells' => $tierCells,
+            'overdue' => $slaService->getOverdueTickets(),
+            'near_breach' => $nearBreach,
+            'near_breach_alpine' => $nearBreach->map(function (Ticket $t) {
+                $due = $t->resolution_due_at ?? $t->response_due_at;
+
+                return [
+                    'id' => $t->id,
+                    'number' => $t->ticket_number,
+                    'subject' => $t->subject,
+                    'priority' => $t->priority,
+                    'client' => $t->client?->name ?? 'N/A',
+                    'agent' => $t->assignee?->name ?? 'Unassigned',
+                    'due_timestamp' => $due ? $due->timestamp : 0,
+                    'due_formatted' => $due ? $due->format('H:i:s') : 'N/A',
+                ];
+            })->values()->all(),
+            'weeks' => $weeks,
+            'weekly_compliance' => $weeklyCompliance,
+            'weekly_resp' => $weeklyResp,
+            'weekly_res' => $weeklyRes,
+        ];
     }
 
     /**

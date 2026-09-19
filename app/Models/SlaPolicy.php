@@ -88,6 +88,16 @@ class SlaPolicy extends Model
     public const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
     /**
+     * How many (tier, priority) slots one workspace's SLA matrix has.
+     * Coverage figures used to divide by a literal 12, which stops being
+     * meaningful the moment the caller is looking at more than one workspace.
+     */
+    public static function matrixSlotCount(): int
+    {
+        return count(self::TIERS) * count(self::PRIORITIES);
+    }
+
+    /**
      * Industry-standard defaults: each tier's {priority => [response_hours, resolution_hours]}.
      */
     public const STANDARD_DEFAULTS = [

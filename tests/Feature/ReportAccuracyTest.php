@@ -149,6 +149,7 @@ class ReportAccuracyTest extends TestCase
         $report = app(SlaService::class)->getComplianceReport(
             Carbon::parse('2026-07-01', 'UTC'),
             Carbon::parse('2026-09-01', 'UTC'),
+            $this->tenant->id,
         );
 
         $row = $report['rows']->first();
@@ -181,6 +182,7 @@ class ReportAccuracyTest extends TestCase
         $report = app(SlaService::class)->getComplianceReport(
             Carbon::parse('2026-07-01', 'UTC'),
             Carbon::parse('2026-09-01', 'UTC'),
+            $this->tenant->id,
         );
 
         $this->assertSame('met', $report['rows']->first()['response_status']);
@@ -223,6 +225,7 @@ class ReportAccuracyTest extends TestCase
         $report = app(SlaService::class)->getComplianceReport(
             Carbon::parse('2026-07-01', 'UTC'),
             Carbon::parse('2026-09-01', 'UTC'),
+            $this->tenant->id,
         );
 
         $this->assertSame(1, $report['total_with_sla']);

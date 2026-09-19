@@ -344,7 +344,7 @@ class ReportController extends Controller
         $from = $request->input('from') ? TenantTime::startOfDay($request->input('from')) : TenantTime::startOfDaysAgo(30);
         $to = $request->input('to') ? TenantTime::endOfDay($request->input('to')) : TenantTime::now();
 
-        $report = $this->slaService->getComplianceReport($from, $to);
+        $report = $this->slaService->getComplianceReport($from, $to, session('current_tenant_id'));
 
         return view('reports.sla-compliance', compact('report'));
     }
@@ -414,7 +414,7 @@ class ReportController extends Controller
         $from = $request->input('from') ? TenantTime::startOfDay($request->input('from')) : TenantTime::startOfDaysAgo(30);
         $to = $request->input('to') ? TenantTime::endOfDay($request->input('to')) : TenantTime::now();
 
-        $report = $this->slaService->getComplianceReport($from, $to);
+        $report = $this->slaService->getComplianceReport($from, $to, session('current_tenant_id'));
 
         $rows = $report['rows']->map(function (array $r) {
             $t = $r['ticket'];
