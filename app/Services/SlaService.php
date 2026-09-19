@@ -6,6 +6,7 @@ use App\Models\SlaPolicy;
 use App\Models\Ticket;
 use App\Support\TenantTime;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 class SlaService
@@ -99,9 +100,9 @@ class SlaService
      * The breach-warning set as a query, so callers can chunk rather than load
      * every overdue ticket across every tenant into memory at once.
      *
-     * @return \Illuminate\Database\Eloquent\Builder<Ticket>
+     * @return Builder<Ticket>
      */
-    public function breachWarningQuery(): \Illuminate\Database\Eloquent\Builder
+    public function breachWarningQuery(): Builder
     {
         return Ticket::withoutGlobalScopes()
             ->open()
@@ -138,9 +139,20 @@ class SlaService
             ->whereBetween('closed_at', [$from, $to])
             ->get();
 
+        // Closed tickets with no policy stamped on them are not part of the
+        // percentage — no target was ever promised for them. Counting them would be
+        // inventing a commitment; hiding them makes compliance read better than the
+        // service actually was, which is the complaint this report attracted. So the
+        // denominator is unchanged and the exclusion is reported alongside it.
+        $withoutSla = Ticket::query()
+            ->notMerged()
+            ->notSpam()
+            ->where('status', 'closed')
+            ->whereNull('sla_policy_id')
+            ->whereBetween('closed_at', [$from, $to])
+            ->count();
+
         $rows = $closedTickets->map(function (Ticket $t) {
-            $responseMet = $t->first_response_at && $t->response_due_at && $t->first_response_at->lte($t->response_due_at);
-            $responseMissed = $t->first_response_at && $t->response_due_at && $t->first_response_at->gt($t->response_due_at);
             // Resolution time excludes hold time. Since assignSla()/extendForHold()
             // also push resolution_due_at out by the hold period, this comparison is
             // now equivalent to closed_at <= resolution_due_at — the same rule the
@@ -150,9 +162,18 @@ class SlaService
             $resolutionMet = $resolutionHours !== null && $resolutionTarget !== null && $resolutionHours <= $resolutionTarget;
             $resolutionMissed = $resolutionHours !== null && $resolutionTarget !== null && $resolutionHours > $resolutionTarget;
 
+            // Response time is reported raw (created_at -> first_response_at) with hold
+            // NOT subtracted, per CLAUDE.md. The verdict must therefore be judged on
+            // the same raw figure against the same printed target: response_due_at has
+            // been pushed out by extendForHold(), so comparing against it produced rows
+            // reading "10h / 4h target" beside a MET badge. response_due_at is left
+            // untouched — the breach scheduler depends on the hold extension.
             $responseHours = $t->first_response_at
                 ? round($t->created_at->diffInHours($t->first_response_at, false), 2)
                 : null;
+            $responseTarget = $t->slaPolicy?->response_time_hours;
+            $responseMet = $responseHours !== null && $responseTarget !== null && $responseHours <= $responseTarget;
+            $responseMissed = $responseHours !== null && $responseTarget !== null && $responseHours > $responseTarget;
 
             $responseStatus = $responseMet ? 'met' : ($responseMissed ? 'missed' : 'na');
             $resolutionStatus = $resolutionMet ? 'met' : ($resolutionMissed ? 'missed' : 'na');
@@ -163,7 +184,7 @@ class SlaService
                 'client_tier' => $t->client?->tier,
                 'policy_name' => $t->slaPolicy?->name,
                 'response_hours' => $responseHours,
-                'response_target' => $t->slaPolicy?->response_time_hours,
+                'response_target' => $responseTarget,
                 'response_status' => $responseStatus,
                 'resolution_hours' => $resolutionHours,
                 'resolution_target' => $t->slaPolicy?->resolution_time_hours,
@@ -218,6 +239,7 @@ class SlaService
 
         return [
             'total_with_sla' => $total,
+            'closed_without_sla' => $withoutSla,
             'response_met' => $responseMet,
             'response_missed' => $responseMissed,
             'response_compliance' => ($responseMet + $responseMissed) > 0 ? round(($responseMet / ($responseMet + $responseMissed)) * 100, 1) : 0,

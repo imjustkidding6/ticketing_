@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\TenantTime;
 use App\Models\AppSetting;
 use App\Models\Client;
 use App\Models\Department;
@@ -11,7 +10,7 @@ use App\Models\TicketCategory;
 use App\Models\User;
 use App\Services\ReportService;
 use App\Services\SlaService;
-use Carbon\Carbon;
+use App\Support\TenantTime;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
@@ -32,8 +31,8 @@ class ReportController extends Controller
     private function extractFilters(Request $request): array
     {
         $filters = array_filter([
-            'from' => $request->input('from', now()->subDays(30)->toDateString()),
-            'to' => $request->input('to', now()->toDateString()),
+            'from' => $request->input('from', TenantTime::now()->subDays(30)->toDateString()),
+            'to' => $request->input('to', TenantTime::now()->toDateString()),
             'status' => $request->input('status'),
             'priority' => $request->input('priority'),
             'department_id' => $request->input('department_id'),
@@ -135,8 +134,8 @@ class ReportController extends Controller
             ['Low', $volume['by_priority']['low']],
         ];
 
-        $from = $filters['from'] ?? now()->subDays(30)->toDateString();
-        $to = $filters['to'] ?? now()->toDateString();
+        $from = $filters['from'] ?? TenantTime::now()->subDays(30)->toDateString();
+        $to = $filters['to'] ?? TenantTime::now()->toDateString();
 
         return $this->reportService->exportToCsv(
             $data,
@@ -155,8 +154,8 @@ class ReportController extends Controller
         $filters = $this->extractFilters($request);
         $departments = $this->reportService->getDepartmentReport($filters);
 
-        $from = $filters['from'] ?? now()->subDays(30)->toDateString();
-        $to = $filters['to'] ?? now()->toDateString();
+        $from = $filters['from'] ?? TenantTime::now()->subDays(30)->toDateString();
+        $to = $filters['to'] ?? TenantTime::now()->toDateString();
 
         return $this->reportService->exportToCsv(
             $departments->toArray(),
@@ -326,7 +325,7 @@ class ReportController extends Controller
                 $t->department?->name ?? '-',
                 $t->assignee?->name ?? '-',
                 AppSetting::formatCurrency($t->billable_amount),
-                $t->billed_at ? $t->billed_at->format('m/d/Y') : 'Unbilled',
+                $t->billed_at ? TenantTime::format($t->billed_at, 'm/d/Y') : 'Unbilled',
                 $t->billable_description ?? '',
             ])->toArray(),
             ['Ticket #', 'Subject', 'Client', 'Department', 'Agent', 'Amount', 'Billed Date', 'Notes'],
@@ -386,9 +385,9 @@ class ReportController extends Controller
             ucfirst($t->priority ?? '-'),
             ucfirst(str_replace('_', ' ', $t->status ?? '-')),
             $t->reopened_count,
-            $t->first_closed_at?->format('Y-m-d H:i') ?? '-',
-            $t->last_reopened_at?->format('Y-m-d H:i') ?? '-',
-            $t->closed_at?->format('Y-m-d H:i') ?? '-',
+            $t->first_closed_at ? TenantTime::format($t->first_closed_at, 'Y-m-d H:i') : '-',
+            $t->last_reopened_at ? TenantTime::format($t->last_reopened_at, 'Y-m-d H:i') : '-',
+            $t->closed_at ? TenantTime::format($t->closed_at, 'Y-m-d H:i') : '-',
             $t->last_reopen_reason ?? '-',
         ])->toArray();
 
@@ -428,9 +427,9 @@ class ReportController extends Controller
                 $t->assignee?->name ?? '-',
                 ucfirst($r['priority'] ?? '-'),
                 $r['policy_name'] ?? '-',
-                $t->created_at->format('Y-m-d H:i'),
-                $t->first_response_at?->format('Y-m-d H:i') ?? '-',
-                $t->closed_at?->format('Y-m-d H:i') ?? '-',
+                TenantTime::format($t->created_at, 'Y-m-d H:i'),
+                $t->first_response_at ? TenantTime::format($t->first_response_at, 'Y-m-d H:i') : '-',
+                $t->closed_at ? TenantTime::format($t->closed_at, 'Y-m-d H:i') : '-',
                 $r['response_hours'] !== null ? $r['response_hours'] : '-',
                 $r['response_target'] ?? '-',
                 strtoupper($r['response_status']),
@@ -550,8 +549,8 @@ class ReportController extends Controller
         $filters = $this->extractFilters($request);
         $agentReport = $this->reportService->getAgentPerformanceReport($filters);
 
-        $from = $filters['from'] ?? now()->subDays(30)->toDateString();
-        $to = $filters['to'] ?? now()->toDateString();
+        $from = $filters['from'] ?? TenantTime::now()->subDays(30)->toDateString();
+        $to = $filters['to'] ?? TenantTime::now()->toDateString();
 
         return $this->reportService->exportToCsv(
             $agentReport->map(fn ($a) => [$a['name'], $a['total'], $a['open'], $a['closed'], $a['avg_resolution_hours']])->toArray(),

@@ -388,35 +388,20 @@ class Ticket extends Model
     }
 
     /**
-     * Start hold time tracking.
-     */
-    public function startHold(): void
-    {
-        $this->update(['hold_started_at' => now()]);
-    }
-
-    /**
-     * End hold time tracking and accumulate duration.
-     */
-    public function endHold(): void
-    {
-        if ($this->hold_started_at) {
-            $holdMinutes = max(0, (int) $this->hold_started_at->diffInMinutes(now()));
-            $this->update([
-                'total_hold_time_minutes' => ($this->total_hold_time_minutes ?? 0) + $holdMinutes,
-                'hold_started_at' => null,
-            ]);
-        }
-    }
-
-    /**
      * Get total hold time in minutes (including current hold if active).
+     *
+     * A running hold is only counted while the ticket is still live. A terminal
+     * ticket that reached closed/cancelled with hold_started_at still set — every
+     * path that bypasses TicketService::changeStatus() leaves one behind — would
+     * otherwise bank more hold with every passing hour, shrinking its reported
+     * resolution time daily. A closed ticket's resolution time is a historical fact
+     * and must read the same tomorrow as it does today.
      */
     public function getTotalHoldTimeMinutes(): int
     {
         $total = $this->total_hold_time_minutes ?? 0;
 
-        if ($this->hold_started_at) {
+        if ($this->hold_started_at && ! in_array($this->status, ['closed', 'cancelled'])) {
             $total += max(0, (int) $this->hold_started_at->diffInMinutes(now()));
         }
 
