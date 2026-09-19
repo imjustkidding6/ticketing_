@@ -272,7 +272,7 @@ class TicketController extends Controller
             $mergeableTickets = Ticket::query()
                 ->where('id', '!=', $ticket->id)
                 ->where('is_merged', false)
-                ->whereNotIn('status', ['closed', 'cancelled'])
+                ->whereNotIn('status', Ticket::CLOSED_STATUSES)
                 ->orderByDesc('created_at')
                 ->limit(100)
                 ->get(['id', 'ticket_number', 'subject']);

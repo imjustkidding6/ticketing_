@@ -123,7 +123,7 @@ class TicketWorkflowService
      */
     public function reopenTicket(Ticket $ticket, ?string $reason = null): bool
     {
-        if (! in_array($ticket->status, ['closed', 'cancelled'])) {
+        if (! in_array($ticket->status, Ticket::CLOSED_STATUSES)) {
             return false;
         }
 
@@ -169,8 +169,8 @@ class TicketWorkflowService
             'pending' => $base()->where('status', 'pending')->count(),
             'closed_today' => $base()->where('status', 'closed')->whereBetween('closed_at', TenantTime::dayRange())->count(),
             'closed_this_week' => $base()->where('status', 'closed')->where('closed_at', '>=', TenantTime::startOfWeek())->count(),
-            'overdue' => $base()->whereNotNull('resolution_due_at')->where('resolution_due_at', '<', now())->whereNotIn('status', ['closed', 'cancelled'])->count(),
-            'unassigned' => $base()->whereNull('assigned_to')->whereNotIn('status', ['closed', 'cancelled'])->count(),
+            'overdue' => $base()->whereNotNull('resolution_due_at')->where('resolution_due_at', '<', now())->whereNotIn('status', Ticket::CLOSED_STATUSES)->count(),
+            'unassigned' => $base()->whereNull('assigned_to')->whereNotIn('status', Ticket::CLOSED_STATUSES)->count(),
         ];
     }
 

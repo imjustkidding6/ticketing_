@@ -543,7 +543,7 @@ class ReportService
             ->withCount([
                 'tickets as total_tickets' => fn ($q) => $ticketFilter($q),
                 'tickets as open_tickets' => fn ($q) => $ticketFilter($q->whereIn('tickets.status', Ticket::OPEN_STATUSES)),
-                'tickets as closed_tickets' => fn ($q) => $ticketFilter($q->whereIn('tickets.status', ['closed', 'cancelled'])),
+                'tickets as closed_tickets' => fn ($q) => $ticketFilter($q->whereIn('tickets.status', Ticket::CLOSED_STATUSES)),
             ])
             ->get()
             ->map(fn ($product) => [

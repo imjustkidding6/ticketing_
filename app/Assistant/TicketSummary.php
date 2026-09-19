@@ -29,7 +29,7 @@ class TicketSummary extends AssistantTool
         $byStatus = Ticket::selectRaw('status, count(*) as c')->groupBy('status')->pluck('c', 'status');
 
         $open = collect(Ticket::OPEN_STATUSES)->sum(fn ($s) => (int) $byStatus->get($s, 0));
-        $closed = collect(['closed', 'cancelled'])->sum(fn ($s) => (int) $byStatus->get($s, 0));
+        $closed = collect(Ticket::CLOSED_STATUSES)->sum(fn ($s) => (int) $byStatus->get($s, 0));
 
         return [
             'by_status' => $byStatus->all(),

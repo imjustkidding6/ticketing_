@@ -24,20 +24,44 @@ class TerminalStatusConsistencyTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_no_terminal_status_literal_survives_in_the_model(): void
+    public function test_no_terminal_status_literal_survives_anywhere_in_the_app(): void
     {
-        $source = file_get_contents((new ReflectionClass(Ticket::class))->getFileName());
-
-        // The declaration itself is the one legitimate occurrence.
+        // Scanning only Ticket.php was not enough: the literal had been copied
+        // into eight other files, so the constant and its copies were already
+        // two different answers to the same question. Whatever this scans is
+        // what it protects.
+        $modelPath = (new ReflectionClass(Ticket::class))->getFileName();
         $declaration = "public const CLOSED_STATUSES = ['closed', 'cancelled'];";
-        $body = str_replace($declaration, '', $source);
 
-        $this->assertDoesNotMatchRegularExpression(
-            "/\[\s*'closed'\s*,\s*'cancelled'\s*\]/",
-            $body,
-            'A copied terminal-status literal is back in Ticket. Use Ticket::CLOSED_STATUSES, '
-            .'or the next status added will be honoured in some checks and ignored in others.'
+        $offenders = [];
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator(app_path(), \FilesystemIterator::SKIP_DOTS)
         );
+
+        foreach ($files as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $source = file_get_contents($file->getPathname());
+
+            // The declaration itself is the one legitimate occurrence.
+            if ($file->getPathname() === $modelPath) {
+                $source = str_replace($declaration, '', $source);
+            }
+
+            foreach (explode("\n", $source) as $i => $line) {
+                if (preg_match("/\[\s*'closed'\s*,\s*'cancelled'\s*\]/", $line)) {
+                    $offenders[] = str_replace(base_path().'/', '', $file->getPathname()).':'.($i + 1);
+                }
+            }
+        }
+
+        $this->assertSame([], $offenders, sprintf(
+            'A copied terminal-status literal drifts from Ticket::CLOSED_STATUSES the first time a '
+            ."terminal status is added — honoured in some checks, ignored in others. Use the constant:\n - %s",
+            implode("\n - ", $offenders)
+        ));
     }
 
     public function test_the_terminal_set_is_exactly_the_statuses_with_no_way_forward(): void

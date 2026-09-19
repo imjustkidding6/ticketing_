@@ -626,7 +626,7 @@ class ClientPortalController extends Controller
         $ticket->load(['department', 'category', 'client', 'comments' => fn ($q) => $q->where('is_public', true)->with('user')->oldest()]);
 
         $canReply = $this->planService->tenantHasFeature($tenant, PlanFeature::ClientComments)
-            && ! in_array($ticket->status, ['closed', 'cancelled']);
+            && ! in_array($ticket->status, Ticket::CLOSED_STATUSES);
 
         return view('tenant.track-result', compact('tenant', 'ticket', 'canReply'));
     }
@@ -685,7 +685,7 @@ class ClientPortalController extends Controller
             }
         }
 
-        if (in_array($ticket->status, ['closed', 'cancelled'])) {
+        if (in_array($ticket->status, Ticket::CLOSED_STATUSES)) {
             return redirect()->route('tenant.track-ticket.token', ['slug' => $slug, 'token' => $ticket->tracking_token])
                 ->with('error', 'This ticket is closed and cannot receive new replies.');
         }

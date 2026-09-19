@@ -101,7 +101,7 @@ class PageContextResolver
             return 'a client detail page, but that client could not be found in this workspace.';
         }
 
-        $open = $client->tickets()->whereNotIn('status', ['closed', 'cancelled'])->count();
+        $open = $client->tickets()->whereNotIn('status', Ticket::CLOSED_STATUSES)->count();
 
         return "the detail page for the client \"{$client->name}\" (tier: ".($client->tier ?: 'n/a').").\n"
             ."They currently have {$open} open ticket(s).";
