@@ -287,7 +287,7 @@ class ClientPortalController extends Controller
             ->get();
 
         $stats = [
-            'open' => $client->tickets()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_spam', false)->whereIn('status', ['open', 'assigned', 'in_progress', 'pending'])->count(),
+            'open' => $client->tickets()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_spam', false)->whereIn('status', Ticket::OPEN_STATUSES)->count(),
             'closed' => $client->tickets()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_spam', false)->where('status', 'closed')->count(),
             'total' => $client->tickets()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('is_spam', false)->count(),
         ];
