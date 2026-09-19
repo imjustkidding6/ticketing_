@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -31,14 +32,14 @@ return new class extends Migration
         // Orphaned rows would block the constraint; clear them first.
         Schema::disableForeignKeyConstraints();
 
-        \Illuminate\Support\Facades\DB::statement('
+        DB::statement('
             UPDATE tickets t
             LEFT JOIN sla_policies p ON p.id = t.sla_policy_id
             SET t.sla_policy_id = NULL
             WHERE t.sla_policy_id IS NOT NULL AND p.id IS NULL
         ');
 
-        \Illuminate\Support\Facades\DB::statement('
+        DB::statement('
             UPDATE tickets t
             LEFT JOIN tickets m ON m.id = t.merged_into_ticket_id
             SET t.merged_into_ticket_id = NULL, t.is_merged = 0

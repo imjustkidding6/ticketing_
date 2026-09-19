@@ -9,6 +9,8 @@ namespace Tests\Feature;
  */
 
 use App\Enums\PlanFeature;
+use App\Exceptions\InvalidStatusTransitionException;
+use App\Exceptions\TicketAlreadyAssignedException;
 use App\Models\Client;
 use App\Models\Department;
 use App\Models\License;
@@ -20,6 +22,7 @@ use App\Models\TicketComment;
 use App\Models\User;
 use App\Services\TenantRoleService;
 use App\Services\TicketService;
+use App\Services\TicketWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -103,12 +106,12 @@ class QaScenarioProbeTest extends TestCase
         $this->actor($tenant);
         $t = $this->ticket($tenant, ['status' => 'closed']);
 
-        $wf = app(\App\Services\TicketWorkflowService::class);
+        $wf = app(TicketWorkflowService::class);
         $this->assertFalse($wf->isValidTransition($t, 'in_progress'));
 
         // The same rule must hold at the service layer, which is what the API and
         // the assistant tools go through.
-        $this->expectException(\App\Exceptions\InvalidStatusTransitionException::class);
+        $this->expectException(InvalidStatusTransitionException::class);
         app(TicketService::class)->changeStatus($t, 'in_progress');
     }
 
@@ -278,7 +281,7 @@ class QaScenarioProbeTest extends TestCase
         Ticket::withoutGlobalScopes()->where('id', $t->id)->update(['assigned_to' => $other->id]);
         $this->assertNull($t->assigned_to);
 
-        $this->expectException(\App\Exceptions\TicketAlreadyAssignedException::class);
+        $this->expectException(TicketAlreadyAssignedException::class);
         app(TicketService::class)->assignTicket($t, $john, onlyIfUnassigned: true);
     }
 

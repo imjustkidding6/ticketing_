@@ -4,16 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Tenant;
 use App\Models\Ticket;
-use App\Support\TenantTime;
 use App\Models\TicketHistory;
 use App\Models\TicketTask;
 use App\Services\OnboardingService;
+use App\Support\TenantTime;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class DashboardController extends Controller
 {

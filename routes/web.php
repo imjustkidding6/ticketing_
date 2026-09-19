@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\TenantController as AdminTenantController;
 use App\Http\Controllers\Admin\TenantFeedbackController as AdminTenantFeedbackController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\App\AiAssistantController as AppAiAssistantController;
+use App\Http\Controllers\ConnectJudeController;
 use App\Http\Controllers\GitHubWebhookController;
 use App\Http\Controllers\HealthCheckController;
 use App\Http\Controllers\HomeController;
@@ -85,9 +86,9 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    Route::get('/connect-jude', [\App\Http\Controllers\ConnectJudeController::class, 'index'])->name('connect-jude');
-    Route::post('/connect-jude', [\App\Http\Controllers\ConnectJudeController::class, 'generate'])->name('connect-jude.generate');
-    Route::delete('/connect-jude/{token}', [\App\Http\Controllers\ConnectJudeController::class, 'revoke'])->name('connect-jude.revoke');
+    Route::get('/connect-jude', [ConnectJudeController::class, 'index'])->name('connect-jude');
+    Route::post('/connect-jude', [ConnectJudeController::class, 'generate'])->name('connect-jude.generate');
+    Route::delete('/connect-jude/{token}', [ConnectJudeController::class, 'revoke'])->name('connect-jude.revoke');
 });
 
 // Admin auth (public)

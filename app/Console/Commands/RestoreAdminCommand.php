@@ -8,7 +8,6 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\TenantRoleService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Hash;
 
 class RestoreAdminCommand extends Command
 {

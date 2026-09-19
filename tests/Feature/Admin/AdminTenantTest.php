@@ -3,12 +3,10 @@
 namespace Tests\Feature\Admin;
 
 use App\Enums\PlanFeature;
-use App\Models\AppSetting;
 use App\Models\Distributor;
 use App\Models\License;
 use App\Models\Plan;
 use App\Models\Tenant;
-use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -129,7 +127,7 @@ class AdminTenantTest extends TestCase
         $response->assertRedirect('/admin/tenants');
         $this->assertDatabaseMissing('tenants', ['id' => $tenant->id]);
         $this->assertDatabaseMissing('tenant_user', ['tenant_id' => $tenant->id]);
-        
+
         $license->refresh();
         $this->assertNull($license->tenant_id);
     }

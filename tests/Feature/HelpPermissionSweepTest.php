@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\PlanFeature;
+use App\Http\Controllers\TutorialController;
 use App\Models\License;
 use App\Models\Plan;
 use App\Models\SlaPolicy;
@@ -296,8 +297,8 @@ class HelpPermissionSweepTest extends TestCase
         // A second copy of the content is how the two drift apart, so there is
         // exactly one: config/help.php.
         $this->assertFalse(
-            class_exists(\App\Http\Controllers\TutorialController::class)
-            && defined(\App\Http\Controllers\TutorialController::class.'::TUTORIALS'),
+            class_exists(TutorialController::class)
+            && defined(TutorialController::class.'::TUTORIALS'),
             'The legacy hardcoded tutorial list must not come back'
         );
 

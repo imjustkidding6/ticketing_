@@ -6,6 +6,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -58,7 +59,7 @@ class AiChatbotTest extends TestCase
         $admin = User::where('email', 'admin@example.com')->first()
             ?? User::factory()->create(['is_admin' => true]);
 
-        $tenant = \App\Models\Tenant::first();
+        $tenant = Tenant::first();
 
         $conv = ChatConversation::create([
             'tenant_id' => $tenant->id,
@@ -91,7 +92,7 @@ class AiChatbotTest extends TestCase
         $admin = User::where('email', 'admin@example.com')->first()
             ?? User::factory()->create(['is_admin' => true]);
 
-        $tenant = \App\Models\Tenant::first();
+        $tenant = Tenant::first();
 
         $conv = ChatConversation::create([
             'tenant_id' => $tenant->id,

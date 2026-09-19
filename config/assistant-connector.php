@@ -8,6 +8,7 @@ use App\Assistant\ListClients;
 use App\Assistant\SetTenantContext;
 use App\Assistant\TicketSummary;
 use App\Assistant\UpdateStatus;
+use App\Models\User;
 
 return [
 
@@ -15,7 +16,7 @@ return [
 
     'middleware' => ['assistant.token'],
 
-    'user_model' => \App\Models\User::class,
+    'user_model' => User::class,
 
     // The actions this helpdesk exposes to the Jude Hub.
     'tools' => [

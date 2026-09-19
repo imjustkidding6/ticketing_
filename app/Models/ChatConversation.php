@@ -148,7 +148,7 @@ class ChatConversation extends Model
      *
      * @param  mixed  $value
      * @param  string|null  $field
-     * @return \Illuminate\Database\Eloquent\Model
+     * @return Model
      */
     public function resolveRouteBinding($value, $field = null)
     {

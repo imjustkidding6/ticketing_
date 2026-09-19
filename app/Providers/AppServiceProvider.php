@@ -10,8 +10,10 @@ use App\Observers\LearnedSnippetObserver;
 use App\Observers\TicketObserver;
 use App\Services\OpenAiService;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -65,7 +67,7 @@ class AppServiceProvider extends ServiceProvider
 
         // Task 4: Development Environment Database Safeguard
         if (app()->environment('local')) {
-            \Illuminate\Support\Facades\Event::listen(\Illuminate\Console\Events\CommandStarting::class, function (\Illuminate\Console\Events\CommandStarting $event) {
+            Event::listen(CommandStarting::class, function (CommandStarting $event) {
                 $destructiveCommands = ['migrate:fresh', 'db:wipe', 'migrate:refresh', 'migrate:reset'];
 
                 if (in_array($event->command, $destructiveCommands, true)) {

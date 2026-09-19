@@ -9,6 +9,7 @@ use App\Models\ChatMessage;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 class AiChatbotService
@@ -60,7 +61,7 @@ class AiChatbotService
         // Auto-title conversation on first message if default
         if ($conversation->title === 'New AI Conversation' || blank($conversation->title)) {
             $conversation->update([
-                'title' => \Illuminate\Support\Str::limit($userContent, 40),
+                'title' => Str::limit($userContent, 40),
             ]);
         }
 
@@ -158,9 +159,9 @@ class AiChatbotService
         }
 
         if (str_contains($lower, 'tenant') || str_contains($lower, 'user')) {
-            return "You can manage system tenants and global administrators directly from the **Workspace** and **Administration** sections in the left sidebar menu.";
+            return 'You can manage system tenants and global administrators directly from the **Workspace** and **Administration** sections in the left sidebar menu.';
         }
 
-        return "I am your AI Assistant. I can answer questions, summarize logs, generate code snippets, and help manage your system operations. How can I assist you today?";
+        return 'I am your AI Assistant. I can answer questions, summarize logs, generate code snippets, and help manage your system operations. How can I assist you today?';
     }
 }

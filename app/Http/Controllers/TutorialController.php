@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Services\HelpService;
 use App\Services\OnboardingService;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -88,7 +88,7 @@ class TutorialController extends Controller
     {
         $path = public_path('docs/Admin-User-Manual.pdf');
         if (! file_exists($path) || filesize($path) < 1000) {
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('admin.help.manual-pdf');
+            $pdf = Pdf::loadView('admin.help.manual-pdf');
             file_put_contents($path, $pdf->output());
         }
 

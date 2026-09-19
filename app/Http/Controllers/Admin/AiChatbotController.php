@@ -6,7 +6,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ChatConversation;
-use App\Models\ChatMessage;
+use App\Models\User;
 use App\Services\AiChatbotService;
 use App\Services\AiConversationExportService;
 use Illuminate\Contracts\View\View;
@@ -33,7 +33,7 @@ class AiChatbotController extends Controller
      */
     public function getConversations(Request $request): JsonResponse
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         $conversations = ChatConversation::withoutGlobalScopes()
@@ -59,7 +59,7 @@ class AiChatbotController extends Controller
             'title' => ['nullable', 'string', 'max:255'],
         ]);
 
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         $conversation = $this->chatbotService->startConversation($user, $validated['title'] ?? null);
@@ -99,7 +99,7 @@ class AiChatbotController extends Controller
             'message' => ['required', 'string', 'max:4000'],
         ]);
 
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         $result = $this->chatbotService->processMessage($conversation, $user, $validated['message']);
@@ -178,7 +178,7 @@ class AiChatbotController extends Controller
      */
     private function authorizeTenantAccess(Request $request, ChatConversation $conversation): void
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         if ($conversation->user_id !== $user->id && ! $user->isAdmin()) {

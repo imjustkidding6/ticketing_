@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class SessionLoginFixTest extends TestCase
@@ -31,7 +32,7 @@ class SessionLoginFixTest extends TestCase
         ];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('sessionDomainProvider')]
+    #[DataProvider('sessionDomainProvider')]
     public function test_session_domain_coerces_placeholder_values_to_null(?string $env, ?string $expected): void
     {
         $original = getenv('SESSION_DOMAIN');
