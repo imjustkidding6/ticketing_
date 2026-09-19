@@ -122,13 +122,31 @@ class TenantIsolationGuardrailsTest extends TestCase
             ->assertDontSee('ZZZ Foreign Tenant Policy');
     }
 
-    public function test_admin_sla_page_uses_the_admin_view(): void
+    public function test_admin_sla_page_uses_the_admin_view_and_is_cross_tenant(): void
     {
+        $plan = Plan::factory()->create(['slug' => 'business', 'features' => PlanFeature::forPlan('business')]);
+
+        $tenantA = Tenant::factory()->create([
+            'license_id' => License::factory()->active()->forPlan($plan)->create()->id,
+        ]);
+        $tenantB = Tenant::factory()->create([
+            'license_id' => License::factory()->active()->forPlan($plan)->create()->id,
+        ]);
+
+        SlaPolicy::factory()->create(['tenant_id' => $tenantA->id, 'name' => 'AAA Alpha Policy']);
+        SlaPolicy::factory()->create(['tenant_id' => $tenantB->id, 'name' => 'ZZZ Foreign Tenant Policy']);
+
         $admin = User::factory()->create(['is_admin' => true]);
 
+        // A view-name assertion alone would not notice that the page is only
+        // cross-tenant when no tenant happens to be in session — which is what it
+        // used to be. Assert the data, with the harder session state set.
         $this->actingAs($admin)
+            ->withSession(['current_tenant_id' => $tenantA->id])
             ->get('/admin/sla')
             ->assertOk()
-            ->assertViewIs('admin.sla.index');
+            ->assertViewIs('admin.sla.index')
+            ->assertSee('AAA Alpha Policy')
+            ->assertSee('ZZZ Foreign Tenant Policy');
     }
 }
