@@ -73,6 +73,24 @@ trait HasTenants
     }
 
     /**
+     * Whether the user holds a tenant permission, owner bypass included.
+     *
+     * Mirrors Controller::userCan() so a view and the controller action behind it
+     * agree — a button gated on a bare Spatie can() disappears for owners, who hold
+     * no Spatie role, and appears for roles the action then 403s.
+     */
+    public function canInTenant(string $permission): bool
+    {
+        $tenant = $this->currentTenant();
+
+        if ($tenant && $this->roleInTenant($tenant) === 'owner') {
+            return true;
+        }
+
+        return $this->can($permission);
+    }
+
+    /**
      * Check if the user is an owner of a tenant.
      */
     public function isOwnerOf(Tenant $tenant): bool

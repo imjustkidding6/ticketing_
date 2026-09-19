@@ -18,10 +18,37 @@ CONTAINER="${TICKETING_APP_CONTAINER:-ticketing-app}"
 DB_HOST="${TEST_DB_HOST:-mysql}"
 DB_PORT="${TEST_DB_PORT:-3306}"
 
+# Two agents running the suite at once against the same database tear each
+# other's schema down mid-run; it surfaces as "table users already exists",
+# which reads like a broken branch rather than a collision. Set TEST_DB_NAME
+# to give your run its own database when anyone else might be testing.
+DB_NAME="${TEST_DB_NAME:-ticketing_test}"
+
 if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
     echo "error: container '$CONTAINER' is not running." >&2
     echo "Start it with 'make up' (or docker compose up -d), or set" >&2
     echo "TICKETING_APP_CONTAINER to the right name." >&2
+    exit 2
+fi
+
+# The app container bind-mounts the main checkout only, so running this from a
+# git worktree would silently test the OTHER branch's code. TEST_DB_NAME
+# isolates the database; nothing here isolates the source. Refuse rather than
+# hand back a confidently wrong result.
+MAIN_WORKTREE=$(git worktree list --porcelain 2>/dev/null | head -1 | cut -d' ' -f2-)
+CURRENT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -n "$MAIN_WORKTREE" ] && [ -n "$CURRENT_ROOT" ] && [ "$MAIN_WORKTREE" != "$CURRENT_ROOT" ]; then
+    cat >&2 <<MSG
+error: this is a linked git worktree ($CURRENT_ROOT).
+The '$CONTAINER' container mounts $MAIN_WORKTREE, so this script would run the
+tests against whatever branch THAT checkout has — not your worktree's code.
+
+Either check your branch out in $MAIN_WORKTREE and run there, or run a
+throwaway container bind-mounting this worktree. A worktree container also
+needs vendor/, public/build/ and docker/php/php.ini from the main checkout:
+without the Vite manifest every view test 500s, and the default 128M memory
+limit exhausts — roughly 149 failures that look like a broken branch.
+MSG
     exit 2
 fi
 
@@ -43,11 +70,23 @@ if [ ${#ARGS[@]} -eq 0 ]; then
     ARGS=(--compact)
 fi
 
-echo "Running: artisan test ${ARGS[*]}  (db ${DB_HOST}:${DB_PORT} in ${CONTAINER})"
+# Create the database when it is not the shared default, so TEST_DB_NAME needs
+# no setup step of its own.
+if [ "$DB_NAME" != "ticketing_test" ]; then
+    DB_C=$(docker ps --filter ancestor=mysql:8.0 --format '{{.Names}}' | grep -i ticketing | head -1)
+    if [ -n "$DB_C" ]; then
+        docker exec "$DB_C" mysql -uroot -p"$DB_PASSWORD" \
+            -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\`;" 2>/dev/null \
+            && echo "Using isolated test database: ${DB_NAME}"
+    fi
+fi
+
+echo "Running: artisan test ${ARGS[*]}  (db ${DB_NAME} on ${DB_HOST}:${DB_PORT} in ${CONTAINER})"
 
 docker exec \
     -e DB_HOST="$DB_HOST" \
     -e DB_PORT="$DB_PORT" \
+    -e DB_DATABASE="$DB_NAME" \
     -e DB_PASSWORD="$DB_PASSWORD" \
     "$CONTAINER" php artisan test "${ARGS[@]}"
 

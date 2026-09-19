@@ -17,7 +17,7 @@
                         <input type="date" name="to" id="to" value="{{ $report['to'] }}" class="mt-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     </div>
                     <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 transition-colors">{{ __('Filter') }}</button>
-                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::DetailedReporting))
+                    @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::DetailedReporting) && auth()->user()?->canInTenant('view sla reports'))
                         <a href="{{ route('reports.export.sla-compliance', ['from' => $report['from'], 'to' => $report['to']]) }}" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
                             <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15M9 12l3 3m0 0 3-3m-3 3V2.25" />
@@ -40,6 +40,17 @@
                         <p class="text-xs text-indigo-700 dark:text-indigo-300">{{ __('A ticket is counted as "Met" when it hits the milestone within the policy\'s target hours for its priority + client tier.') }}</p>
                     </div>
                 </div>
+            </div>
+
+            {{-- Coverage. The percentages below cover only tickets that carried an SLA
+                 policy; say so, rather than letting a flattering subset read as the whole. --}}
+            <div class="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                <p class="text-sm text-gray-700 dark:text-gray-300">
+                    {{ __('Based on :covered closed tickets covered by an SLA policy.', ['covered' => $report['total_with_sla']]) }}
+                    @if($report['closed_without_sla'] > 0)
+                        <span class="font-semibold text-amber-600 dark:text-amber-400">{{ __(':excluded more closed tickets had no SLA policy and are not counted in these percentages.', ['excluded' => $report['closed_without_sla']]) }}</span>
+                    @endif
+                </p>
             </div>
 
             {{-- Averages --}}
