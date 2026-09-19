@@ -31,6 +31,27 @@ if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
     exit 2
 fi
 
+# The app container bind-mounts the main checkout only, so running this from a
+# git worktree would silently test the OTHER branch's code. TEST_DB_NAME
+# isolates the database; nothing here isolates the source. Refuse rather than
+# hand back a confidently wrong result.
+MAIN_WORKTREE=$(git worktree list --porcelain 2>/dev/null | head -1 | cut -d' ' -f2-)
+CURRENT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -n "$MAIN_WORKTREE" ] && [ -n "$CURRENT_ROOT" ] && [ "$MAIN_WORKTREE" != "$CURRENT_ROOT" ]; then
+    cat >&2 <<MSG
+error: this is a linked git worktree ($CURRENT_ROOT).
+The '$CONTAINER' container mounts $MAIN_WORKTREE, so this script would run the
+tests against whatever branch THAT checkout has — not your worktree's code.
+
+Either check your branch out in $MAIN_WORKTREE and run there, or run a
+throwaway container bind-mounting this worktree. A worktree container also
+needs vendor/, public/build/ and docker/php/php.ini from the main checkout:
+without the Vite manifest every view test 500s, and the default 128M memory
+limit exhausts — roughly 149 failures that look like a broken branch.
+MSG
+    exit 2
+fi
+
 # Prefer an explicitly supplied password; otherwise read the one the app is
 # actually configured with, so this keeps working if the container is rebuilt.
 if [ -n "${TEST_DB_PASSWORD:-}" ]; then
