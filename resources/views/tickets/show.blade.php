@@ -500,6 +500,13 @@
                         @include('tickets.partials._status-card')
                     </div>
 
+                    {{-- SLA. A live fragment: pausing this ticket happens in the card
+                         directly above, and a countdown left behind on a paused deadline
+                         is the precise failure this panel exists to prevent. --}}
+                    <div id="ticket-sla" data-fragment="sla">
+                        @include('tickets.partials._sla-panel')
+                    </div>
+
                     {{-- Escalation --}}
                     @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AgentEscalation))
                     <div class="rounded-xl bg-white p-6 shadow-sm">
