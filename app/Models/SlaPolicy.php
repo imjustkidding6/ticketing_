@@ -23,9 +23,22 @@ class SlaPolicy extends Model
         'client_tier',
         'priority',
         'response_time_hours',
+        'response_hours_mode',
         'resolution_time_hours',
+        'resolution_hours_mode',
         'is_active',
     ];
+
+    /**
+     * The clock a target is measured on. varchar in the database, so this is the only
+     * enumeration — every entry point (updateTier(), the tier editor, SlaService)
+     * validates against it.
+     *
+     * 'calendar' is elapsed wall-clock time and is the default for every row, existing
+     * and new: it is today's behaviour, so nothing moves until an admin chooses.
+     * 'business' counts only the open minutes on the workspace's SLA calendar.
+     */
+    public const HOURS_MODES = ['calendar', 'business'];
 
     /**
      * @return array<string, string>
@@ -37,6 +50,16 @@ class SlaPolicy extends Model
             'response_time_hours' => 'integer',
             'resolution_time_hours' => 'integer',
         ];
+    }
+
+    public function responseClockIsBusiness(): bool
+    {
+        return $this->response_hours_mode === 'business';
+    }
+
+    public function resolutionClockIsBusiness(): bool
+    {
+        return $this->resolution_hours_mode === 'business';
     }
 
     /**
