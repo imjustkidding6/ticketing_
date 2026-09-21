@@ -782,12 +782,18 @@ class SlaPolicyController extends Controller
                 'response' => $existing?->response_time_hours ?? $defaults[$priority][0] ?? null,
                 'resolution' => $existing?->resolution_time_hours ?? $defaults[$priority][1] ?? null,
                 'is_active' => $existing ? $existing->is_active : true,
+                // Default 'calendar' for a row that does not exist yet, matching the
+                // column default. Nothing drifts onto business hours by accident.
+                'response_mode' => $existing?->response_hours_mode ?? 'calendar',
+                'resolution_mode' => $existing?->resolution_hours_mode ?? 'calendar',
             ];
         }
 
+        $calendarUsable = $this->usableCalendar() !== null;
+
         // Tenant surface only: the admin group no longer registers sla.edit-tier,
         // because its form posted to a route that is gone.
-        return view('sla.edit-tier', compact('tier', 'rows'));
+        return view('sla.edit-tier', compact('tier', 'rows', 'calendarUsable'));
     }
 
     /**
@@ -801,15 +807,32 @@ class SlaPolicyController extends Controller
         abort_unless(in_array($tier, SlaPolicy::TIERS, true), 404);
 
         $rules = [];
+        $modeRule = ['required', Rule::in(SlaPolicy::HOURS_MODES)];
         foreach (SlaPolicy::PRIORITIES as $priority) {
             $rules["rows.{$priority}.response"] = ['required', 'integer', 'min:0', 'lte:rows.'.$priority.'.resolution'];
             $rules["rows.{$priority}.resolution"] = ['required', 'integer', 'min:1'];
+            $rules["rows.{$priority}.response_mode"] = $modeRule;
+            $rules["rows.{$priority}.resolution_mode"] = $modeRule;
         }
 
         $validated = $request->validate($rules, [
             'rows.*.response.lte' => 'Response time target cannot exceed resolution time target.',
             'rows.*.resolution.min' => 'Resolution time target must be at least 1 hour.',
         ]);
+
+        // The disabled attribute on the option is a hint to a browser, not a guard. This
+        // POST is the guard, and it is the same configuration-time block the calendar
+        // editor applies in the other direction: business hours never becomes live
+        // without working hours to measure it against.
+        $wantsBusiness = collect($validated['rows'])
+            ->contains(fn ($r) => ($r['response_mode'] ?? 'calendar') === 'business'
+                               || ($r['resolution_mode'] ?? 'calendar') === 'business');
+
+        if ($wantsBusiness && $this->usableCalendar() === null) {
+            return back()->withInput()->withErrors([
+                'rows' => __('Set up a business-hours calendar before using business hours.'),
+            ]);
+        }
 
         $tenantId = session('current_tenant_id');
 
@@ -828,6 +851,8 @@ class SlaPolicyController extends Controller
                     'name' => ucfirst($tier).' - '.ucfirst($priority),
                     'response_time_hours' => $response,
                     'resolution_time_hours' => $resolution,
+                    'response_hours_mode' => $validated['rows'][$priority]['response_mode'],
+                    'resolution_hours_mode' => $validated['rows'][$priority]['resolution_mode'],
                     'is_active' => $active,
                 ]
             );
@@ -836,7 +861,16 @@ class SlaPolicyController extends Controller
         $routePrefix = request()->routeIs('admin.*') ? 'admin.' : '';
         $redirectRoute = Route::has($routePrefix.'sla.index') ? $routePrefix.'sla.index' : 'sla.index';
 
-        return redirect()->route($redirectRoute)->with('success', ucfirst($tier).' SLA policies saved.');
+        $redirect = redirect()->route($redirectRoute)->with('success', ucfirst($tier).' SLA policies saved.');
+
+        // Warn, do not block. Enterprise tier is a 24x7 promise by product decision, but
+        // a tenant whose enterprise clients are genuinely weekday-only is entitled to say
+        // so — encoding pricing policy in a validator ages badly. The save succeeds.
+        if ($tier === 'enterprise' && $wantsBusiness) {
+            $redirect->with('warning', __('Enterprise-tier clients are promised round-the-clock support. Business hours pause the clock at night and at weekends.'));
+        }
+
+        return $redirect;
     }
 
     /**

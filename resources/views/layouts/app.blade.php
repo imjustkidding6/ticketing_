@@ -701,6 +701,16 @@
                     </div>
                 @endif
 
+                {{-- A save that succeeded but deserves a second thought. Distinct from
+                     'error' on purpose: the action went through. --}}
+                @if(session('warning'))
+                    <div class="px-4 mt-4">
+                        <div class="bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded">
+                            {{ session('warning') }}
+                        </div>
+                    </div>
+                @endif
+
                 {{-- License expiration banner --}}
                 @if($sidebarTenant?->license)
                     @php $lic = $sidebarTenant->license; @endphp
