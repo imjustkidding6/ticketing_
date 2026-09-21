@@ -352,6 +352,14 @@ class AiAssistantController extends Controller
     {
         $this->checkPermission('manage ai settings');
 
+        // ChatConversation::resolveRouteBinding() deliberately bypasses the tenant
+        // scope, because the anonymous portal has no session to scope by. That
+        // makes the tenant check the caller's job, and this caller was not doing
+        // it: any workspace admin could read another workspace's conversation by
+        // id. Mirrors the check myConversationMessages() already performs.
+        $tenant = Tenant::findOrFail(session('current_tenant_id'));
+        abort_if($conversation->tenant_id !== $tenant->id, 404);
+
         $conversation->load(['user', 'client']);
         $messages = $conversation->messages()
             ->whereIn('role', [ChatMessage::ROLE_USER, ChatMessage::ROLE_ASSISTANT])

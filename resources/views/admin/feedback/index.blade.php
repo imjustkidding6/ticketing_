@@ -95,7 +95,7 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {{ \App\Support\TenantTime::format($fb->created_at, 'M d, Y g:i A') }}
+                            {{ \App\Support\AdminTime::format($fb->created_at, 'M d, Y g:i A') }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
                             <a href="{{ route('admin.feedback.show', $fb) }}"

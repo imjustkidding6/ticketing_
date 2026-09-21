@@ -129,13 +129,13 @@
 
                 <div>
                     <dt class="text-sm font-medium text-gray-500">Issued At</dt>
-                    <dd class="mt-1 text-sm text-gray-900">@localdt($license->issued_at, 'M d, Y H:i')</dd>
+                    <dd class="mt-1 text-sm text-gray-900">@admindt($license->issued_at, 'M d, Y H:i')</dd>
                 </div>
 
                 <div>
                     <dt class="text-sm font-medium text-gray-500">Activated At</dt>
                     <dd class="mt-1 text-sm text-gray-900">
-                        {{ $license->activated_at ? \App\Support\TenantTime::format($license->activated_at, 'M d, Y H:i') : 'Not activated' }}
+                        {{ $license->activated_at ? \App\Support\AdminTime::format($license->activated_at, 'M d, Y H:i') : 'Not activated' }}
                     </dd>
                 </div>
 
@@ -148,7 +148,7 @@
                     <dt class="text-sm font-medium text-gray-500">Expires At</dt>
                     <dd class="mt-1 text-sm text-gray-900">
                         @if($license->expires_at)
-                            @localdt($license->expires_at, 'M d, Y')
+                            @admindt($license->expires_at, 'M d, Y')
                             @if(!$license->isExpired())
                                 <span class="text-gray-500">({{ $license->daysUntilExpiry() }} days remaining)</span>
                             @endif
@@ -166,14 +166,14 @@
                 @if($license->reactivated_at)
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Last Reactivated</dt>
-                        <dd class="mt-1 text-sm text-gray-900">@localdt($license->reactivated_at, 'M d, Y H:i')</dd>
+                        <dd class="mt-1 text-sm text-gray-900">@admindt($license->reactivated_at, 'M d, Y H:i')</dd>
                     </div>
                 @endif
 
                 @if($license->revoked_at)
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Revoked At</dt>
-                        <dd class="mt-1 text-sm text-gray-900">@localdt($license->revoked_at, 'M d, Y H:i')</dd>
+                        <dd class="mt-1 text-sm text-gray-900">@admindt($license->revoked_at, 'M d, Y H:i')</dd>
                     </div>
                 @endif
             </dl>
