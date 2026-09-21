@@ -236,7 +236,7 @@ return [
             'permission' => 'view sla policies',
             'feature' => 'sla_management',
             'minutes' => 6,
-            'keywords' => 'sla policy response time resolution time first response breach target tier hold deadline compliance overdue',
+            'keywords' => 'sla policy response time resolution time first response breach target tier hold deadline compliance overdue calendar hours business hours working hours',
             'summary' => 'How a deadline is chosen, and what stops the clock.',
             'blocks' => [
                 ['p' => 'An SLA policy sets two targets: the <strong>response time</strong>, meaning how long until an agent first replies, and the <strong>resolution time</strong>, meaning how long until the ticket is closed. A ticket is matched to a policy by <strong>client tier and priority</strong>.'],
@@ -261,7 +261,8 @@ return [
                 ], 'minutes' => 3, 'permission' => ['create sla policies', 'update sla policies']],
                 ['faq' => [
                     ['q' => 'A ticket shows as overdue but the SLA report says it met its target.', 'a' => 'That should no longer happen: the deadline itself is extended when a hold ends, so the dashboard and the report now apply the same rule. If you still see it, the ticket is worth reporting.'],
-                    ['q' => 'Does the SLA pause outside working hours?', 'a' => 'No. Targets are plain elapsed hours — a 24-hour target set on Friday evening expires on Saturday evening. Set targets that reflect that.'],
+                    ['q' => 'Does the SLA pause outside working hours?', 'a' => 'No — targets are measured in <strong>calendar hours</strong>, which is a deliberate choice rather than a limitation. A 24-hour target set on Friday evening expires on Saturday evening, whether or not anyone is rostered. Set targets that reflect the cover you actually run: if you want "two working days", the calendar-hours equivalent is what to type.'],
+                    ['q' => 'What is a calendar hour?', 'a' => 'An hour of elapsed clock time, counted continuously from the moment the ticket is created — nights, weekends and public holidays all count. The only thing that stops the clock is putting the ticket <strong>on hold</strong>, which pushes the deadline out by the length of the hold.'],
                 ]],
             ],
 
@@ -273,7 +274,7 @@ return [
                 'steps' => [
                     ['route' => 'sla.index', 'selector' => '[data-tour="sla-tiers"]', 'title' => 'One set of targets per client tier', 'body' => 'Every client sits in a tier, and each tier carries its own response and resolution hours for each priority. On an empty workspace, seed the defaults first — a priority with no matching policy cannot be set at all.', 'advance' => 'next', 'side' => 'bottom'],
                     ['route' => 'sla.index', 'selector' => '[data-tour="sla-tier"]', 'title' => 'Targets are set per tier', 'body' => 'Each client tier has its own response and resolution hours for each priority. Open one to adjust it.', 'advance' => 'click', 'side' => 'bottom'],
-                    ['route' => 'sla.edit-tier', 'selector' => '[data-tour="sla-targets"]', 'title' => 'Two clocks, not one', 'body' => 'Response is how long until someone replies; resolution is how long until it is closed. They are measured separately and breach separately.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'sla.edit-tier', 'selector' => '[data-tour="sla-targets"]', 'title' => 'Two clocks, not one', 'body' => 'Response is how long until someone replies; resolution is how long until it is closed. They are measured separately and breach separately. Both are counted in calendar hours — elapsed clock time, including nights, weekends and holidays.', 'advance' => 'next', 'side' => 'bottom'],
                     ['route' => 'sla.edit-tier', 'selector' => '[data-tour="sla-save"]', 'title' => 'This changes new tickets only', 'body' => 'Tickets already open keep the deadline they were given. Changing a target here does not retroactively breach or rescue anything.', 'advance' => 'next', 'side' => 'top'],
                 ],
             ],

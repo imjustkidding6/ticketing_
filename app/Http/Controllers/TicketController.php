@@ -219,6 +219,8 @@ class TicketController extends Controller
 
         $ticket->load([
             'tasks.assignee',
+            // The SLA panel prints the policy's targets beside the deadlines.
+            'slaPolicy',
             'history' => fn ($q) => $q->with('user')->latest(),
         ]);
 
@@ -227,6 +229,12 @@ class TicketController extends Controller
             'tasks' => view('tickets.partials._tasks', compact('ticket'))->render(),
             'status' => view('tickets.partials._status-card', compact('ticket'))->render(),
             'history' => view('tickets.partials._history', compact('ticket'))->render(),
+            // Pausing a ticket is a status change made from the card directly above the
+            // SLA panel. Without this key the status card updates in place and the panel
+            // keeps counting down a deadline that is no longer running. When the tenant
+            // lacks sla_management the rendered string is empty, which the browser's
+            // `if (target)` swap loop already handles.
+            'sla' => view('tickets.partials._sla-panel', compact('ticket'))->render(),
         ]);
     }
 

@@ -484,7 +484,7 @@
                                             <select name="priority" id="sidebar_priority" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                                 @foreach(['low', 'medium', 'high', 'critical'] as $p)
                                                     <option value="{{ $p }}" {{ $ticket->priority === $p ? 'selected' : '' }}>
-                                                        {{ ucfirst($p) }}{{ isset($showSlaPolicy[$p]) ? ' — Reso: ' . $showSlaPolicy[$p]->resolution_time_hours . 'h' : '' }}
+                                                        {{ ucfirst($p) }}{{ isset($showSlaPolicy[$p]) ? ' — Reso: ' . $showSlaPolicy[$p]->resolution_time_hours . 'h calendar' : '' }}
                                                     </option>
                                                 @endforeach
                                             </select>
@@ -498,6 +498,13 @@
 
                     <div id="ticket-status-card" data-tour="ticket-status" data-fragment="status" data-live-forms>
                         @include('tickets.partials._status-card')
+                    </div>
+
+                    {{-- SLA. A live fragment: pausing this ticket happens in the card
+                         directly above, and a countdown left behind on a paused deadline
+                         is the precise failure this panel exists to prevent. --}}
+                    <div id="ticket-sla" data-fragment="sla">
+                        @include('tickets.partials._sla-panel')
                     </div>
 
                     {{-- Escalation --}}

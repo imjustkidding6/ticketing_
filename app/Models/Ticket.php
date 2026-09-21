@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Traits\BelongsToTenant;
 use App\Models\Traits\LogsActivity;
+use Carbon\CarbonInterface;
 use Database\Factories\TicketFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -447,6 +448,61 @@ class Ticket extends Model
             && now()->gt($this->response_due_at)
             && $this->first_response_at === null
             && ! in_array($this->status, self::CLOSED_STATUSES, true);
+    }
+
+    /**
+     * The response deadline as it will stand once the running hold is banked.
+     *
+     * Display only — never persisted, never read by SlaService, and deliberately
+     * absent from $fillable/$casts/$appends: a computed value that reaches the wire
+     * is a computed value someone eventually writes back.
+     *
+     * While a ticket is paused, extendForHold() has not run yet, so the stored
+     * deadline is knowingly early by exactly the running segment. Showing it would
+     * be a deadline that is too soon and then silently jumps later. The arithmetic
+     * here is the same one SlaService::extendForHold() applies — including its rule
+     * that an already-answered response clock is not moved, because it has stopped.
+     */
+    public function projectedResponseDueAt(): ?CarbonInterface
+    {
+        if ($this->first_response_at) {
+            return $this->response_due_at;
+        }
+
+        return $this->projectDueDate($this->response_due_at);
+    }
+
+    /**
+     * The resolution deadline as it will stand once the running hold is banked.
+     * Display only — see projectedResponseDueAt().
+     */
+    public function projectedResolutionDueAt(): ?CarbonInterface
+    {
+        return $this->projectDueDate($this->resolution_due_at);
+    }
+
+    /**
+     * Returns the stored instant untouched unless a hold is genuinely running.
+     *
+     * A paused ticket with no hold_started_at is a real state, not a bug to paper
+     * over: older rows predate the field, and any write that bypasses
+     * TicketService::changeStatus() (the Jude connector's UpdateStatus tool is one)
+     * pauses without stamping it. There is nothing to project from, so we project
+     * nothing rather than invent a deadline.
+     */
+    private function projectDueDate(?CarbonInterface $due): ?CarbonInterface
+    {
+        if (! $due || ! $this->hold_started_at) {
+            return $due;
+        }
+
+        if (! in_array($this->status, self::PAUSED_STATUSES, true)) {
+            return $due;
+        }
+
+        $running = max(0, (int) $this->hold_started_at->diffInMinutes(now()));
+
+        return $due->copy()->addMinutes($running);
     }
 
     /**

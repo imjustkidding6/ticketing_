@@ -343,4 +343,28 @@ class SlaPolicyTest extends TestCase
         $nonAdmin = User::factory()->create(['is_admin' => false]);
         $this->actingAs($nonAdmin)->get(route('admin.sla.index'))->assertForbidden();
     }
+
+    public function test_tier_editor_states_targets_are_calendar_hours(): void
+    {
+        $this->setupContext('business');
+
+        $response = $this->get($this->tenantUrl('/sla/tier/basic/edit'));
+
+        $response->assertOk();
+        // The number must never be typed without its unit: an admin entering "48"
+        // is entitled to know it is 48 elapsed clock hours, not two working days.
+        $response->assertSee('Response (calendar hours)');
+        $response->assertSee('Resolution (calendar hours)');
+    }
+
+    public function test_sla_index_explains_the_clock(): void
+    {
+        $this->setupContext('business');
+
+        $response = $this->get($this->tenantUrl('/sla'));
+
+        $response->assertOk();
+        $response->assertSee('calendar hours');
+        $response->assertSee('nights, weekends and holidays', false);
+    }
 }
