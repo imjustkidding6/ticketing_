@@ -135,7 +135,7 @@
                 <div>
                     <dt class="text-sm font-medium text-gray-500">Activated At</dt>
                     <dd class="mt-1 text-sm text-gray-900">
-                        {{ $license->activated_at ? \App\Support\TenantTime::format($license->activated_at, 'M d, Y H:i') : 'Not activated' }}
+                        {{ $license->activated_at ? \App\Support\AdminTime::format($license->activated_at, 'M d, Y H:i') : 'Not activated' }}
                     </dd>
                 </div>
 

@@ -242,9 +242,11 @@ class SlaPolicyController extends Controller
      */
     private function adminOps(SlaService $slaService, $allPolicies): array
     {
-        // Explicit UTC, not TenantTime: TenantTime::timezone() branches on
-        // session('current_tenant_id') too, so the default 30-day window was a second
-        // copy of the same bug. The page prints the window it used.
+        // Explicit UTC by choice, not for want of a helper: this window has to agree
+        // with SlaService's own wall-clock `resolution_due_at < now()` comparisons, so
+        // shifting it into anyone's display zone would put the two out of step again.
+        // AdminTime exists for admin *display*; query boundaries on this page stay UTC.
+        // The page prints the window it used.
         $to = Carbon::now('UTC');
         $from = $to->copy()->subDays(30);
 

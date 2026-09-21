@@ -108,10 +108,9 @@ class AiConversationCrossTenantProbeTest extends TestCase
 
         $response = $this->get($this->tenantUrl('settings/ai/conversations/'.$own->id));
 
-        fwrite(STDERR, "\n[control] own conversation -> HTTP ".$response->status()."\n");
-        fwrite(STDERR, '[control] has perm: '.var_export($user->can('manage ai settings'), true)
-            .'; plan features: '.json_encode($attacker->plan()?->features)
-            .'; body: '.substr(strip_tags($response->getContent()), 0, 160)."\n");
+        // Proves the fixture really grants the permission, so a 404 in the test
+        // above means the boundary held rather than the setup having failed.
+        $this->assertTrue($user->can('manage ai settings'));
 
         $response->assertOk();
         $response->assertSee('OWN-PAYLOAD');

@@ -218,7 +218,7 @@
                                             {{ ucfirst($user->pivot->role) }}
                                         </span>
                                     </td>
-                                    <td class="px-4 py-2 text-sm text-gray-500">{{ $user->pivot->joined_at ? \App\Support\TenantTime::format($user->pivot->joined_at, 'M d, Y') : '-' }}</td>
+                                    <td class="px-4 py-2 text-sm text-gray-500">{{ $user->pivot->joined_at ? \App\Support\AdminTime::format($user->pivot->joined_at, 'M d, Y') : '-' }}</td>
                                 </tr>
                             @endforeach
                         </tbody>

@@ -171,7 +171,7 @@
                                 </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
-                                {{ $a->published_at ? \App\Support\TenantTime::format($a->published_at, 'M d, Y g:i A') : '-' }}
+                                {{ $a->published_at ? \App\Support\AdminTime::format($a->published_at, 'M d, Y g:i A') : '-' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
                                 {{ $a->publisher?->name ?? 'System' }}
