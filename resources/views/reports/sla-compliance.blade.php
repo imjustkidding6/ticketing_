@@ -37,7 +37,7 @@
                     <div class="text-sm text-indigo-900 dark:text-indigo-200 space-y-2">
                         <p><span class="font-semibold">{{ __('Response Time') }}:</span> {{ __('measured from ticket creation until the ticket is first moved to In Progress.') }}</p>
                         <p><span class="font-semibold">{{ __('Resolution Time') }}:</span> {{ __('measured from ticket creation until the ticket is Closed.') }}</p>
-                        <p class="text-xs text-indigo-700 dark:text-indigo-300">{{ __('A ticket is counted as "Met" when it hits the milestone within the policy\'s target calendar hours for its priority + client tier.') }}</p>
+                        <p class="text-xs text-indigo-700 dark:text-indigo-300">{{ __('A ticket is counted as "Met" when it hits the milestone within the policy\'s target hours for its priority + client tier. Each target says whether those are calendar hours (elapsed clock time) or business hours (time your workspace is open).') }}</p>
                     </div>
                 </div>
             </div>
@@ -215,7 +215,7 @@
                                     <td class="px-4 py-2 align-top"><x-badge :type="$row['priority']">{{ ucfirst($row['priority']) }}</x-badge></td>
                                     <td class="px-4 py-2 align-top text-xs text-gray-600 dark:text-gray-400">{{ $row['policy_name'] ?? '-' }}</td>
                                     <td class="px-4 py-2 align-top text-right">
-                                        <div class="text-gray-900 dark:text-gray-100">{{ $row['response_hours'] !== null ? $row['response_hours'].'h' : '—' }} <span class="text-xs text-gray-500 dark:text-gray-400" title="{{ __('calendar hours') }}">/ {{ $row['response_target'] ?? '—' }}h</span></div>
+                                        <div class="text-gray-900 dark:text-gray-100">{{ $row['response_hours'] !== null ? $row['response_hours'].'h' : '—' }} <span class="text-xs text-gray-500 dark:text-gray-400" title="{{ __($row['response_clock'].' hours') }}">/ {{ $row['response_target'] ?? '—' }}h {{ __($row['response_clock']) }}</span></div>
                                         @if($row['response_status'] === 'met')
                                             <span class="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-300">{{ __('Met') }}</span>
                                         @elseif($row['response_status'] === 'missed')
@@ -225,7 +225,7 @@
                                         @endif
                                     </td>
                                     <td class="px-4 py-2 align-top text-right">
-                                        <div class="text-gray-900 dark:text-gray-100">{{ $row['resolution_hours'] !== null ? $row['resolution_hours'].'h' : '—' }} <span class="text-xs text-gray-500 dark:text-gray-400" title="{{ __('calendar hours') }}">/ {{ $row['resolution_target'] ?? '—' }}h</span></div>
+                                        <div class="text-gray-900 dark:text-gray-100">{{ $row['resolution_hours'] !== null ? $row['resolution_hours'].'h' : '—' }} <span class="text-xs text-gray-500 dark:text-gray-400" title="{{ __($row['resolution_clock'].' hours') }}">/ {{ $row['resolution_target'] ?? '—' }}h {{ __($row['resolution_clock']) }}</span></div>
                                         @if($row['resolution_status'] === 'met')
                                             <span class="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-300">{{ __('Met') }}</span>
                                         @elseif($row['resolution_status'] === 'missed')

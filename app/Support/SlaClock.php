@@ -158,7 +158,13 @@ final class SlaClock
 
         $position = $this->toLocal($from);
         $cursor = $position;
-        $remaining = max(0, $minutes);
+        // Carried in SECONDS, not minutes. $from routinely has a seconds component
+        // (created_at does), and a target that runs out of one window and into the next
+        // has to carry that remainder across the boundary. Rounding to whole minutes at
+        // each crossing moved the deadline by up to a second per window — invisible in a
+        // single-window case and caught only by asserting equality with addHours() to the
+        // second across a day boundary.
+        $remaining = max(0, $minutes) * 60;
         $daysScanned = 0;
 
         while (true) {
@@ -184,10 +190,10 @@ final class SlaClock
                     return $this->toUtc($entry);
                 }
 
-                $available = (int) round($entry->diffInMinutes($windowEnd, false));
+                $available = (int) round($entry->diffInSeconds($windowEnd, false));
 
                 if ($available >= $remaining) {
-                    return $this->toUtc($entry->addMinutes($remaining));
+                    return $this->toUtc($entry->addSeconds($remaining));
                 }
 
                 $remaining -= $available;
@@ -233,14 +239,19 @@ final class SlaClock
                 $overlapEnd = $windowEnd < $end ? $windowEnd : $end;
 
                 if ($overlapEnd > $overlapStart) {
-                    $total += (int) round($overlapStart->diffInMinutes($overlapEnd, false));
+                    // Seconds for the same reason as addBusinessMinutes(): a span split
+                    // across window boundaries must not gain or lose a minute at each cut.
+                    // Converted once, at the end.
+                    $total += (int) round($overlapStart->diffInSeconds($overlapEnd, false));
                 }
             }
 
             $cursor = $this->atMinute($cursor->addDay(), 0);
         }
 
-        return max(0, $total);
+        // Truncated, matching the whole-minute figure these callers reported before the
+        // clock existed; the fractional minute is not information anyone is reading.
+        return max(0, intdiv($total, 60));
     }
 
     /**

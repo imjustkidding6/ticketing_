@@ -14,11 +14,11 @@
     @php
         $policy = $ticket->slaPolicy;
 
-        // The clock label is hard-coded for now: every target in the product is
-        // calendar hours. Commit 3 replaces these two lines with the policy's
-        // per-clock mode columns and nothing else in this partial moves.
-        $responseClock = 'calendar';
-        $resolutionClock = 'calendar';
+        // Each target names its own clock, from the policy. Said out loud beside the
+        // deadline because the loudest complaint about this feature elsewhere is an
+        // admin who believed one mode and got the other.
+        $responseClock = $policy?->response_hours_mode ?? 'calendar';
+        $resolutionClock = $policy?->resolution_hours_mode ?? 'calendar';
 
         // The guard is on the DUE DATES, per row — not on the policy id. A policy
         // with null deadlines is a real older-row state, and letting it reach the
@@ -33,8 +33,13 @@
         // response judged RAW (created_at -> first_response_at), resolution judged
         // on the hold-excluding effective figure. Judging one way and printing the
         // other is the "10h / 4h target beside a green MET badge" defect.
+        // ...and raw in the clock the target is stated in, matching getComplianceReport()
+        // exactly. Printing wall-clock hours beside a business-hours target is the same
+        // "10h / 4h target, green MET badge" defect wearing a different hat.
         $responseHours = $ticket->first_response_at
-            ? round($ticket->created_at->diffInHours($ticket->first_response_at, false), 2)
+            ? ($responseClock === 'business'
+                ? app(\App\Services\SlaService::class)->clockFor('business')->businessHoursBetween($ticket->created_at, $ticket->first_response_at)
+                : round($ticket->created_at->diffInHours($ticket->first_response_at, false), 2))
             : null;
         $resolutionHours = $ticket->getEffectiveResolutionTimeHours();
     @endphp
