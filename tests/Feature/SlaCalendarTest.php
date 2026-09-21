@@ -136,40 +136,34 @@ class SlaCalendarTest extends TestCase
     }
 
     /**
-     * Zero behaviour change is the promise of this commit. Shipping the arithmetic dark
-     * is deliberate — it is the part most likely to be subtly wrong and it can be proven
-     * in isolation — but a promise nothing checks is a promise someone breaks by
-     * accident in the next commit.
+     * The clock now has consumers, so the "nothing reads it yet" guard this file used to
+     * carry has done its job and is retired. What replaces it is the invariant that
+     * outlives it: the business-hours transform lives INSIDE assignSla()/extendForHold(),
+     * where it moves the stored due date, and inside the two Ticket effective-hours
+     * accessors every report already routes through.
+     *
+     * A SlaClock appearing in a report service would mean a parallel calculation, which is
+     * how the breach scheduler's wall-clock test and the report's effective-hours test
+     * stopped being the same rule last time — the "10h / 4h target beside a green MET
+     * badge" defect. The deadline is a wall-clock instant whichever clock produced it;
+     * reports must keep reading it, not recomputing it.
      */
-    public function test_nothing_reads_the_calendar_yet(): void
+    public function test_no_report_path_recomputes_business_hours_for_itself(): void
     {
-        $roots = [base_path('app/Services'), base_path('app/Http'), base_path('routes')];
+        $mustNotKnowAboutTheClock = [
+            'app/Services/ReportService.php',
+            'app/Services/AgentPerformanceService.php',
+            'app/Services/ServiceReportService.php',
+            'app/Services/TicketWorkflowService.php',
+            'app/Http/Controllers/DashboardController.php',
+        ];
 
-        $offenders = [];
-
-        foreach ($roots as $root) {
-            if (! is_dir($root)) {
-                continue;
-            }
-
-            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
-
-            foreach ($files as $file) {
-                if (! $file->isFile() || $file->getExtension() !== 'php') {
-                    continue;
-                }
-
-                $contents = file_get_contents($file->getPathname());
-
-                if (preg_match('/\bSlaClock\b|\bSlaCalendar(Hour|Holiday)?\b/', $contents)) {
-                    $offenders[] = str_replace(base_path().'/', '', $file->getPathname());
-                }
-            }
+        foreach ($mustNotKnowAboutTheClock as $path) {
+            $this->assertStringNotContainsString(
+                'SlaClock',
+                file_get_contents(base_path($path)),
+                "{$path} must read the stored deadline and the effective-hours accessors, never build its own clock"
+            );
         }
-
-        $this->assertSame([], $offenders, implode("\n", array_merge(
-            ['SlaClock/SlaCalendar must have no consumer yet. Found references in:'],
-            $offenders,
-        )));
     }
 }

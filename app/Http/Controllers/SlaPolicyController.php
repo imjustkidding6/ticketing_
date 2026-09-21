@@ -2,15 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\UpdateSlaCalendarRequest;
+use App\Models\SlaCalendar;
+use App\Models\SlaCalendarHoliday;
+use App\Models\SlaCalendarHour;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\Ticket;
+use App\Services\ActivityLogger;
 use App\Services\SlaService;
+use App\Support\SlaClock;
+use App\Support\TenantTime;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -190,6 +198,15 @@ class SlaPolicyController extends Controller
             'tiers' => SlaPolicy::TIERS,
             'priorities' => SlaPolicy::PRIORITIES,
             'hasAny' => $allPolicies->isNotEmpty(),
+            // Admin is cross-tenant and has no workspace calendar to show; the card is
+            // rendered on the tenant surface only.
+            'calendar' => $isAdmin ? null : SlaCalendar::query()->default()->first(),
+            'businessTargetCount' => $isAdmin ? 0 : $allPolicies->reduce(
+                fn (int $carry, $p) => $carry
+                    + ($p->response_hours_mode === 'business' ? 1 : 0)
+                    + ($p->resolution_hours_mode === 'business' ? 1 : 0),
+                0
+            ),
             'policiesList' => $policies,
             'alpinePolicies' => $alpinePolicies,
             'healthStats' => [
@@ -820,6 +837,257 @@ class SlaPolicyController extends Controller
         $redirectRoute = Route::has($routePrefix.'sla.index') ? $routePrefix.'sla.index' : 'sla.index';
 
         return redirect()->route($redirectRoute)->with('success', ucfirst($tier).' SLA policies saved.');
+    }
+
+    /**
+     * The workspace's business-hours calendar, or null when there is nothing usable to
+     * measure a business-hours target against.
+     *
+     * One calendar per workspace for now; the tables allow more and a later commit can
+     * add a picker additively. An ordinary scoped query, so no id is ever accepted from
+     * a request and cross-tenant reads are impossible by construction.
+     */
+    private function usableCalendar(): ?SlaCalendar
+    {
+        $calendar = SlaCalendar::query()->default()->first();
+
+        return $calendar && $calendar->hasOpenWindows() ? $calendar : null;
+    }
+
+    /**
+     * Edit the workspace's business-hours calendar.
+     *
+     * Deliberately not under /settings: the calendar is SLA configuration, it is
+     * Business+ like the rest of sla.*, and separating it from the only numbers it
+     * affects is how an admin ends up believing one clock and getting the other.
+     */
+    public function editCalendar(): View
+    {
+        $this->checkPermission('update sla policies');
+
+        $calendar = SlaCalendar::query()->default()->with(['hours', 'holidays'])->first();
+
+        // Keyed by ISO weekday so the view renders seven rows whether or not the calendar
+        // exists. A day with no windows is a closed day.
+        $windows = [];
+        foreach (range(1, 7) as $day) {
+            $windows[$day] = ($calendar?->hours ?? collect())
+                ->where('day_of_week', $day)
+                ->sortBy('start_minute')
+                ->map(fn (SlaCalendarHour $h) => [
+                    'start' => $this->formatMinute($h->start_minute),
+                    'end' => $this->formatMinute($h->end_minute),
+                ])
+                ->values()
+                ->all();
+        }
+
+        // Never an empty grid on first visit. A workspace opening this page is trying to
+        // answer "which days are we available, and between what times" — presenting the
+        // ordinary answer pre-filled makes it one click, not seven rows of typing. It is
+        // only a prefill: nothing is written until they save, so a GET has no side effect.
+        if (! $calendar) {
+            foreach (range(1, 5) as $day) {
+                $windows[$day] = [['start' => '09:00', 'end' => '17:00']];
+            }
+        }
+
+        // Open/closed is its own visible state, not something inferred from two blank
+        // time fields. Unticking Saturday and Sunday is the obvious action, so it has to
+        // look like one.
+        $dayOpen = [];
+        foreach (range(1, 7) as $day) {
+            $dayOpen[$day] = $windows[$day] !== [];
+        }
+
+        $holidays = ($calendar?->holidays ?? collect())
+            ->sortBy(fn ($h) => sprintf('%02d%02d', $h->month, $h->day))
+            ->map(fn (SlaCalendarHoliday $h) => [
+                'name' => $h->name,
+                'month' => $h->month,
+                'day' => $h->day,
+                'year' => $h->year,
+                'recurring' => $h->year === null,
+            ])
+            ->values()
+            ->all();
+
+        $timezone = $calendar?->timezone ?? TenantTime::timezone();
+
+        $businessTargetCount = SlaPolicy::query()->where('response_hours_mode', 'business')->count()
+            + SlaPolicy::query()->where('resolution_hours_mode', 'business')->count();
+
+        $consequence = $this->describeTarget($timezone, $windows, $holidays, 48);
+
+        return view('sla.calendar', compact(
+            'calendar', 'windows', 'dayOpen', 'holidays', 'timezone', 'businessTargetCount', 'consequence'
+        ));
+    }
+
+    /**
+     * Replace the whole week and the whole holiday list in one transaction.
+     *
+     * Replace-all, not per-row CRUD across three tables to edit one logical record —
+     * the same shape the tier editor already uses for its four policies.
+     */
+    public function updateCalendar(UpdateSlaCalendarRequest $request): RedirectResponse
+    {
+        $this->checkPermission('update sla policies');
+
+        $tenantId = session('current_tenant_id');
+        $validated = $request->validated();
+
+        DB::transaction(function () use ($request, $validated, $tenantId) {
+            $calendar = SlaCalendar::query()->default()->first()
+                ?? new SlaCalendar(['tenant_id' => $tenantId, 'name' => 'Business hours', 'is_default' => true]);
+
+            $calendar->timezone = $validated['timezone'];
+            $calendar->save();
+
+            $originalHours = $calendar->exists ? $calendar->hours()->count() : 0;
+            $originalHolidays = $calendar->exists ? $calendar->holidays()->count() : 0;
+
+            $calendar->hours()->delete();
+            $calendar->holidays()->delete();
+
+            $openDays = (array) $request->input('days', []);
+
+            foreach ((array) $request->input('windows', []) as $day => $rows) {
+                $day = (int) $day;
+                // A day switched off is closed whatever its time fields still say. The
+                // toggle is the answer to "do we work weekends"; the times only qualify it.
+                if ($day < 1 || $day > 7 || ! is_array($rows) || empty($openDays[$day])) {
+                    continue;
+                }
+
+                foreach ($rows as $row) {
+                    $start = $this->parseMinute($row['start'] ?? null);
+                    $end = $this->parseMinute($row['end'] ?? null);
+
+                    if ($start === null || $end === null || $end <= $start) {
+                        continue;
+                    }
+
+                    $calendar->hours()->create([
+                        'tenant_id' => $tenantId,
+                        'day_of_week' => $day,
+                        'start_minute' => $start,
+                        'end_minute' => $end,
+                    ]);
+                }
+            }
+
+            foreach ((array) $request->input('holidays', []) as $row) {
+                if (blank($row['name'] ?? null)) {
+                    continue;
+                }
+
+                $calendar->holidays()->create([
+                    'tenant_id' => $tenantId,
+                    'name' => $row['name'],
+                    'month' => (int) $row['month'],
+                    'day' => (int) $row['day'],
+                    // Recurring is the default because rotting must be the deliberate
+                    // act: the failure mode here is a calendar nobody repopulates in
+                    // January and agents flagged as breaching on days nobody worked.
+                    'year' => ($row['recurring'] ?? false) ? null : (int) $row['year'],
+                ]);
+            }
+
+            // The audit answer to "who deleted our Saturday hours". Child rows carry no
+            // LogsActivity by design, and a week whose shifts all moved leaves the
+            // parent's own attributes untouched — LogsActivity skips an update with no
+            // field diff, and touch() only moves updated_at, which it always ignores. So
+            // the entry is written explicitly, which is what ActivityLogger is for.
+            if (! $calendar->wasRecentlyCreated) {
+                ActivityLogger::log($calendar, 'updated', 'SLA business hours updated.', [
+                    'hours' => ['old' => $originalHours, 'new' => $calendar->hours()->count()],
+                    'holidays' => ['old' => $originalHolidays, 'new' => $calendar->holidays()->count()],
+                ]);
+            }
+        });
+
+        return redirect()->route('sla.calendar.edit')
+            ->with('success', __('Business hours saved. Tickets already open keep the deadline they were given.'));
+    }
+
+    /**
+     * "A 48 business-hour target on this calendar is about 6 working days."
+     *
+     * The sentence the whole feature exists to answer, computed rather than asserted —
+     * SlaClock is the same arithmetic the deadlines use, so the page cannot claim one
+     * thing while the tickets do another.
+     *
+     * @param  array<int, list<array{start:string,end:string}>>  $windows
+     * @param  list<array<string, mixed>>  $holidays
+     * @return array{working_days: float, calendar_days: int}|null
+     */
+    private function describeTarget(string $timezone, array $windows, array $holidays, int $hours): ?array
+    {
+        $flat = [];
+        $weeklyMinutes = 0;
+        $openDayCount = 0;
+
+        foreach ($windows as $day => $rows) {
+            if ($rows === []) {
+                continue;
+            }
+
+            $openDayCount++;
+
+            foreach ($rows as $row) {
+                $start = $this->parseMinute($row['start'] ?? null);
+                $end = $this->parseMinute($row['end'] ?? null);
+
+                if ($start === null || $end === null || $end <= $start) {
+                    continue;
+                }
+
+                $flat[] = ['day' => (int) $day, 'start' => $start, 'end' => $end];
+                $weeklyMinutes += $end - $start;
+            }
+        }
+
+        if ($flat === [] || $weeklyMinutes === 0 || $openDayCount === 0) {
+            return null;
+        }
+
+        $clock = new SlaClock($timezone, $flat, array_map(fn ($h) => [
+            'month' => (int) ($h['month'] ?? 0),
+            'day' => (int) ($h['day'] ?? 0),
+            'year' => ($h['recurring'] ?? false) ? null : (($h['year'] ?? null) !== null ? (int) $h['year'] : null),
+        ], $holidays));
+
+        // Measured from the next open minute, not from "now": starting the example in the
+        // middle of a closed Sunday would quietly add a weekend to the answer.
+        $start = $clock->nextOpenAt(now());
+
+        if (! $start) {
+            return null;
+        }
+
+        $due = $clock->addBusinessHours($start, $hours);
+
+        return [
+            'working_days' => round($hours * 60 / ($weeklyMinutes / $openDayCount), 1),
+            'calendar_days' => (int) ceil($start->diffInDays($due, false)),
+        ];
+    }
+
+    private function formatMinute(int $minute): string
+    {
+        return sprintf('%02d:%02d', intdiv($minute, 60), $minute % 60);
+    }
+
+    private function parseMinute(?string $time): ?int
+    {
+        if (! $time || ! preg_match('/^(\d{1,2}):(\d{2})$/', $time, $m)) {
+            return null;
+        }
+
+        $minute = ((int) $m[1]) * 60 + (int) $m[2];
+
+        return ($minute < 0 || $minute > 1440) ? null : $minute;
     }
 
     /**

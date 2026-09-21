@@ -268,6 +268,10 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
         Route::post('sla/bulk-action', [SlaPolicyController::class, 'bulkAction'])->name('sla.bulk-action');
         Route::get('sla/export', [SlaPolicyController::class, 'export'])->name('sla.export');
         Route::post('sla/seed-defaults', [SlaPolicyController::class, 'seedDefaults'])->name('sla.seed-defaults');
+        // The workspace's "when we are open" definition. Permission is update sla
+        // policies — the same audience that edits the targets it measures.
+        Route::get('sla/calendar', [SlaPolicyController::class, 'editCalendar'])->name('sla.calendar.edit');
+        Route::post('sla/calendar', [SlaPolicyController::class, 'updateCalendar'])->name('sla.calendar.update');
         Route::get('sla/tier/{tier}/edit', [SlaPolicyController::class, 'editTier'])->name('sla.edit-tier');
         Route::post('sla/tier/{tier}', [SlaPolicyController::class, 'updateTier'])->name('sla.update-tier');
         Route::delete('sla/tier/{tier}', [SlaPolicyController::class, 'destroyTier'])->name('sla.destroy-tier');

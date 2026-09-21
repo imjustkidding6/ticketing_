@@ -33,8 +33,34 @@
                 <p>{{ __('Policies are grouped by client tier. Each tier has one row per priority.') }}</p>
                 <p><span class="font-semibold">{{ __('Response hours') }}:</span> {{ __('target time from ticket creation until it is first moved to In Progress.') }}</p>
                 <p><span class="font-semibold">{{ __('Resolution hours') }}:</span> {{ __('target time from ticket creation until it is Closed.') }}</p>
-                <p>{{ __('Both targets are measured in calendar hours — elapsed clock time, including nights, weekends and holidays. Time on hold is the only thing that pauses the clock.') }}</p>
+                <p>{{ __('Each target carries its own clock. Calendar hours are elapsed clock time, including nights, weekends and holidays; business hours count only the time your workspace is open. Time on hold pauses either clock.') }}</p>
             </div>
+
+            @can('update sla policies')
+                {{-- The entry point to the calendar. It states whether one exists, because
+                     a business-hours target with no working hours behind it silently falls
+                     back to calendar hours and the admin would never know. --}}
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm">
+                    <div class="text-sm">
+                        <p class="font-semibold text-gray-900">{{ __('Business hours calendar') }}</p>
+                        @if($calendar && $calendar->hasOpenWindows())
+                            <p class="text-gray-500">
+                                {{ __('Set up for :zone.', ['zone' => $calendar->timezone]) }}
+                                @if($businessTargetCount > 0)
+                                    {{ trans_choice('{1}:count target is measured against it.|[2,*]:count targets are measured against it.', $businessTargetCount, ['count' => $businessTargetCount]) }}
+                                @else
+                                    {{ __('No target uses business hours yet.') }}
+                                @endif
+                            </p>
+                        @else
+                            <p class="text-gray-500">{{ __('Not set up yet, so every target must stay on calendar hours.') }}</p>
+                        @endif
+                    </div>
+                    <a href="{{ route('sla.calendar.edit') }}" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                        {{ ($calendar && $calendar->hasOpenWindows()) ? __('Edit business hours') : __('Set up business hours') }}
+                    </a>
+                </div>
+            @endcan
 
             <div data-tour="sla-tiers">
 
