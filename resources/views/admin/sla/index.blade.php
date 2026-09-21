@@ -34,8 +34,6 @@
                 return '/tickets?' . http_build_query($params);
             }
         };
-
-        $routePrefix = request()->routeIs('admin.*') ? 'admin.' : '';
     @endphp
 
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
@@ -200,117 +198,17 @@
             sortDesc: '{{ $filters['direction'] ?? 'asc' }}' === 'desc',
             page: 1,
             perPage: 10,
-            confirmDeleteTier: null,
-            showSeedModal: false,
-            showSeedSummaryModal: false,
-            seedSummaryData: null,
             chartsLoaded: false,
             nearBreachList: @json($alpineNearBreach),
-            selectedRows: [],
 
-            // Modal States
-            showCreateModal: false,
-            modalMode: 'create', // 'create', 'edit', 'duplicate'
+            // Modal States. Only the read-only details modal survives: this surface
+            // observes, so there is nothing here to create, edit or delete.
             showViewModal: false,
             selectedPolicyForView: null,
-            showDeleteModal: false,
-            selectedPolicyForDelete: null,
-            
-            // Form Object
-            form: {
-                id: null,
-                name: '',
-                description: '',
-                client_tier: 'basic',
-                priority: 'medium',
-                response_time_hours: 8,
-                resolution_time_hours: 24,
-                is_active: true,
-                overwrite: false,
-            },
-
-            openCreateModal() {
-                this.modalMode = 'create';
-                this.form = {
-                    id: null,
-                    name: '',
-                    description: '',
-                    client_tier: 'basic',
-                    priority: 'medium',
-                    response_time_hours: 8,
-                    resolution_time_hours: 24,
-                    is_active: true,
-                    overwrite: false,
-                };
-                this.showCreateModal = true;
-            },
-
-            openEditModal(p) {
-                this.modalMode = 'edit';
-                this.form = {
-                    id: p.id,
-                    name: p.name,
-                    description: p.description || '',
-                    client_tier: p.client_tier,
-                    priority: p.priority,
-                    response_time_hours: p.response_time_hours,
-                    resolution_time_hours: p.resolution_time_hours,
-                    is_active: p.is_active,
-                    overwrite: false,
-                };
-                this.showCreateModal = true;
-            },
-
-            openDuplicateModal(p) {
-                this.modalMode = 'duplicate';
-                this.form = {
-                    id: null,
-                    name: p.name + ' (Copy)',
-                    description: p.description || '',
-                    client_tier: p.client_tier,
-                    priority: p.priority,
-                    response_time_hours: p.response_time_hours,
-                    resolution_time_hours: p.resolution_time_hours,
-                    is_active: true,
-                    overwrite: false,
-                };
-                this.showCreateModal = true;
-            },
 
             openViewModal(p) {
                 this.selectedPolicyForView = p;
                 this.showViewModal = true;
-            },
-
-            openDeleteModal(p) {
-                this.selectedPolicyForDelete = p;
-                this.showDeleteModal = true;
-            },
-
-            get validationErrors() {
-                const errors = [];
-                if (!this.form.name || !this.form.name.trim()) {
-                    errors.push('Policy name is required.');
-                }
-                if (this.form.resolution_time_hours === '' || Number(this.form.resolution_time_hours) <= 0) {
-                    errors.push('Resolution time target must be greater than 0 hours.');
-                }
-                if (this.form.response_time_hours === '' || Number(this.form.response_time_hours) < 0) {
-                    errors.push('Response time target cannot be negative.');
-                }
-                if (Number(this.form.response_time_hours) > Number(this.form.resolution_time_hours)) {
-                    errors.push('Response time target cannot exceed resolution time target.');
-                }
-                return errors;
-            },
-
-            get duplicateMatch() {
-                if (!this.form.client_tier || !this.form.priority) return null;
-                return this.policies.find(p => 
-                    p.client_tier === this.form.client_tier && 
-                    p.priority === this.form.priority && 
-                    p.id !== this.form.id
-                ) || null;
             },
 
             get totalPages() {
@@ -373,14 +271,6 @@
                 this.page = 1;
             },
 
-            toggleSelectAll() {
-                if (this.selectedRows.length === this.paginatedPolicies.length) {
-                    this.selectedRows = [];
-                } else {
-                    this.selectedRows = this.paginatedPolicies.map(p => p.id);
-                }
-            },
-
             clearFilters() {
                 this.searchQuery = '';
                 this.selectedTier = 'All';
@@ -391,45 +281,11 @@
                 this.page = 1;
             },
 
-            applyBulkAction(action) {
-                if (!this.selectedRows.length) {
-                    alert('No policies selected.');
-                    return;
-                }
-                const form = document.querySelector('#bulk-action-form');
-                if (form) {
-                    document.querySelector('#bulk-action-input').value = action;
-                    form.submit();
-                }
-            },
-
             exportCSV() {
-                const url = '{{ Route::has($routePrefix."sla.export") ? route($routePrefix."sla.export") : "#" }}';
-                if (url !== '#') {
-                    window.location.href = url + '?ids=' + this.selectedRows.join(',');
-                } else {
-                    let headers = ['Policy Name', 'Client Tier', 'Priority', 'Response Target (Hours)', 'Resolution Target (Hours)', 'Status', 'Last Updated'];
-                    let rows = this.filteredPolicies.map(p => [
-                        `"${p.name}"`,
-                        p.client_tier ? p.client_tier.toUpperCase() : 'N/A',
-                        p.priority ? p.priority.toUpperCase() : 'N/A',
-                        p.response_time_hours,
-                        p.resolution_time_hours,
-                        p.is_active ? 'ACTIVE' : 'PAUSED',
-                        `"${p.updated_at}"`
-                    ]);
-                    
-                    let csvContent = 'data:text/csv;charset=utf-8,\uFEFF' 
-                        + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-                        
-                    let encodedUri = encodeURI(csvContent);
-                    let link = document.createElement('a');
-                    link.setAttribute('href', encodedUri);
-                    link.setAttribute('download', 'SLA_Policies_Export.csv');
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                }
+                // Server-side only. The client-side fallback that used to live here
+                // built its own header list, which would now disagree with the
+                // server export's Workspace column.
+                window.location.href = '{{ route('admin.sla.export') }}';
             },
 
             printRegistry() {
@@ -632,22 +488,6 @@
             },
 
             init() {
-                const successMsg = @json(session('success'));
-                if (successMsg && (successMsg.includes('Seeded') || successMsg.includes('already in place'))) {
-                    let created = 0;
-                    if (successMsg.includes('Seeded')) {
-                        const match = successMsg.match(/Seeded (\d+) standard/);
-                        if (match) created = parseInt(match[1]);
-                    }
-                    this.seedSummaryData = {
-                        created: created,
-                        existing: 12 - created,
-                        skipped: 12 - created,
-                        total: 12
-                    };
-                    this.showSeedSummaryModal = true;
-                }
-
                 this.$nextTick(() => {
                     this.initDashboardCharts();
                 });
@@ -689,13 +529,8 @@
                 </h1>
             </div>
             
-            <!-- Right Side (Buttons): 4 Action Buttons sitting on the far right -->
+            <!-- Right Side (Buttons): read-only actions only — this surface does not edit -->
             <div class="flex flex-wrap items-center gap-3 shrink-0 relative z-30 pointer-events-auto">
-                <button type="button" @click="openCreateModal()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#5B5FF6] hover:bg-[#4F46E5] active:scale-[0.99] text-white px-4 py-2.5 h-10 text-xs sm:text-sm font-semibold shadow-sm transition-all cursor-pointer border-none shrink-0 w-auto max-w-max relative z-30 pointer-events-auto">
-                    <svg class="h-4 w-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                    <span class="whitespace-nowrap pointer-events-none">Create Policy</span>
-                </button>
-
                 <button type="button" @click="exportCSV()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-soft)] dark:border-slate-700 px-4 py-2.5 h-10 text-xs sm:text-sm font-semibold shadow-sm transition-all cursor-pointer shrink-0 w-auto max-w-max relative z-30 pointer-events-auto">
                     <svg class="h-4 w-4 text-[var(--text-secondary)] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                     <span class="whitespace-nowrap pointer-events-none">Export</span>
@@ -706,15 +541,14 @@
                     <span class="whitespace-nowrap pointer-events-none">Refresh</span>
                 </button>
 
-                <button type="button" @click="showSeedModal = true" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-soft)] dark:border-slate-700 px-4 py-2.5 h-10 text-xs sm:text-sm font-semibold shadow-sm transition-all cursor-pointer shrink-0 w-auto max-w-max relative z-30 pointer-events-auto">
-                    <span class="whitespace-nowrap pointer-events-none">Seed Defaults</span>
-                </button>
             </div>
         </div>
 
         <!-- 3. Subtitle Row (Middle): Directly below Header Row with mt-2 (8px). NO background box, NO borders -->
         <p class="mt-2 text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed block w-full text-left bg-transparent border-none p-0 no-print relative z-10">
-            Configure, monitor, and enforce service level agreements across client tiers and priorities.
+            Monitor service level agreements across every workspace, client tier and priority.
+            <span class="font-semibold text-[var(--text-primary)]">SLA targets belong to the workspace.</span>
+            Open the workspace and use Impersonate to manage them — this page is read-only.
         </p>
 
         <!-- 4. Tabs Container (Bottom) - Theme-aware Light/Dark supporting panel -->
@@ -734,7 +568,7 @@
                             : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] dark:text-slate-400 dark:hover:text-white font-semibold border-b-2 border-transparent'" 
                         class="px-5 py-3 text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-2.5 flex-1 focus:outline-none cursor-pointer">
                     <svg class="h-4 w-4 shrink-0 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    <span class="whitespace-nowrap pointer-events-none">📋 SLA Policy Registry (CRUD)</span>
+                    <span class="whitespace-nowrap pointer-events-none">📋 SLA Policy Registry</span>
                 </button>
                 <button type="button" @click="activeTab = 'tiers'" 
                         :class="activeTab === 'tiers' 
@@ -974,37 +808,16 @@
                         </button>
                     </div>
                 </div>
-
-                <!-- Bulk Actions Bar -->
-                <div x-show="selectedRows.length > 0" class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-indigo-50 dark:bg-indigo-950/40 p-3 rounded-xl border border-indigo-200/50 dark:border-indigo-800/40 text-xs text-indigo-900 dark:text-indigo-300">
-                    <div class="flex items-center gap-2 font-bold">
-                        <span x-text="selectedRows.length + ' policies selected'"></span>
-                    </div>
-                    <div class="flex items-center flex-wrap gap-2">
-                        <button type="button" @click="applyBulkAction('activate')" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 cursor-pointer text-xs border-none">Activate Selected</button>
-                        <button type="button" @click="applyBulkAction('deactivate')" class="px-3 py-1.5 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-700 cursor-pointer text-xs border-none">Archive Selected</button>
-                        <button type="button" @click="applyBulkAction('delete')" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white font-semibold hover:bg-rose-700 cursor-pointer text-xs border-none">Delete Selected (Safe)</button>
-                    </div>
-                </div>
             </div>
 
             <!-- Policies Registry Table -->
             <div class="premium-card overflow-hidden">
-                <form id="bulk-action-form" method="POST" action="{{ Route::has($routePrefix.'sla.bulk-action') ? route($routePrefix.'sla.bulk-action') : '#' }}">
-                    @csrf
-                    <input type="hidden" name="action" id="bulk-action-input" value="" />
-                    <template x-for="id in selectedRows" :key="id">
-                        <input type="hidden" name="ids[]" :value="id" />
-                    </template>
-                </form>
 
                 <div class="overflow-x-auto sticky-table-container">
                     <table class="min-w-full divide-y divide-slate-100 dark:divide-slate-800 text-left text-sm">
                         <thead class="bg-slate-50/70 dark:bg-slate-800/50 text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] no-print">
                             <tr>
-                                <th class="px-4 py-3.5 w-10 text-center">
-                                    <input type="checkbox" @click="toggleSelectAll()" :checked="selectedRows.length === paginatedPolicies.length && paginatedPolicies.length > 0" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
-                                </th>
+                                <th class="px-4 py-3.5">Workspace</th>
                                 <th class="px-6 py-3.5 cursor-pointer hover:text-[var(--text-primary)]" @click="toggleSort('name')">
                                     Policy Name <span x-show="sortBy === 'name'" x-text="sortDesc ? '↓' : '↑'"></span>
                                 </th>
@@ -1036,8 +849,8 @@
 
                             <template x-for="p in paginatedPolicies" :key="p.id">
                                 <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition">
-                                    <td class="px-4 py-4 text-center no-print">
-                                        <input type="checkbox" :value="p.id" x-model="selectedRows" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                                    <td class="px-4 py-4 font-semibold">
+                                        <a :href="p.workspace_url" class="text-indigo-600 dark:text-indigo-400 hover:underline" x-text="p.workspace"></a>
                                     </td>
                                     <td class="px-6 py-4 font-bold text-[var(--text-primary)]">
                                         <span x-text="p.name"></span>
@@ -1074,25 +887,10 @@
                                                     <svg class="h-3.5 w-3.5 text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                                     <span>View Details</span>
                                                 </button>
-                                                <button type="button" @click="openEditModal(p); open = false;" class="w-full text-left px-4 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2 cursor-pointer">
-                                                    <svg class="h-3.5 w-3.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                                    <span>Edit Policy</span>
-                                                </button>
-                                                <button type="button" @click="openDuplicateModal(p); open = false;" class="w-full text-left px-4 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2 cursor-pointer">
-                                                    <svg class="h-3.5 w-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-                                                    <span>Duplicate</span>
-                                                </button>
-                                                <form method="POST" :action="p.toggle_url" class="inline">
-                                                    @csrf
-                                                    <button type="submit" class="w-full text-left px-4 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2 cursor-pointer">
-                                                        <svg class="h-3.5 w-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
-                                                        <span x-text="p.is_active ? 'Archive Policy' : 'Activate Policy'"></span>
-                                                    </button>
-                                                </form>
-                                                <button type="button" @click="openDeleteModal(p); open = false;" class="w-full text-left px-4 py-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2 cursor-pointer">
-                                                    <svg class="h-3.5 w-3.5 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                    <span>Delete Policy</span>
-                                                </button>
+                                                <a :href="p.workspace_url" class="w-full text-left px-4 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2 cursor-pointer">
+                                                    <svg class="h-3.5 w-3.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                                    <span>Open workspace</span>
+                                                </a>
                                             </div>
                                         </div>
                                     </td>
@@ -1183,153 +981,13 @@
                             </div>
                         </div>
 
-                        <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 no-print">
-                            <a href="{{ Route::has($routePrefix.'sla.edit-tier') ? route($routePrefix.'sla.edit-tier', ['tier' => $tier]) : '#' }}" class="inline-flex items-center justify-center flex-1 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-[var(--text-primary)] py-2 text-sm font-semibold transition border border-slate-200 dark:border-slate-700">
-                                {{ $hasRows ? __('Configure Targets') : __('Initialize Tier') }}
-                            </a>
+                        <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-[var(--text-secondary)] no-print">
+                            Targets for this tier are set by each workspace.
                         </div>
                     </div>
                 @endforeach
             </div>
         </div>
-
-        <!-- ==================== MODAL 1: CREATE / EDIT SLA POLICY (WITH LIVE PREVIEW) ==================== -->
-        <template x-if="showCreateModal">
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm no-print overflow-y-auto">
-                <div class="bg-[var(--bg-card)] rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-[var(--border-soft)] space-y-6 animate-fade-in max-h-[90vh] overflow-y-auto" @click.outside="showCreateModal = false">
-                    
-                    <!-- Modal Header -->
-                    <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-                        <div>
-                            <h3 class="text-lg font-bold text-[var(--text-primary)]" x-text="modalMode === 'edit' ? 'Edit SLA Policy' : (modalMode === 'duplicate' ? 'Duplicate SLA Policy' : 'Create SLA Policy')"></h3>
-                            <p class="text-xs text-[var(--text-secondary)]">Configure target SLA response and resolution times for tickets.</p>
-                        </div>
-                        <button type="button" @click="showCreateModal = false" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
-                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                    </div>
-
-                    <!-- Form & Live Preview 2-Column Grid -->
-                    <form method="POST" :action="modalMode === 'edit' ? '/admin/sla/' + form.id : '{{ Route::has($routePrefix.'sla.store') ? route($routePrefix.'sla.store') : '/admin/sla' }}'">
-                        @csrf
-                        <template x-if="modalMode === 'edit'">
-                            <input type="hidden" name="_method" value="PUT" />
-                        </template>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            
-                            <!-- LEFT COLUMN: Inputs -->
-                            <div class="space-y-4 text-xs">
-                                <div>
-                                    <label class="block font-bold text-[var(--text-primary)] mb-1">Policy Name *</label>
-                                    <input type="text" name="name" x-model="form.name" required placeholder="e.g. Enterprise - Critical Priority" class="w-full px-3 py-2 rounded-xl border border-[var(--border-soft)] bg-[var(--bg-app)] text-[var(--text-primary)] text-sm font-semibold" />
-                                </div>
-
-                                <div>
-                                    <label class="block font-bold text-[var(--text-primary)] mb-1">Description</label>
-                                    <textarea name="description" x-model="form.description" rows="2" placeholder="Optional notes regarding target expectations..." class="w-full px-3 py-2 rounded-xl border border-[var(--border-soft)] bg-[var(--bg-app)] text-[var(--text-primary)] text-xs"></textarea>
-                                </div>
-
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label class="block font-bold text-[var(--text-primary)] mb-1">Client Tier *</label>
-                                        <select name="client_tier" x-model="form.client_tier" class="w-full px-3 py-2 rounded-xl border border-[var(--border-soft)] bg-[var(--bg-app)] text-[var(--text-primary)] text-xs font-semibold cursor-pointer">
-                                            <option value="basic">Basic Tier</option>
-                                            <option value="premium">Premium Tier</option>
-                                            <option value="enterprise">Enterprise Tier</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block font-bold text-[var(--text-primary)] mb-1">Ticket Priority *</label>
-                                        <select name="priority" x-model="form.priority" class="w-full px-3 py-2 rounded-xl border border-[var(--border-soft)] bg-[var(--bg-app)] text-[var(--text-primary)] text-xs font-semibold cursor-pointer">
-                                            <option value="low">Low Priority</option>
-                                            <option value="medium">Medium Priority</option>
-                                            <option value="high">High Priority</option>
-                                            <option value="critical">Critical Priority</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label class="block font-bold text-[var(--text-primary)] mb-1">Response Target (Hours) *</label>
-                                        <input type="number" name="response_time_hours" x-model="form.response_time_hours" min="0" required class="w-full px-3 py-2 rounded-xl border border-[var(--border-soft)] bg-[var(--bg-app)] text-[var(--text-primary)] text-sm font-bold text-center" />
-                                    </div>
-                                    <div>
-                                        <label class="block font-bold text-[var(--text-primary)] mb-1">Resolution Target (Hours) *</label>
-                                        <input type="number" name="resolution_time_hours" x-model="form.resolution_time_hours" min="1" required class="w-full px-3 py-2 rounded-xl border border-[var(--border-soft)] bg-[var(--bg-app)] text-[var(--text-primary)] text-sm font-bold text-center" />
-                                    </div>
-                                </div>
-
-                                <div class="flex items-center gap-2 pt-2">
-                                    <input type="checkbox" name="is_active" id="is_active_input" value="1" :checked="form.is_active" @change="form.is_active = $el.checked" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
-                                    <label for="is_active_input" class="font-bold text-[var(--text-primary)] cursor-pointer">Active Policy (Enforce SLA tracking)</label>
-                                </div>
-                            </div>
-
-                            <!-- RIGHT COLUMN: Live Policy Preview Panel -->
-                            <div class="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200/60 dark:border-slate-700 space-y-4">
-                                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-                                    <span class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Live SLA Policy Preview</span>
-                                    <span class="sla-pill" :class="'sla-badge-' + form.priority" x-text="form.priority"></span>
-                                </div>
-
-                                <div class="space-y-3 text-xs">
-                                    <div class="p-3 bg-[var(--bg-card)] rounded-lg border border-slate-100 dark:border-slate-800 space-y-1">
-                                        <span class="text-[10px] font-bold uppercase text-[var(--text-secondary)] block">Target Scope</span>
-                                        <p class="font-extrabold text-[var(--text-primary)]" x-text="(form.client_tier || 'basic').toUpperCase() + ' Tier — ' + (form.priority || 'medium').toUpperCase() + ' Priority'"></p>
-                                    </div>
-
-                                    <div class="p-3 bg-[var(--bg-card)] rounded-lg border border-slate-100 dark:border-slate-800 space-y-1">
-                                        <span class="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 block">Response Target</span>
-                                        <p class="font-bold text-[var(--text-primary)]" x-text="'Created + ' + (form.response_time_hours || 0) + ' Hours'"></p>
-                                        <p class="text-[11px] text-[var(--text-secondary)] font-medium">e.g. Ticket created at 9:00 AM → First Response due by <strong class="text-[var(--text-primary)]" x-text="(form.response_time_hours || 0) + ' hours later'"></strong></p>
-                                    </div>
-
-                                    <div class="p-3 bg-[var(--bg-card)] rounded-lg border border-slate-100 dark:border-slate-800 space-y-1">
-                                        <span class="text-[10px] font-bold uppercase text-indigo-600 dark:text-indigo-400 block">Resolution Target</span>
-                                        <p class="font-bold text-[var(--text-primary)]" x-text="'Created + ' + (form.resolution_time_hours || 0) + ' Hours'"></p>
-                                        <p class="text-[11px] text-[var(--text-secondary)] font-medium">e.g. Ticket created at 9:00 AM → Full Resolution due by <strong class="text-[var(--text-primary)]" x-text="(form.resolution_time_hours || 0) + ' hours later'"></strong></p>
-                                    </div>
-                                </div>
-
-                                <!-- Inline Validation Warning Box -->
-                                <template x-if="validationErrors.length > 0">
-                                    <div class="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-800/40 text-xs text-rose-700 dark:text-rose-400 space-y-1">
-                                        <span class="font-bold block">Validation Warnings:</span>
-                                        <template x-for="err in validationErrors" :key="err">
-                                            <p class="text-[11px]" x-text="'• ' + err"></p>
-                                        </template>
-                                    </div>
-                                </template>
-
-                                <!-- Duplicate Detection Warning Box -->
-                                <template x-if="duplicateMatch">
-                                    <div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-800/40 text-xs text-amber-800 dark:text-amber-300 space-y-2">
-                                        <span class="font-bold block">Duplicate Settings Detected:</span>
-                                        <p class="text-[11px]" x-text="'An existing policy (' + duplicateMatch.name + ') already matches ' + form.client_tier.toUpperCase() + ' tier & ' + form.priority.toUpperCase() + ' priority.'"></p>
-                                        <div class="flex items-center gap-2 pt-1">
-                                            <input type="checkbox" name="overwrite" id="overwrite_check" value="1" x-model="form.overwrite" class="rounded border-amber-400 text-amber-600 focus:ring-amber-500 cursor-pointer" />
-                                            <label for="overwrite_check" class="font-bold text-[11px] cursor-pointer">I confirm overwrite of existing policy</label>
-                                        </div>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-
-                        <!-- Modal Footer Buttons -->
-                        <div class="flex justify-end gap-3 pt-6 border-t border-slate-100 dark:border-slate-800 mt-6">
-                            <button type="button" @click="showCreateModal = false" class="px-4 py-2 text-sm font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[var(--text-primary)] transition cursor-pointer">
-                                Cancel
-                            </button>
-                            <button type="submit" :disabled="validationErrors.length > 0 || (duplicateMatch && !form.overwrite)" class="px-5 py-2 text-sm font-semibold rounded-xl bg-[#5B5FF6] hover:bg-[#4F46E5] text-white shadow-sm transition cursor-pointer border-none disabled:opacity-40">
-                                Save SLA Policy
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </template>
 
         <!-- ==================== MODAL 2: POLICY DETAILS VIEW MODAL ==================== -->
         <template x-if="showViewModal && selectedPolicyForView">
@@ -1379,121 +1037,6 @@
                     <div class="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
                         <button type="button" @click="showViewModal = false" class="px-5 py-2 text-sm font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 text-[var(--text-primary)] transition cursor-pointer">
                             Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </template>
-
-        <!-- ==================== MODAL 3: SAFE DELETE CHECK MODAL ==================== -->
-        <template x-if="showDeleteModal && selectedPolicyForDelete">
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm no-print">
-                <div class="bg-[var(--bg-card)] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[var(--border-soft)] space-y-5 animate-fade-in" @click.outside="showDeleteModal = false">
-                    
-                    <div class="flex items-start gap-4">
-                        <div class="p-3 rounded-xl shrink-0" :class="(selectedPolicyForDelete.total_tickets_count || 0) > 0 ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400' : 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400'">
-                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-bold text-[var(--text-primary)]" x-text="(selectedPolicyForDelete.total_tickets_count || 0) > 0 ? 'Policy Cannot Be Deleted' : 'Delete SLA Policy?'"></h3>
-                            <p class="text-xs text-[var(--text-secondary)] mt-1" x-text="(selectedPolicyForDelete.total_tickets_count || 0) > 0 ? 'This SLA Policy is currently assigned to ' + selectedPolicyForDelete.total_tickets_count + ' ticket(s). Deletion is prevented to preserve historical SLA tracking.' : 'Are you sure you want to permanently delete \'' + selectedPolicyForDelete.name + '\'?'"></p>
-                        </div>
-                    </div>
-
-                    <!-- Options for in-use policy vs unused policy -->
-                    <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-                        <button type="button" @click="showDeleteModal = false" class="px-4 py-2 text-sm font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-[var(--text-primary)] transition cursor-pointer">
-                            Cancel
-                        </button>
-
-                        <template x-if="(selectedPolicyForDelete.total_tickets_count || 0) > 0">
-                            <form method="POST" :action="selectedPolicyForDelete.toggle_url" class="inline">
-                                @csrf
-                                <button type="submit" class="px-4 py-2 text-sm font-semibold rounded-xl bg-amber-600 hover:bg-amber-700 text-white transition cursor-pointer border-none">
-                                    Archive / Deactivate
-                                </button>
-                            </form>
-                        </template>
-
-                        <template x-if="(selectedPolicyForDelete.total_tickets_count || 0) === 0">
-                            <form method="POST" :action="selectedPolicyForDelete.delete_url" class="inline">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="px-4 py-2 text-sm font-semibold rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition cursor-pointer border-none">
-                                    Delete Permanently
-                                </button>
-                            </form>
-                        </template>
-                    </div>
-                </div>
-            </div>
-        </template>
-
-        <!-- ==================== MODAL 4: SEED CONFIRMATION MODAL ==================== -->
-        <template x-if="showSeedModal">
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm no-print">
-                <div class="bg-[var(--bg-card)] rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[var(--border-soft)] space-y-5 animate-fade-in" @click.outside="showSeedModal = false">
-                    <div class="flex items-start gap-4">
-                        <div class="p-3 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0">
-                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-bold text-[var(--text-primary)]">Seed Standard SLA Policies</h3>
-                            <p class="text-sm text-[var(--text-secondary)] mt-1">
-                                This will automatically populate 12 standard ITIL SLA targets across Basic, Premium, and Enterprise tiers.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-                        <button type="button" @click="showSeedModal = false" class="px-4 py-2 text-sm font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[var(--text-primary)] transition cursor-pointer">
-                            Cancel
-                        </button>
-                        <form method="POST" action="{{ Route::has($routePrefix.'sla.seed-defaults') ? route($routePrefix.'sla.seed-defaults') : '#' }}" class="inline">
-                            @csrf
-                            <button type="submit" class="px-4 py-2 text-sm font-semibold rounded-xl bg-[#5B5FF6] hover:bg-[#4F46E5] text-white shadow-sm transition cursor-pointer border-none">
-                                Proceed & Seed Defaults
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </template>
-
-        <!-- ==================== MODAL 5: SEED SUMMARY MODAL ==================== -->
-        <template x-if="showSeedSummaryModal && seedSummaryData">
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm no-print">
-                <div class="bg-[var(--bg-card)] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[var(--border-soft)] space-y-5 animate-fade-in" @click.outside="showSeedSummaryModal = false">
-                    <div class="flex items-start gap-4">
-                        <div class="p-3 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 rounded-xl shrink-0">
-                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-bold text-[var(--text-primary)]">Seed Defaults Summary</h3>
-                            <p class="text-sm text-[var(--text-secondary)] mt-2">
-                                Seeding process completed successfully. Let's see the metrics updates:
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-3 gap-3 text-center text-xs">
-                        <div class="bg-emerald-50/50 dark:bg-emerald-950/10 p-3 rounded-xl border border-emerald-100/30">
-                            <span class="block text-xl font-extrabold text-emerald-600 dark:text-emerald-400" x-text="seedSummaryData.created"></span>
-                            <span class="text-[10px] text-[var(--text-secondary)] font-bold uppercase mt-1 block">Created</span>
-                        </div>
-                        <div class="bg-indigo-50/50 dark:bg-indigo-950/10 p-3 rounded-xl border border-indigo-100/30">
-                            <span class="block text-xl font-extrabold text-indigo-600 dark:text-indigo-400" x-text="seedSummaryData.skipped"></span>
-                            <span class="text-[10px] text-[var(--text-secondary)] font-bold uppercase mt-1 block">Skipped</span>
-                        </div>
-                        <div class="bg-slate-50 dark:bg-slate-800/30 p-3 rounded-xl border border-slate-200/20">
-                            <span class="block text-xl font-extrabold text-[var(--text-primary)]" x-text="seedSummaryData.total"></span>
-                            <span class="text-[10px] text-[var(--text-secondary)] font-bold uppercase mt-1 block">Total Standard</span>
-                        </div>
-                    </div>
-
-                    <div class="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
-                        <button type="button" @click="showSeedSummaryModal = false" class="px-5 py-2 text-sm font-semibold rounded-xl bg-[#5B5FF6] hover:bg-[#4F46E5] text-white shadow-sm transition cursor-pointer border-none">
-                            Got it, thanks!
                         </button>
                     </div>
                 </div>

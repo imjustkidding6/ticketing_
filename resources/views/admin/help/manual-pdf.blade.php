@@ -696,12 +696,19 @@
         <div class="screenshot-caption">Figure 25: SLA Policy Registry Overview</div>
     </div>
 
-    <div class="step-header">Step 1: Configure Response & Resolution Targets</div>
-    <p>Click <strong>Create Policy</strong> to establish response time targets per priority.</p>
-    <div class="screenshot-box">
-        <img src="{{ public_path('docs/screenshots/26_create_sla_policy.png') }}" class="screenshot-img" alt="Create Policy Modal">
-        <div class="screenshot-caption">Figure 26: Configure SLA Policy Targets Modal</div>
-    </div>
+    <p>
+        This page is <strong>read-only</strong>. SLA targets belong to the workspace that owns
+        them, so they are set per workspace and not from the platform console. Each row names
+        its <strong>Workspace</strong> and links to that workspace's record.
+    </p>
+
+    <div class="step-header">Step 1: Read the targets a workspace has set</div>
+    <p>
+        The registry lists every workspace's policies side by side: response and resolution
+        targets, whether the policy is active, and how many tickets are using it. Use
+        <strong>Export</strong> for the same data as CSV, including the Workspace column.
+        The reference targets below are the standard defaults a workspace starts from.
+    </p>
     <table class="data-table">
         <tr>
             <th>Priority Tier</th>
@@ -735,11 +742,14 @@
         </tr>
     </table>
 
-    <div class="step-header">Step 2: Edit Tier Response Targets & Escalation Rules</div>
-    <div class="screenshot-box">
-        <img src="{{ public_path('docs/screenshots/27_edit_sla_policy.png') }}" class="screenshot-img" alt="Edit SLA Targets">
-        <div class="screenshot-caption">Figure 27: Edit SLA Target Response Times & Tier Escalation Rules</div>
-    </div>
+    <div class="step-header">Step 2: Change a workspace's targets</div>
+    <p>
+        Open the workspace from the row's <strong>Open workspace</strong> link, then use
+        <strong>Impersonate</strong> on the workspace record. Editing happens inside the
+        workspace, under <em>Settings &rarr; SLA</em>, and requires the workspace's own
+        permissions. Opening <code>/{slug}/settings/sla</code> directly does not work for
+        platform staff: it needs a tenant role, and the SLA module is a Business-plan feature.
+    </p>
 
     <!-- 10. NOTIFICATIONS -->
     <div class="page-break"></div>
