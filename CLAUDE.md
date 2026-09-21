@@ -83,7 +83,7 @@ Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->get();
 
 **Admin controllers** (`app/Http/Controllers/Admin/`) intentionally operate across tenants.
 
-**View-layer guardrails (CI-enforced by `TenantIsolationGuardrailsTest`):** views outside `resources/views/admin/` must not `@extends('layouts.admin')` (give admin screens their own view under `admin/` — never repurpose a tenant view), and any `withoutGlobalScopes()` in a non-admin view must chain `->where('tenant_id', ...)` on the same line. A controller serving both surfaces should pick the view by route, e.g. `view($request->routeIs('admin.*') ? 'admin.sla.index' : 'sla.index', ...)` (see `SlaPolicyController`).
+**Isolation guardrails (CI-enforced by `TenantIsolationGuardrailsTest`):** it inspected Blade only for a long time, which is why an unscoped admin query in PHP went unnoticed. It now also scans `app/` (statement-level, joined on `;`, with a justified `ALLOWED_BYPASSES` list) and enforces a second-order rule that a static check *can* express: **a file outside `App\Http\Controllers\Admin\` that branches on `routeIs('admin.*')` has self-declared as dual-surface and must be registered in `DUAL_SURFACE` with behaviour tests covering both halves** (`DualSurfaceScopeTest`). A static check cannot decide whether a given `withoutGlobalScopes()` is legitimate — surface is not a property of a file. Views outside `resources/views/admin/` must not `@extends('layouts.admin')` (give admin screens their own view under `admin/` — never repurpose a tenant view), and any `withoutGlobalScopes()` in a non-admin view must chain `->where('tenant_id', ...)` on the same line. A controller serving both surfaces should pick the view by route, e.g. `view($request->routeIs('admin.*') ? 'admin.sla.index' : 'sla.index', ...)` (see `SlaPolicyController`).
 
 ### Feature Gating (3-Tier Plans)
 
@@ -158,7 +158,7 @@ When adding a permission: add it to a group in `PERMISSION_GROUPS`, grant it in 
 
 Ancillary namespaces:
 - `app/Notifications/` — Per-event notifications (`TicketCreated`, `TicketAssigned`, `TicketStatusChanged`, `SlaBreachWarning`, client variants, `SystemAnnouncement`). Dispatched by services rather than controllers; respect the `email_notifications` feature where relevant.
-- `app/Support/` — Framework-agnostic helpers (e.g., `TenantTime`). Not services; no side effects.
+- `app/Support/` — Framework-agnostic helpers (`ZonedTime` + `TenantTime`/`AdminTime`, `SystemGuide`, `FileParser`). Not services; no side effects.
 
 ### Activity Logging
 
@@ -212,7 +212,9 @@ SLA policies are managed **per client-tier** (not per-id): routes `sla.index`, `
 
 ### Timezones & Reporting (CRITICAL)
 
-Storage and `config('app.timezone')` are **UTC**; display goes through `TenantTime::format()` in the tenant's timezone. The trap is filtering: `whereDate(..., today())`, `now()->startOfMonth()` and `Carbon::parse($date)->startOfDay()` all evaluate on the *server's* calendar, so a report could exclude a row it then printed as being inside the range.
+Storage and `config('app.timezone')` are **UTC**; display goes through `TenantTime::format()` in the tenant's timezone.
+
+**Two zones, each named explicitly.** `App\Support\ZonedTime` holds the date maths; `TenantTime` supplies the workspace timezone and `AdminTime` supplies `admin_timezone`. `TenantTime::timezone()` used to branch on whether `session('current_tenant_id')` happened to be set, so an admin who had impersonated a workspace saw different day boundaries from one who had not — same page, different answers from browsing history. Callers state which zone they want; nothing infers it. In Blade: **`@localdt` for tenant screens, `@admindt` for admin screens** (`TenantIsolationGuardrailsTest` fails an admin view using `@localdt`). A grep for `TenantTime` cannot see through the directive — that is how 11 call sites were missed once already. The trap is filtering: `whereDate(..., today())`, `now()->startOfMonth()` and `Carbon::parse($date)->startOfDay()` all evaluate on the *server's* calendar, so a report could exclude a row it then printed as being inside the range.
 
 Use `App\Support\TenantTime` for every date boundary that reaches a query:
 
@@ -236,7 +238,14 @@ Dev default (`.env.example`): `QUEUE_CONNECTION=database`, `CACHE_STORE=database
 
 ### Testing
 
-- **PHPUnit:** Uses MySQL (not SQLite), `RefreshDatabase` trait, test database `ticketing_test`. The dev box is **dockerized** (containers `ticketing-app`/`ticketing-mysql`/`ticketing-nginx`/`ticketing-redis`; Sail's `laravel.test` service is not used). MySQL is published on host port **3320**; tests run from the host against `127.0.0.1` also work via `phpunit.xml`. Run the suite either way: `php artisan test --compact` on the host, or inside the container with `docker exec ticketing-app php artisan test`.
+- **PHPUnit:** Uses MySQL (not SQLite), `RefreshDatabase` trait, test database `ticketing_test`. The dev box is **dockerized** (containers `ticketing-app`/`ticketing-mysql`/`ticketing-nginx`/`ticketing-redis`; Sail's `laravel.test` service is not used). The MySQL container is often renamed with a hash prefix, so resolve it by image rather than by name: `docker ps --filter ancestor=mysql:8.0`.
+- **Use the bundled runner, not the raw command.** `phpunit.xml` pins `DB_USERNAME`/`DB_PASSWORD` to `root`/`root`, and PHPUnit sets those *before* Laravel loads `.env` — Dotenv is immutable, so `.env` cannot override them. When the container's root password differs, **every test fails on authentication before executing**, which looks exactly like a branch having broken everything and has cost real time more than once.
+```bash
+.claude/skills/delivery-team/scripts/run_tests.sh                     # full suite (~12 min)
+.claude/skills/delivery-team/scripts/run_tests.sh --filter=TicketTest # one class
+TEST_DB_NAME=ticketing_mine .claude/skills/delivery-team/scripts/run_tests.sh   # isolated DB
+```
+  `TEST_DB_NAME` matters whenever two runs could overlap: sharing one database tears down the other's schema mid-run and surfaces as `Table 'migrations' already exists` — a collision that reads as a broken branch. The script creates the database and refuses to run from a linked git worktree, since the app container mounts only the main checkout and would silently test the wrong branch.
 - **Testing-disk permission gotcha:** if you run tests *inside* the container (as root) and later on the host, branding/logo tests fail with `UnexpectedValueException: FilesystemIterator … Permission denied` because `storage/framework/testing/disks/public/tenant-logos` was created `root:root 0700`. Clear it through the container: `docker exec ticketing-app rm -rf storage/framework/testing/disks/public/tenant-logos`. (Passwordless `sudo` is not available on the host.)
 - **Playwright E2E:** Config in `playwright.config.ts`. Tests in `tests/e2e/`. Runs **headless**, chromium only, 1920x1080, `baseURL` `http://localhost:8005`, `screenshot: 'only-on-failure'`, `video: 'retain-on-failure'`, 180s timeout.
 - **Test helpers** in `tests/TestCase.php`: `withTenant($tenant)` sets test context, `tenantUrl($path)` generates tenant-prefixed URLs.
@@ -437,6 +446,8 @@ Reference implementation and the fuller rationale: `../projects/alstylehris/docs
 ### CI/CD
 
 GitHub Actions (`.github/workflows/`):
-- **test.yml** — runs on all pushes and PRs. Spins up MySQL + Redis services, runs `php artisan test --compact` and Pint lint check.
-- **deploy.yml** — runs test job first, then on `main` only: builds Docker image → pushes to ECR → runs migrations as an ECS one-off task → updates `ticketing-web` and `ticketing-worker` ECS services → waits for stability. Web and queue worker are separate ECS services.
+- **test.yml** — pushes and PRs, plus `workflow_call:` so `deploy.yml` can reuse it (it could not before, so every deploy failed at its first job). MySQL + Redis services, `php artisan test --compact`, then `vendor/bin/pint --test`. **Pint is a hard gate**: it inspects the whole repo, and `pint --dirty` locally only checks changed files, so the suite can be green while CI is red on files nobody touched.
+- **deploy.yml** — test job first, then on `main` only: build → ECR → migrate → update services → wait. The migration runs as a one-off ECS task that is **waited on and exit-code checked**; a failed migration aborts before any service is updated. Both `ticketing-web` and `ticketing-worker` are waited for stability. A `rollback` job captures both task-definition revisions *before* the deploy and restores them on failure — it deliberately does not revert the schema, because rolling code back under a migrated database is how an incident becomes data loss.
+- Migrations run **only** there. `docker/entrypoint.sh` is gated on `RUN_MIGRATIONS_ON_BOOT` (false in both ECS task definitions); it used to migrate on every container start, so every web task, every worker task and the deploy task raced each other.
+- The ECS health check points at **`/health`** (`HealthCheckController`, checks DB + cache), not `/up`. `/up` returns 200 while the database is down, so `wait services-stable` reported success on deploys that had taken the site offline.
 <!-- Laravel Boost guidelines are auto-injected at runtime by the Laravel Boost MCP server. Do not duplicate them here. -->
