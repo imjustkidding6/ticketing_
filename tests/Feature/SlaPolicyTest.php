@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\PlanFeature;
 use App\Models\License;
 use App\Models\Plan;
+use App\Models\SlaCalendar;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\Ticket;
@@ -78,12 +79,14 @@ class SlaPolicyTest extends TestCase
     {
         [$tenant] = $this->setupContext('business');
 
+        // Both clocks are required on every row — the form always posts them, and a
+        // silently-defaulted mode is how a target ends up on a clock nobody chose.
         $this->post($this->tenantUrl('/sla/tier/premium'), [
             'rows' => [
-                'low' => ['response' => 20, 'resolution' => 40, 'is_active' => '1'],
-                'medium' => ['response' => 10, 'resolution' => 20, 'is_active' => '1'],
-                'high' => ['response' => 5, 'resolution' => 10, 'is_active' => '1'],
-                'critical' => ['response' => 2, 'resolution' => 5, 'is_active' => '0'],
+                'low' => ['response' => 20, 'resolution' => 40, 'is_active' => '1', 'response_mode' => 'calendar', 'resolution_mode' => 'calendar'],
+                'medium' => ['response' => 10, 'resolution' => 20, 'is_active' => '1', 'response_mode' => 'calendar', 'resolution_mode' => 'calendar'],
+                'high' => ['response' => 5, 'resolution' => 10, 'is_active' => '1', 'response_mode' => 'calendar', 'resolution_mode' => 'calendar'],
+                'critical' => ['response' => 2, 'resolution' => 5, 'is_active' => '0', 'response_mode' => 'calendar', 'resolution_mode' => 'calendar'],
             ],
         ])->assertRedirect($this->tenantUrl('/sla'));
 
@@ -351,10 +354,151 @@ class SlaPolicyTest extends TestCase
         $response = $this->get($this->tenantUrl('/sla/tier/basic/edit'));
 
         $response->assertOk();
-        // The number must never be typed without its unit: an admin entering "48"
-        // is entitled to know it is 48 elapsed clock hours, not two working days.
-        $response->assertSee('Response (calendar hours)');
-        $response->assertSee('Resolution (calendar hours)');
+        // The number must never be typed without its unit. The unit moved from the column
+        // header onto a per-target control when the clock became choosable, but an admin
+        // entering "48" must still be able to read what 48 means without leaving the page.
+        $response->assertSee('calendar hours');
+        $response->assertSee('Calendar hours are elapsed clock time', false);
+    }
+
+    private function nineToFiveCalendar(Tenant $tenant): SlaCalendar
+    {
+        return SlaCalendar::factory()->nineToFive()->create([
+            'tenant_id' => $tenant->id,
+            'timezone' => 'UTC',
+        ]);
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function tierPayload(string $responseMode = 'calendar', string $resolutionMode = 'calendar'): array
+    {
+        $rows = [];
+        foreach (SlaPolicy::PRIORITIES as $priority) {
+            $rows[$priority] = [
+                'response' => 4,
+                'resolution' => 8,
+                'response_mode' => $responseMode,
+                'resolution_mode' => $resolutionMode,
+                'is_active' => 1,
+            ];
+        }
+
+        return $rows;
+    }
+
+    public function test_tier_editor_offers_a_mode_per_clock(): void
+    {
+        [$tenant] = $this->setupContext('business');
+        $this->nineToFiveCalendar($tenant);
+
+        $response = $this->get($this->tenantUrl('/sla/tier/basic/edit'));
+
+        $response->assertOk();
+
+        // Two selects per priority row, four rows: per clock, not per policy. A per-row
+        // control cannot express "respond on the wall clock, resolve on the working one",
+        // which is the sentence this whole feature exists for.
+        foreach (SlaPolicy::PRIORITIES as $priority) {
+            $response->assertSee('rows['.$priority.'][response_mode]', false);
+            $response->assertSee('rows['.$priority.'][resolution_mode]', false);
+        }
+
+        $this->assertSame(8, substr_count($response->getContent(), '_mode]"'));
+
+        // Every one defaults to calendar: nothing drifts onto business hours by accident.
+        $this->assertSame(8, substr_count($response->getContent(), '<option value="calendar" selected>'));
+    }
+
+    public function test_business_hours_option_is_disabled_when_no_calendar_exists(): void
+    {
+        $this->setupContext('business');
+
+        $response = $this->get($this->tenantUrl('/sla/tier/basic/edit'));
+
+        $response->assertOk();
+        // The state every workspace is in today, so it must explain itself rather than
+        // just greying a control out.
+        $response->assertSee('<option value="business" disabled', false);
+        $response->assertSee('Business hours are unavailable until you set up a business-hours calendar.');
+        $response->assertSee($this->tenantUrl('/sla/calendar'), false);
+    }
+
+    public function test_update_tier_rejects_business_hours_without_a_usable_calendar(): void
+    {
+        $this->setupContext('business');
+
+        // A disabled option is a hint to a browser, not a guard. The POST is the guard.
+        $response = $this->post($this->tenantUrl('/sla/tier/basic'), [
+            'rows' => $this->tierPayload('calendar', 'business'),
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasErrors('rows');
+        $this->assertDatabaseCount('sla_policies', 0);
+    }
+
+    public function test_update_tier_rejects_an_unknown_mode(): void
+    {
+        [$tenant] = $this->setupContext('business');
+        $this->nineToFiveCalendar($tenant);
+
+        $response = $this->post($this->tenantUrl('/sla/tier/basic'), [
+            'rows' => $this->tierPayload('elapsed', 'calendar'),
+        ]);
+
+        $response->assertSessionHasErrors('rows.low.response_mode');
+        $this->assertDatabaseCount('sla_policies', 0);
+    }
+
+    public function test_update_tier_persists_both_modes(): void
+    {
+        [$tenant] = $this->setupContext('business');
+        $this->nineToFiveCalendar($tenant);
+
+        $this->post($this->tenantUrl('/sla/tier/basic'), [
+            'rows' => $this->tierPayload('calendar', 'business'),
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('sla_policies', [
+            'tenant_id' => $tenant->id,
+            'client_tier' => 'basic',
+            'priority' => 'critical',
+            'response_hours_mode' => 'calendar',
+            'resolution_hours_mode' => 'business',
+        ]);
+    }
+
+    public function test_enterprise_tier_warns_but_still_saves_business_hours(): void
+    {
+        [$tenant] = $this->setupContext('business');
+        $this->nineToFiveCalendar($tenant);
+
+        $response = $this->post($this->tenantUrl('/sla/tier/enterprise'), [
+            'rows' => $this->tierPayload('business', 'business'),
+        ]);
+
+        // Warn, do not block: encoding pricing policy in a validator ages badly.
+        $response->assertSessionHasNoErrors();
+        $response->assertSessionHas('warning');
+        $response->assertSessionHas('success');
+        $this->assertDatabaseHas('sla_policies', [
+            'tenant_id' => $tenant->id,
+            'client_tier' => 'enterprise',
+            'priority' => 'critical',
+            'response_hours_mode' => 'business',
+        ]);
+    }
+
+    public function test_enterprise_tier_does_not_warn_when_every_clock_stays_calendar(): void
+    {
+        [$tenant] = $this->setupContext('business');
+        $this->nineToFiveCalendar($tenant);
+
+        $this->post($this->tenantUrl('/sla/tier/enterprise'), [
+            'rows' => $this->tierPayload('calendar', 'calendar'),
+        ])->assertSessionMissing('warning');
     }
 
     public function test_sla_index_explains_the_clock(): void

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Traits\BelongsToTenant;
 use App\Models\Traits\LogsActivity;
+use App\Services\SlaService;
 use Carbon\CarbonInterface;
 use Database\Factories\TicketFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -528,6 +529,11 @@ class Ticket extends Model
 
     /**
      * Get effective resolution time in hours (excluding hold time).
+     *
+     * Measured in the clock its own target is stated in. This is the edit that is easy
+     * to omit and expensive to omit: if the deadline is set in open hours and the figure
+     * is reported in wall-clock hours, a ticket closed comfortably inside its
+     * business-hours deadline prints "60h / 16h target" beside a green MET badge.
      */
     public function getEffectiveResolutionTimeHours(): ?float
     {
@@ -535,14 +541,15 @@ class Ticket extends Model
             return null;
         }
 
-        $totalHours = $this->created_at->diffInMinutes($this->closed_at) / 60;
-        $holdHours = $this->getTotalHoldTimeMinutes() / 60;
-
-        return round(max(0, $totalHours - $holdHours), 1);
+        return $this->effectiveHoursTo($this->closed_at, $this->slaPolicy?->resolution_hours_mode);
     }
 
     /**
      * Get effective response time in hours (excluding hold time).
+     *
+     * Note this is NOT what SlaService::getComplianceReport() judges the response verdict
+     * on — that uses the raw figure with no hold subtracted, because this method subtracts
+     * *total* hold including holds taken after the first response and would under-report.
      */
     public function getEffectiveResponseTimeHours(): ?float
     {
@@ -550,7 +557,24 @@ class Ticket extends Model
             return null;
         }
 
-        $totalHours = $this->created_at->diffInMinutes($this->first_response_at) / 60;
+        return $this->effectiveHoursTo($this->first_response_at, $this->slaPolicy?->response_hours_mode);
+    }
+
+    /**
+     * Elapsed hours from creation to $milestone on the given clock, less hold.
+     *
+     * Approximation, deliberately: we store a running hold total and hold_started_at, not
+     * the segment boundaries, so under a business clock we cannot know how many of those
+     * banked wall-clock minutes were actually open ones. A hold running overnight banks 16
+     * hours of which zero were open, and subtracting them whole would push the figure
+     * negative. The max(0, ...) clamp is the proportionate fix — a hold-segment table for
+     * a rounding difference is a subsystem nobody asked for. Revisit if a tenant reports it.
+     */
+    private function effectiveHoursTo(CarbonInterface $milestone, ?string $mode): float
+    {
+        $clock = app(SlaService::class)->clockFor($mode);
+
+        $totalHours = $clock->businessHoursBetween($this->created_at, $milestone);
         $holdHours = $this->getTotalHoldTimeMinutes() / 60;
 
         return round(max(0, $totalHours - $holdHours), 1);

@@ -23,10 +23,14 @@ class ServiceReportService
 
         $general = AppSetting::getByGroup('general');
 
-        // Exclude hold time when judging SLA compliance: a ticket parked on hold
-        // shouldn't be marked breached for time it spent legitimately paused.
+        // Hold time is already excluded — by SlaService::extendForHold(), which pushed
+        // resolution_due_at out by the hold period when the hold ended. Subtracting it
+        // again here counted it twice, and once deadlines can be extended in business
+        // minutes the two subtractions are not even in the same units. The deadline is
+        // the hold-adjusted figure; compare against it plainly, exactly as the breach
+        // scheduler and getComplianceReport() do.
         $slaMet = $ticket->closed_at && $ticket->resolution_due_at
-            ? $ticket->closed_at->copy()->subMinutes($ticket->getTotalHoldTimeMinutes())->lte($ticket->resolution_due_at)
+            ? $ticket->closed_at->lte($ticket->resolution_due_at)
             : null;
 
         $reportData = [

@@ -2,12 +2,16 @@
 
 namespace App\Services;
 
+use App\Models\SlaCalendar;
 use App\Models\SlaPolicy;
 use App\Models\Ticket;
+use App\Support\SlaClock;
 use App\Support\TenantTime;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 
 class SlaService
 {
@@ -28,38 +32,100 @@ class SlaService
         // exactly when closed_at <= resolution_due_at.
         $holdMinutes = $ticket->getTotalHoldTimeMinutes();
 
+        // One clock per target, chosen by that target's own mode. Calendar mode goes
+        // through SlaClock::alwaysOpen() rather than branching back to addHours(): one
+        // code path with two clocks, which is what makes the equality with the old
+        // expression a property worth testing instead of a tautology.
+        $responseClock = $this->clockFor($policy->response_hours_mode);
+        $resolutionClock = $this->clockFor($policy->resolution_hours_mode);
+
         $ticket->update([
             'sla_policy_id' => $policy->id,
-            'response_due_at' => $ticket->created_at->copy()
-                ->addHours($policy->response_time_hours)
-                ->addMinutes($holdMinutes),
-            'resolution_due_at' => $ticket->created_at->copy()
-                ->addHours($policy->resolution_time_hours)
-                ->addMinutes($holdMinutes),
+            'response_due_at' => $responseClock->addBusinessMinutes(
+                $ticket->created_at, $policy->response_time_hours * 60 + $holdMinutes
+            ),
+            'resolution_due_at' => $resolutionClock->addBusinessMinutes(
+                $ticket->created_at, $policy->resolution_time_hours * 60 + $holdMinutes
+            ),
         ]);
     }
 
     /**
      * Push the deadlines out by a period the ticket spent on hold.
+     *
+     * The extension is measured in the target's OWN clock: a 6-hour hold on a
+     * 09:00-17:00 calendar starting at 15:00 moves the deadline to 13:00 the next day,
+     * not to 21:00 tonight. $holdMinutes itself stays wall-clock — it is what
+     * changeStatus() banks and what getTotalHoldTimeMinutes() reports, and converting it
+     * here would change hold accounting for calendar-mode policies too.
      */
     public function extendForHold(Ticket $ticket, int $holdMinutes): void
     {
+        // Load-bearing, and more so than it looks: addBusinessMinutes($due, 0) returns
+        // the NEXT OPEN instant rather than $due, so without this early return a
+        // zero-minute hold would shunt a deadline that fell at 02:00 forward to 09:00.
         if ($holdMinutes <= 0) {
             return;
         }
 
+        $policy = $ticket->slaPolicy;
         $updates = [];
 
         if ($ticket->response_due_at && ! $ticket->first_response_at) {
-            $updates['response_due_at'] = $ticket->response_due_at->copy()->addMinutes($holdMinutes);
+            $updates['response_due_at'] = $this->clockFor($policy?->response_hours_mode)
+                ->addBusinessMinutes($ticket->response_due_at, $holdMinutes);
         }
 
         if ($ticket->resolution_due_at) {
-            $updates['resolution_due_at'] = $ticket->resolution_due_at->copy()->addMinutes($holdMinutes);
+            $updates['resolution_due_at'] = $this->clockFor($policy?->resolution_hours_mode)
+                ->addBusinessMinutes($ticket->resolution_due_at, $holdMinutes);
         }
 
         if ($updates) {
             $ticket->update($updates);
+        }
+    }
+
+    /**
+     * The clock a target in this mode is measured on. The single fallback point, and
+     * public because Ticket::getEffective*TimeHours() must measure in exactly the same
+     * clock the deadline was set in — a second resolution path is how the printed figure
+     * and the met/missed verdict drift apart.
+     *
+     * This NEVER throws. It runs inside ticket creation, so a workspace that deleted its
+     * calendar must still be able to file a ticket; business hours is blocked where it is
+     * configured (the tier editor and the calendar editor), not where a ticket is written.
+     */
+    public function clockFor(?string $mode): SlaClock
+    {
+        $tz = TenantTime::timezone();
+
+        if ($mode !== 'business') {
+            return SlaClock::alwaysOpen($tz);
+        }
+
+        $calendar = SlaCalendar::query()->default()->first();
+
+        if (! $calendar || ! $calendar->hasOpenWindows()) {
+            Log::warning('SLA business-hours mode with no usable calendar; falling back to calendar hours.', [
+                'tenant_id' => session('current_tenant_id'),
+            ]);
+
+            return SlaClock::alwaysOpen($tz);
+        }
+
+        try {
+            return SlaClock::fromCalendar($calendar);
+        } catch (InvalidArgumentException $e) {
+            // hasOpenWindows() already ruled out the empty calendar; this catches the
+            // pathological one (every window zero-length) that EmptySlaCalendarException
+            // also covers. Ticket creation must not be the thing that discovers it.
+            Log::warning('SLA calendar could not be used; falling back to calendar hours.', [
+                'tenant_id' => session('current_tenant_id'),
+                'error' => $e->getMessage(),
+            ]);
+
+            return SlaClock::alwaysOpen($tz);
         }
     }
 
@@ -189,8 +255,14 @@ class SlaService
             // been pushed out by extendForHold(), so comparing against it produced rows
             // reading "10h / 4h target" beside a MET badge. response_due_at is left
             // untouched — the breach scheduler depends on the hold extension.
+            // ...but "raw" means "in whichever clock the target is stated in". Under a
+            // business-hours response target the printed hours must be business hours
+            // too, or a 4h target met at 10:00 the next morning prints "17h / 4h" beside
+            // a MET badge — the same defect in the other clock. Still no hold subtracted.
             $responseHours = $t->first_response_at
-                ? round($t->created_at->diffInHours($t->first_response_at, false), 2)
+                ? ($t->slaPolicy?->responseClockIsBusiness()
+                    ? app(self::class)->clockFor('business')->businessHoursBetween($t->created_at, $t->first_response_at)
+                    : round($t->created_at->diffInHours($t->first_response_at, false), 2))
                 : null;
             $responseTarget = $t->slaPolicy?->response_time_hours;
             $responseMet = $responseHours !== null && $responseTarget !== null && $responseHours <= $responseTarget;
@@ -210,6 +282,8 @@ class SlaService
                 'resolution_hours' => $resolutionHours,
                 'resolution_target' => $t->slaPolicy?->resolution_time_hours,
                 'resolution_status' => $resolutionStatus,
+                'response_clock' => $t->slaPolicy?->response_hours_mode ?? 'calendar',
+                'resolution_clock' => $t->slaPolicy?->resolution_hours_mode ?? 'calendar',
             ];
         });
 

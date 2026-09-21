@@ -261,9 +261,20 @@ return [
                 ], 'minutes' => 3, 'permission' => ['create sla policies', 'update sla policies']],
                 ['faq' => [
                     ['q' => 'A ticket shows as overdue but the SLA report says it met its target.', 'a' => 'That should no longer happen: the deadline itself is extended when a hold ends, so the dashboard and the report now apply the same rule. If you still see it, the ticket is worth reporting.'],
-                    ['q' => 'Does the SLA pause outside working hours?', 'a' => 'No — targets are measured in <strong>calendar hours</strong>, which is a deliberate choice rather than a limitation. A 24-hour target set on Friday evening expires on Saturday evening, whether or not anyone is rostered. Set targets that reflect the cover you actually run: if you want "two working days", the calendar-hours equivalent is what to type.'],
+                    ['q' => 'Does the SLA pause outside working hours?', 'a' => 'It depends on the clock you chose for that target. On <strong>calendar hours</strong> — the default for every target — it does not: a 24-hour target set on Friday evening expires on Saturday evening whether or not anyone is rostered. On <strong>business hours</strong> it does: only the time your workspace is open is counted, so a Friday-evening ticket does not start its clock until you open on Monday.'],
                     ['q' => 'What is a calendar hour?', 'a' => 'An hour of elapsed clock time, counted continuously from the moment the ticket is created — nights, weekends and public holidays all count. The only thing that stops the clock is putting the ticket <strong>on hold</strong>, which pushes the deadline out by the length of the hold.'],
+                    ['q' => 'What is a business hour?', 'a' => 'An hour your workspace is open, as defined on your business-hours calendar. A ticket arriving outside those hours does not start its clock until you next open. There is no "days" unit: "two working days" on an eight-hour calendar is <strong>16 business hours</strong>.'],
+                    ['q' => 'I changed a target to business hours and nothing moved.', 'a' => 'Deadlines are worked out once, when the ticket is created, and again if its priority changes. Tickets already open keep the deadline they were given — a change here can never retroactively breach or rescue anything.'],
                 ]],
+                ['h' => 'Business hours calendar', 'permission' => 'update sla policies'],
+                ['p' => 'Each target carries its own clock, so <em>respond within 2 calendar hours, resolve within 16 business hours</em> is one policy row. Business hours need somewhere to read your opening times from, which is the <strong>business-hours calendar</strong> — one per workspace, reached from the SLA policies page.', 'permission' => 'update sla policies'],
+                ['ul' => [
+                    'Set the weekly shifts. A day with no shifts is a closed day; two shifts on one day is a closed lunch.',
+                    'Add your holidays. They <strong>repeat every year</strong> unless you say otherwise — a calendar nobody repopulates in January flags agents for breaching on days nobody worked.',
+                    'The calendar carries its own timezone, separate from the one your reports are read in.',
+                    'Until a calendar exists, business hours cannot be selected at all and every target stays on calendar hours.',
+                ], 'permission' => 'update sla policies'],
+                ['note' => 'Changing your opening hours affects reporting for tickets already closed, because a closed ticket\'s resolution figure is measured on the clock its target names. Open tickets keep their deadlines either way.', 'permission' => 'update sla policies'],
             ],
 
             'tour' => [
@@ -274,7 +285,7 @@ return [
                 'steps' => [
                     ['route' => 'sla.index', 'selector' => '[data-tour="sla-tiers"]', 'title' => 'One set of targets per client tier', 'body' => 'Every client sits in a tier, and each tier carries its own response and resolution hours for each priority. On an empty workspace, seed the defaults first — a priority with no matching policy cannot be set at all.', 'advance' => 'next', 'side' => 'bottom'],
                     ['route' => 'sla.index', 'selector' => '[data-tour="sla-tier"]', 'title' => 'Targets are set per tier', 'body' => 'Each client tier has its own response and resolution hours for each priority. Open one to adjust it.', 'advance' => 'click', 'side' => 'bottom'],
-                    ['route' => 'sla.edit-tier', 'selector' => '[data-tour="sla-targets"]', 'title' => 'Two clocks, not one', 'body' => 'Response is how long until someone replies; resolution is how long until it is closed. They are measured separately and breach separately. Both are counted in calendar hours — elapsed clock time, including nights, weekends and holidays.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'sla.edit-tier', 'selector' => '[data-tour="sla-targets"]', 'title' => 'Two clocks, not one', 'body' => 'Response is how long until someone replies; resolution is how long until it is closed. They are measured separately, breach separately, and each one names its own clock: calendar hours are elapsed clock time including nights and weekends, business hours count only the time you are open.', 'advance' => 'next', 'side' => 'bottom'],
                     ['route' => 'sla.edit-tier', 'selector' => '[data-tour="sla-save"]', 'title' => 'This changes new tickets only', 'body' => 'Tickets already open keep the deadline they were given. Changing a target here does not retroactively breach or rescue anything.', 'advance' => 'next', 'side' => 'top'],
                 ],
             ],
