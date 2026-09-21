@@ -54,10 +54,12 @@ class TenantIsolationGuardrailsTest extends TestCase
      */
     private const DUAL_SURFACE = [
         'app/Http/Controllers/SlaPolicyController.php' => 'Tests\Feature\DualSurfaceScopeTest',
-        // The help centre renders the same config/help.php filtered for a
-        // tenant role and unfiltered for platform staff; DualSurfaceScopeTest
-        // asserts the tenant half only sees what the reader's role permits.
-        'app/Http/Controllers/TutorialController.php' => 'Tests\Feature\DualSurfaceScopeTest',
+        // The help centre renders the same config/help.php filtered for a tenant
+        // role and unfiltered for platform staff, so its tenant half is a
+        // permission question, not a scope one. HelpPermissionSweepTest already
+        // walks every seeded role against every topic and tour; pointing at it
+        // beats a thinner assertion here that would pass with the filter removed.
+        'app/Http/Controllers/TutorialController.php' => 'Tests\Feature\HelpPermissionSweepTest',
         // The base controller's permission bypass: is_admin skips checks on
         // admin.* routes only. Covered by asserting it does NOT apply on a
         // tenant route.
@@ -128,7 +130,11 @@ class TenantIsolationGuardrailsTest extends TestCase
         [
             'file' => 'app/Services/AiAssistantService.php',
             'contains' => "\$w->where('email', 'like'",
-            'why' => 'Relation filter inside a query whose own statement filters on tenant_id.',
+            // Deliberately precise: the tenant_id filter is NOT in this statement.
+            // queryTickets() builds $query with ->where('tenant_id', $conversation->tenant_id)
+            // a few statements earlier and this only narrows the client relation
+            // on that same builder, which cannot widen the row set.
+            'why' => 'Narrows the client relation on a builder already filtered by tenant_id upstream.',
         ],
         [
             'file' => 'app/Services/TicketService.php',
@@ -136,15 +142,49 @@ class TenantIsolationGuardrailsTest extends TestCase
             'why' => 'Re-queries one already-resolved, already-scoped ticket by primary key.',
         ],
         [
-            // NOT a clean bill of health. Route-model binding here ignores the
-            // tenant scope, and AiAssistantController::myConversationMessages
-            // compensates with an explicit tenant_id/user_id check while
-            // showConversation (settings.ai.conversation) does not. Raised as a
-            // follow-up package; listed so this guardrail can ship without
-            // either hiding it or blocking on a fix in another subsystem.
+            // Route-model binding resolves unscoped so the controller can answer
+            // 404 rather than leak the difference between "not yours" and "does
+            // not exist". Both consumers re-check: myConversationMessages() on
+            // tenant_id + user_id + channel, showConversation() on tenant_id
+            // (added in ca81046). A third consumer must do the same.
             'file' => 'app/Models/ChatConversation.php',
             'contains' => 'public function resolveRouteBinding',
-            'why' => 'KNOWN GAP — callers must check tenant_id themselves and one of them does not.',
+            'why' => 'Unscoped binding; every consuming controller re-checks tenant_id itself.',
+        ],
+        [
+            'file' => 'app/Jobs/GenerateBatchEmbeddingsJob.php',
+            'contains' => '$articleQuery = KbArticle::withoutGlobalScopes()',
+            'why' => 'Queued embedding sweep: no session, every tenant by design, writes back per row.',
+        ],
+        [
+            'file' => 'app/Jobs/GenerateBatchEmbeddingsJob.php',
+            'contains' => '$ticketQuery = Ticket::withoutGlobalScopes()',
+            'why' => 'Same sweep, closed tickets. Embeddings are stored on the row they came from.',
+        ],
+        [
+            'file' => 'app/Jobs/GenerateBatchEmbeddingsJob.php',
+            'contains' => '$snippetQuery = LearnedSnippet::withoutGlobalScopes()',
+            'why' => 'Same sweep, learned snippets.',
+        ],
+        [
+            'file' => 'app/Console/Commands/EmbedTicketsCommand.php',
+            'contains' => '$query = Ticket::withoutGlobalScopes()',
+            'why' => 'ai:embed:tickets runs from the scheduler with no session; --tenant narrows it.',
+        ],
+        [
+            'file' => 'app/Console/Commands/EmbedKnowledgeCommand.php',
+            'contains' => '$query = KbArticle::withoutGlobalScopes()',
+            'why' => 'ai:embed:knowledge, as above.',
+        ],
+        [
+            'file' => 'app/Console/Commands/EmbedSnippetsCommand.php',
+            'contains' => '$query = LearnedSnippet::withoutGlobalScopes()',
+            'why' => 'ai:embed:snippets, as above.',
+        ],
+        [
+            'file' => 'app/Console/Commands/ReconcileBugPullRequests.php',
+            'contains' => 'BugReport::withoutGlobalScopes()',
+            'why' => 'Bug reports are reconciled against GitHub issue numbers, which are platform-wide.',
         ],
     ];
 
@@ -160,12 +200,13 @@ class TenantIsolationGuardrailsTest extends TestCase
             if (! str_ends_with($relative, '.php')) {
                 continue;
             }
-            // Admin controllers are cross-tenant by design; console commands and
-            // jobs run without a session and are swept by their own tests.
-            foreach (['app/Http/Controllers/Admin/', 'app/Console/', 'app/Jobs/'] as $exempt) {
-                if (str_starts_with($relative, $exempt)) {
-                    continue 2;
-                }
+            // Only App\Http\Controllers\Admin\ is exempt, because CLAUDE.md
+            // declares it cross-tenant by design. Console commands and jobs are
+            // NOT exempt: they run with no session, which is exactly the state
+            // in which an unscoped query looks like it works. Their sweeps are
+            // listed in ALLOWED_BYPASSES individually instead.
+            if (str_starts_with($relative, 'app/Http/Controllers/Admin/')) {
+                continue;
             }
             $files[$relative] = $file->getContents();
         }
@@ -210,6 +251,39 @@ class TenantIsolationGuardrailsTest extends TestCase
         ));
     }
 
+    /**
+     * @localdt expands to TenantTime::format() and @admindt to AdminTime::format(),
+     * so a grep for either class name cannot see these call sites at all — which
+     * is how eleven admin dates were missed the first time round. Each surface
+     * gets its own directive and this is what keeps them apart.
+     */
+    public function test_each_surface_uses_its_own_date_directive(): void
+    {
+        $offenders = [];
+
+        foreach (File::allFiles(resource_path('views')) as $file) {
+            $relative = str_replace('\\', '/', $file->getRelativePathname());
+            if (! str_ends_with($relative, '.blade.php')) {
+                continue;
+            }
+
+            $contents = $file->getContents();
+            $isAdmin = str_starts_with($relative, 'admin/');
+
+            if ($isAdmin && str_contains($contents, '@localdt')) {
+                $offenders[] = $relative.' uses @localdt — admin screens read the admin timezone (@admindt)';
+            }
+            if (! $isAdmin && str_contains($contents, '@admindt')) {
+                $offenders[] = $relative.' uses @admindt — tenant screens read the workspace timezone (@localdt)';
+            }
+        }
+
+        $this->assertSame([], $offenders, sprintf(
+            "A date must be rendered in the zone of the surface showing it: \n - %s",
+            implode("\n - ", $offenders)
+        ));
+    }
+
     public function test_views_outside_admin_never_bypass_tenant_scope_without_a_tenant_filter(): void
     {
         $offenders = [];
@@ -227,6 +301,16 @@ class TenantIsolationGuardrailsTest extends TestCase
         ));
     }
 
+    /**
+     * Strip //, # and block comments so only executable text is matched.
+     */
+    private function withoutComments(string $php): string
+    {
+        $php = preg_replace('#/\*.*?\*/#s', ' ', $php) ?? $php;
+
+        return preg_replace('#(^|\s)(//|\#)[^\n]*#', ' ', $php) ?? $php;
+    }
+
     public function test_php_outside_admin_never_bypasses_tenant_scope_without_a_tenant_filter(): void
     {
         $offenders = [];
@@ -240,6 +324,12 @@ class TenantIsolationGuardrailsTest extends TestCase
                 if (! str_contains($statement, 'withoutGlobalScopes')) {
                     continue;
                 }
+
+                // Suppress on code only. A chunk almost always carries the
+                // preceding docblock, and a comment mentioning tenant_id — this
+                // codebase's comments discuss it constantly — would otherwise
+                // wave the statement through.
+                $statement = $this->withoutComments($statement);
                 if (str_contains($statement, 'tenant_id') || str_contains($statement, '$tenant->id')) {
                     continue;
                 }

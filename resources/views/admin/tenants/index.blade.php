@@ -119,7 +119,7 @@
                             @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-slate-400">
-                            @localdt($tenant->created_at, 'M d, Y')
+                            @admindt($tenant->created_at, 'M d, Y')
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div class="flex items-center gap-2 sm:gap-3">
@@ -252,7 +252,7 @@
                                 </div>
                                 <div>
                                     <span class="block uppercase tracking-wider text-xs text-slate-400 dark:text-slate-500 font-semibold">CREATED</span>
-                                    <span class="text-base font-semibold text-slate-900 dark:text-[var(--text-primary)] mt-0.5 block">@localdt($tenant->created_at, 'M d, Y')</span>
+                                    <span class="text-base font-semibold text-slate-900 dark:text-[var(--text-primary)] mt-0.5 block">@admindt($tenant->created_at, 'M d, Y')</span>
                                 </div>
                             </div>
 

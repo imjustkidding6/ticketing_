@@ -71,7 +71,7 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             @if($license->expires_at)
-                                @localdt($license->expires_at, 'M d, Y')
+                                @admindt($license->expires_at, 'M d, Y')
                             @else
                                 <span class="text-gray-400">{{ $license->duration_days }}d from activation</span>
                             @endif
@@ -162,7 +162,7 @@
                     <span class="block uppercase tracking-wider text-xs text-slate-400 dark:text-slate-500 font-semibold">EXPIRES</span>
                     <span class="text-base font-semibold text-slate-900 dark:text-[var(--text-primary)] mt-0.5 block">
                         @if($license->expires_at)
-                            @localdt($license->expires_at, 'M d, Y')
+                            @admindt($license->expires_at, 'M d, Y')
                         @else
                             <span class="text-slate-400">{{ $license->duration_days }}d from activation</span>
                         @endif

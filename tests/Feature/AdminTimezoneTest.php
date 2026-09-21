@@ -137,6 +137,38 @@ class AdminTimezoneTest extends TestCase
     }
 
     /**
+     * The regression the first cut of this change shipped: @localdt expands to
+     * TenantTime::format() without naming the class, so eleven admin dates kept
+     * reading the wrong helper while the five literal call sites moved. On this
+     * page issued_at (@admindt) and activated_at (AdminTime::format) sit in
+     * adjacent <dd> elements — if the directive drifts again they disagree by
+     * hours on screen.
+     */
+    public function test_admin_dates_on_one_page_share_one_zone(): void
+    {
+        SystemSetting::set('admin_timezone', 'America/New_York');
+
+        $instant = Carbon::parse('2026-08-27 01:30:00', 'UTC');
+        $license = License::factory()->active()->create([
+            'issued_at' => $instant,
+            'activated_at' => $instant,
+        ]);
+
+        $expected = $instant->copy()->setTimezone('America/New_York')->format('M d, Y H:i');
+
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $response = $this->actingAs($admin)->get("/admin/licenses/{$license->id}");
+
+        $response->assertOk();
+        $this->assertSame(
+            2,
+            substr_count($response->getContent(), $expected),
+            'Issued At and Activated At must render in the same zone — one of them is not using AdminTime.'
+        );
+    }
+
+    /**
      * The public portal resolves its tenant from the URL slug and has no tenant
      * session, so it used to take the deleted SystemSetting branch. It turns out
      * nothing on that path formats through TenantTime at all — the track page

@@ -32,8 +32,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Two directives, not one that guesses: @localdt is the workspace's zone,
+        // @admindt is platform staff's. A single directive resolving "which
+        // surface am I on?" at render time would be the ambient-state bug these
+        // two classes exist to remove, and a grep for TenantTime cannot see
+        // through a directive — so the split has to be visible in the template.
         Blade::directive('localdt', function (string $expression) {
             return "<?php echo e(\App\Support\TenantTime::format({$expression})); ?>";
+        });
+
+        Blade::directive('admindt', function (string $expression) {
+            return "<?php echo e(\App\Support\AdminTime::format({$expression})); ?>";
         });
 
         KbArticle::observe(KbArticleObserver::class);

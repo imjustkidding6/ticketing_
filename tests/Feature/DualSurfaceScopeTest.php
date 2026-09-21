@@ -26,6 +26,10 @@ use Tests\TestCase;
  * a page that is scoped. So each test below asserts the data: a second tenant's
  * row exists and must not appear.
  *
+ * TutorialController's half of the registry points at HelpPermissionSweepTest,
+ * which already walks every seeded role against every topic and tour — a thinner
+ * assertion here would pass with the permission filter removed.
+ *
  * The admin (cross-tenant) half of SlaPolicyController lives in
  * TenantIsolationGuardrailsTest::test_admin_sla_page_uses_the_admin_view_and_is_cross_tenant
  * and is referenced rather than duplicated.
@@ -136,25 +140,6 @@ class DualSurfaceScopeTest extends TestCase
             ->assertViewIs('sla.edit-tier')
             ->assertSee('value="1717"', false)
             ->assertDontSee('value="4242"', false);
-    }
-
-    /**
-     * TutorialController's tenant half renders the reader-filtered help centre.
-     * The admin half deliberately renders everything, so the risk is the tenant
-     * page picking up the admin view — which is how /admin/sla started.
-     */
-    public function test_tenant_help_centre_renders_the_filtered_tenant_view(): void
-    {
-        $tenant = $this->businessTenant();
-        $user = $this->adminUserFor($tenant);
-
-        $this->actingAs($user)
-            ->withTenant($tenant)
-            ->withSession(['current_tenant_id' => $tenant->id])
-            ->get($this->tenantUrl('/tutorials'))
-            ->assertOk()
-            ->assertViewIs('tutorials.index')
-            ->assertDontSee('admin-sidebar');
     }
 
     /**
