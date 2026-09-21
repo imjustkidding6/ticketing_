@@ -274,4 +274,28 @@ class HelpCentreTest extends TestCase
 
         return array_values(array_unique($found));
     }
+
+    /**
+     * Commit 1's whole job is to stop the docs over-claiming. Commit 3 will be tempted to
+     * write the business-hours copy before the behaviour exists; this fails the build if it
+     * does. The topic may discuss the words — it may not promise the clock pauses.
+     */
+    public function test_sla_topic_does_not_promise_business_hours(): void
+    {
+        $topic = app(HelpService::class)->allTopics()['sla-management'] ?? null;
+
+        $this->assertNotNull($topic, 'The sla-management help topic is missing.');
+
+        $text = app(HelpService::class)->searchTextFor($topic).' '.json_encode($topic);
+
+        $this->assertStringContainsString('calendar hours', $text);
+
+        foreach (['pauses outside', 'only working hours', 'pauses overnight', 'stops at the end of the working day'] as $overclaim) {
+            $this->assertStringNotContainsStringIgnoringCase(
+                $overclaim,
+                $text,
+                "The SLA help topic promises business-hours behaviour ('{$overclaim}') that the product does not implement."
+            );
+        }
+    }
 }

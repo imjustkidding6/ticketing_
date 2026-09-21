@@ -9,7 +9,8 @@
                 @csrf
 
                 <div class="mb-4">
-                    <p class="text-sm text-gray-600">{{ __('Define response and resolution targets (in hours) for each priority level on the :tier tier.', ['tier' => $tier]) }}</p>
+                    <p class="text-sm text-gray-600">{{ __('Define response and resolution targets for each priority level on the :tier tier.', ['tier' => $tier]) }}</p>
+                    <p class="mt-1 text-sm text-gray-500">{{ __('Targets are measured in calendar hours — elapsed clock time, counting nights, weekends and holidays. Time on hold is the only thing that pauses the clock.') }}</p>
                 </div>
 
                 <div class="overflow-hidden rounded-md border border-gray-200">
@@ -17,8 +18,8 @@
                         <thead class="bg-gray-50 text-xs font-medium uppercase tracking-wider text-gray-500">
                             <tr>
                                 <th class="px-4 py-2 text-left">{{ __('Priority') }}</th>
-                                <th class="px-4 py-2 text-center">{{ __('Response (hours)') }}</th>
-                                <th class="px-4 py-2 text-center">{{ __('Resolution (hours)') }}</th>
+                                <th class="px-4 py-2 text-center">{{ __('Response (calendar hours)') }}</th>
+                                <th class="px-4 py-2 text-center">{{ __('Resolution (calendar hours)') }}</th>
                                 <th class="px-4 py-2 text-center">{{ __('Active') }}</th>
                             </tr>
                         </thead>

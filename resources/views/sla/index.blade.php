@@ -33,6 +33,7 @@
                 <p>{{ __('Policies are grouped by client tier. Each tier has one row per priority.') }}</p>
                 <p><span class="font-semibold">{{ __('Response hours') }}:</span> {{ __('target time from ticket creation until it is first moved to In Progress.') }}</p>
                 <p><span class="font-semibold">{{ __('Resolution hours') }}:</span> {{ __('target time from ticket creation until it is Closed.') }}</p>
+                <p>{{ __('Both targets are measured in calendar hours — elapsed clock time, including nights, weekends and holidays. Time on hold is the only thing that pauses the clock.') }}</p>
             </div>
 
             <div data-tour="sla-tiers">

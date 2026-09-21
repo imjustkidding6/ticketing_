@@ -484,7 +484,7 @@
                                             <select name="priority" id="sidebar_priority" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                                 @foreach(['low', 'medium', 'high', 'critical'] as $p)
                                                     <option value="{{ $p }}" {{ $ticket->priority === $p ? 'selected' : '' }}>
-                                                        {{ ucfirst($p) }}{{ isset($showSlaPolicy[$p]) ? ' — Reso: ' . $showSlaPolicy[$p]->resolution_time_hours . 'h' : '' }}
+                                                        {{ ucfirst($p) }}{{ isset($showSlaPolicy[$p]) ? ' — Reso: ' . $showSlaPolicy[$p]->resolution_time_hours . 'h calendar' : '' }}
                                                     </option>
                                                 @endforeach
                                             </select>

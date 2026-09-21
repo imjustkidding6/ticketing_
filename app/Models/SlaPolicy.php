@@ -99,6 +99,15 @@ class SlaPolicy extends Model
 
     /**
      * Industry-standard defaults: each tier's {priority => [response_hours, resolution_hours]}.
+     *
+     * Every number here is **calendar hours** — elapsed clock time from ticket creation,
+     * counting nights, weekends and public holidays. Nothing pauses it except time on
+     * hold, which moves the deadline out rather than being subtracted afterwards.
+     *
+     * The enterprise row is the one place that is deliberate rather than merely inherited:
+     * enterprise tier is a 24x7 promise by product decision, so calendar hours is the
+     * correct clock for it and would remain correct even if other tiers ever moved to a
+     * business-hours clock.
      */
     public const STANDARD_DEFAULTS = [
         'basic' => [
