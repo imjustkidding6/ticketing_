@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 /**
@@ -30,9 +31,18 @@ use Tests\TestCase;
  * which already walks every seeded role against every topic and tour — a thinner
  * assertion here would pass with the permission filter removed.
  *
- * The admin (cross-tenant) half of SlaPolicyController lives in
- * TenantIsolationGuardrailsTest::test_admin_sla_page_uses_the_admin_view_and_is_cross_tenant
- * and is referenced rather than duplicated.
+ * The admin (cross-tenant) half of SlaPolicyController makes two claims, and both
+ * are referenced rather than duplicated. "Cross-tenant" lives in
+ * TenantIsolationGuardrailsTest::test_admin_sla_page_uses_the_admin_view_and_is_cross_tenant.
+ * "Writes nothing" lives in
+ * AdminSlaReadOnlyTest::test_posting_to_an_admin_sla_write_url_is_refused_and_writes_nothing,
+ * which is the behavioural claim: unregistering the admin route is not on its own
+ * evidence, because `{slug}/sla` still matches `/admin/sla` and the request is
+ * dispatched into this very controller. What is asserted here is the narrower and
+ * purely structural fact that the two surfaces now differ at all —
+ * test_admin_sla_surface_is_read_only_while_the_tenant_surface_is_not — because
+ * the risk in making the admin half read-only was always that the tenant half
+ * went with it.
  */
 class DualSurfaceScopeTest extends TestCase
 {
@@ -161,5 +171,26 @@ class DualSurfaceScopeTest extends TestCase
             ->withSession(['current_tenant_id' => $tenant->id])
             ->get($this->tenantUrl('/sla'))
             ->assertForbidden();
+    }
+
+    /**
+     * One controller, two surfaces, and now two different capabilities: the
+     * workspace owns its SLA targets and edits them, while the platform view only
+     * reads. Asserted as a pair — a route name missing from both groups would be a
+     * regression on the tenant side, not a success on the admin side.
+     *
+     * Route registration is necessary, not sufficient: the refusal itself is
+     * proven in AdminSlaReadOnlyTest, named in this class's docblock.
+     */
+    public function test_admin_sla_surface_is_read_only_while_the_tenant_surface_is_not(): void
+    {
+        foreach (['store', 'update', 'toggle', 'destroy', 'bulk-action', 'seed-defaults', 'edit-tier', 'update-tier', 'destroy-tier'] as $action) {
+            $this->assertTrue(Route::has("sla.{$action}"), "the tenant surface lost sla.{$action}");
+            $this->assertFalse(Route::has("admin.sla.{$action}"), "the admin surface still registers admin.sla.{$action}");
+        }
+
+        // Both halves still read.
+        $this->assertTrue(Route::has('sla.index'));
+        $this->assertTrue(Route::has('admin.sla.index'));
     }
 }

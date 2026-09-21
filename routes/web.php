@@ -193,17 +193,14 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('notifications/{id}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
     Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount'])->name('notifications.unreadCount');
 
-    // Admin SLA Policies
+    // Admin SLA Policies — READ ONLY by decision. SLA targets belong to the
+    // workspace that owns them, so the platform surface observes and does not
+    // edit; the write routes (store/update/toggle/destroy/bulk-action/
+    // seed-defaults/edit-tier/update-tier/destroy-tier) live on the tenant
+    // surface only, in routes/tenant.php. They are unregistered rather than
+    // aborting: a form that 403s on submit is the same dead end with a worse
+    // message. The controller methods stay — the tenant routes call all of them.
     Route::get('sla', [SlaPolicyController::class, 'index'])->name('sla.index');
-    Route::post('sla', [SlaPolicyController::class, 'store'])->name('sla.store');
-    Route::put('sla/{policy}', [SlaPolicyController::class, 'update'])->name('sla.update');
-    Route::post('sla/{policy}/toggle', [SlaPolicyController::class, 'toggle'])->name('sla.toggle');
-    Route::delete('sla/{policy}', [SlaPolicyController::class, 'destroy'])->name('sla.destroy');
-    Route::post('sla/bulk-action', [SlaPolicyController::class, 'bulkAction'])->name('sla.bulk-action');
     Route::get('sla/export', [SlaPolicyController::class, 'export'])->name('sla.export');
-    Route::post('sla/seed-defaults', [SlaPolicyController::class, 'seedDefaults'])->name('sla.seed-defaults');
-    Route::get('sla/tier/{tier}/edit', [SlaPolicyController::class, 'editTier'])->name('sla.edit-tier');
-    Route::post('sla/tier/{tier}', [SlaPolicyController::class, 'updateTier'])->name('sla.update-tier');
-    Route::delete('sla/tier/{tier}', [SlaPolicyController::class, 'destroyTier'])->name('sla.destroy-tier');
 });
 require __DIR__.'/auth.php';

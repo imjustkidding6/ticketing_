@@ -169,17 +169,9 @@ async function save(page, filename, selector = null) {
     await save(page, '24_sla_health_command_center.png');
     await save(page, '25_sla_registry.png');
 
-    const createSlaBtn = await page.$('button:has-text("Create Policy"), button:has-text("Add Policy"), a[href*="sla/create"]');
-    if (createSlaBtn) {
-        await createSlaBtn.click();
-        await page.waitForTimeout(600);
-        await save(page, '26_create_sla_policy.png');
-    } else {
-        await save(page, '26_create_sla_policy.png');
-    }
-
-    await page.goto(`${BASE_URL}/admin/sla/tier/starter/edit`, { waitUntil: 'domcontentloaded' }).catch(() => {});
-    await save(page, '27_edit_sla_policy.png');
+    // /admin/sla is read-only: SLA targets are edited inside the workspace, so there is
+    // no create modal and no tier editor to capture. Manual figures 26/27 were dropped
+    // with those controls.
 
     console.log('--- 9. Notifications Module ---');
     await page.goto(`${BASE_URL}/admin/notifications`, { waitUntil: 'domcontentloaded' });

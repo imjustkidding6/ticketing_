@@ -37,6 +37,13 @@ class SlaPolicyController extends Controller
         $query = ($isAdmin ? SlaPolicy::withoutGlobalScopes() : SlaPolicy::query())
             ->withCount($this->ticketUsageCounts($isAdmin));
 
+        // Cross-tenant rows are unreadable without the workspace that owns them.
+        // Tenant is not a BelongsToTenant model, so an ordinary with() is correct
+        // here — and one eager load, not a lookup per row.
+        if ($isAdmin) {
+            $query->with(['tenant:id,name,slug']);
+        }
+
         // Filter: Search Name or Description
         if ($request->filled('search')) {
             $search = strtolower($request->input('search'));
@@ -136,10 +143,30 @@ class SlaPolicyController extends Controller
         }
 
         // Prepare JSON structure for Alpine JS registry
-        $alpinePolicies = $policies->map(function (SlaPolicy $p) {
-            $routePrefix = request()->routeIs('admin.*') ? 'admin.' : '';
+        $alpinePolicies = $policies->map(function (SlaPolicy $p) use ($isAdmin) {
+            $routePrefix = $isAdmin ? 'admin.' : '';
 
-            return [
+            // The admin surface is read-only, so it gets the workspace instead of
+            // the row controls. Editing happens inside the workspace — see the
+            // admin view's copy about Impersonate.
+            $surface = $isAdmin
+                ? [
+                    'workspace' => $p->tenant?->name ?? '—',
+                    'workspace_url' => $p->tenant_id ? route('admin.tenants.show', $p->tenant_id) : '#',
+                ]
+                : [
+                    'edit_url' => $p->client_tier && Route::has($routePrefix.'sla.edit-tier')
+                        ? route($routePrefix.'sla.edit-tier', ['tier' => $p->client_tier])
+                        : '#',
+                    'toggle_url' => Route::has($routePrefix.'sla.toggle')
+                        ? route($routePrefix.'sla.toggle', $p)
+                        : '#',
+                    'delete_url' => Route::has($routePrefix.'sla.destroy')
+                        ? route($routePrefix.'sla.destroy', $p)
+                        : '#',
+                ];
+
+            return $surface + [
                 'id' => $p->id,
                 'name' => $p->name,
                 'client_tier' => $p->client_tier,
@@ -154,15 +181,6 @@ class SlaPolicyController extends Controller
                 'active_tickets_count' => $p->active_tickets_count ?? 0,
                 'closed_tickets_count' => $p->closed_tickets_count ?? 0,
                 'breached_tickets_count' => $p->breached_tickets_count ?? 0,
-                'edit_url' => $p->client_tier && Route::has($routePrefix.'sla.edit-tier')
-                    ? route($routePrefix.'sla.edit-tier', ['tier' => $p->client_tier])
-                    : '#',
-                'toggle_url' => Route::has($routePrefix.'sla.toggle')
-                    ? route($routePrefix.'sla.toggle', $p)
-                    : '#',
-                'delete_url' => Route::has($routePrefix.'sla.destroy')
-                    ? route($routePrefix.'sla.destroy', $p)
-                    : '#',
             ];
         })->values()->all();
 
@@ -623,26 +641,24 @@ class SlaPolicyController extends Controller
         $ids = $request->input('ids');
         $idArray = is_array($ids) ? $ids : (is_string($ids) && strlen($ids) > 0 ? explode(',', $ids) : null);
 
-        return $this->exportCSV($idArray);
+        return $this->exportCSV($idArray, $request->routeIs('admin.*'));
     }
 
     /**
      * Helper to generate streamed CSV.
+     *
+     * Scope is chosen the same way index() chooses it. This used to build from
+     * SlaPolicy::query() and so was cross-tenant only while no tenant happened to
+     * be in session — the download changed with the admin's browsing history.
      */
-    private function exportCSV(?array $ids = null): StreamedResponse
+    private function exportCSV(?array $ids = null, bool $isAdmin = false): StreamedResponse
     {
-        $query = SlaPolicy::query()->withCount([
-            'tickets as total_tickets_count',
-            'tickets as active_tickets_count' => fn ($q) => $q->open(),
-            'tickets as closed_tickets_count' => fn ($q) => $q->closed(),
-            'tickets as breached_tickets_count' => fn ($q) => $q->where(function ($q2) {
-                $q2->where('resolution_due_at', '<', now())
-                    ->orWhere(function ($q3) {
-                        $q3->whereNull('first_response_at')
-                            ->where('response_due_at', '<', now());
-                    });
-            }),
-        ]);
+        $query = ($isAdmin ? SlaPolicy::withoutGlobalScopes() : SlaPolicy::query())
+            ->withCount($this->ticketUsageCounts($isAdmin));
+
+        if ($isAdmin) {
+            $query->with(['tenant:id,name,slug']);
+        }
 
         if ($ids) {
             $query->whereIn('id', $ids);
@@ -662,6 +678,7 @@ class SlaPolicyController extends Controller
 
         $columns = [
             'ID',
+            ...($isAdmin ? ['Workspace'] : []),
             'Policy Name',
             'Client Tier',
             'Ticket Priority',
@@ -676,7 +693,7 @@ class SlaPolicyController extends Controller
             'Created Date',
         ];
 
-        $callback = function () use ($policies, $columns) {
+        $callback = function () use ($policies, $columns, $isAdmin) {
             $file = fopen('php://output', 'w');
             // Write BOM for Excel compatibility
             fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
@@ -686,6 +703,7 @@ class SlaPolicyController extends Controller
             foreach ($policies as $p) {
                 fputcsv($file, [
                     $p->id,
+                    ...($isAdmin ? [$p->tenant?->name ?? '—'] : []),
                     $p->name,
                     strtoupper($p->client_tier),
                     strtoupper($p->priority),
@@ -750,7 +768,9 @@ class SlaPolicyController extends Controller
             ];
         }
 
-        return view(request()->routeIs('admin.*') ? 'admin.sla.edit-tier' : 'sla.edit-tier', compact('tier', 'rows'));
+        // Tenant surface only: the admin group no longer registers sla.edit-tier,
+        // because its form posted to a route that is gone.
+        return view('sla.edit-tier', compact('tier', 'rows'));
     }
 
     /**
