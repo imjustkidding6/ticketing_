@@ -19,7 +19,13 @@ Credentials: `admin@example.com` / `password` (platform admin), `test@example.co
 
 ## Driving
 
-Playwright is configured: headless chromium, 1920x1080, `baseURL` http://localhost:8005. For ad-hoc scenarios write a throwaway script under the run's `artifacts/` directory. For something worth keeping, write a proper spec into `tests/e2e/` — a reviewable committed file, not a generated one.
+Playwright is configured: headless chromium, 1920x1080, `baseURL` http://localhost:8005. You have no browser tool, so you drive it by writing a script and running it through Bash. That is expected — but the script is **evidence, not scaffolding**:
+
+- save it under the run's `artifacts/` directory, named for the scenario it drives (`artifacts/s3-driver.mjs`);
+- never delete it or rewrite it in place between runs — write `s3-driver-2.mjs` instead. A finding is only reproducible while the exact thing that produced it still exists, and the reporter cites it;
+- do not write into `tests/e2e/` unless the spec is meant to be committed and reviewed like any other code.
+
+Name the script in the `Artifacts:` line of the observation it produced.
 
 Capture at every meaningful step, because you cannot go back for it later:
 
@@ -55,4 +61,4 @@ Write `observed.md`:
 
 When something differs from the expectation, resist the urge to retry until it passes. Record the first result, then check whether it reproduces, and record that too. Intermittent is a different defect from broken, and only stating both distinguishes them.
 
-Finish with a `handoff` message to `evidence-correlator`.
+Finish with a `handoff` message to `qa-evidence-correlator` — address `to` by the exact agent name, because the orchestrator routes on it.

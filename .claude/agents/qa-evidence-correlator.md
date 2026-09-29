@@ -69,4 +69,4 @@ Include the query verbatim. The reporter and whoever fixes this need to re-run i
 
 Keep interpretation tight to the data. If the rows do not settle the question, say that — "the history entry is absent, which is consistent with either a bypass of the service or a failed queue job; `failed_jobs` is empty, so a bypass is more likely" is honest and still moves the investigation.
 
-Finish with a `handoff` message to `reporter`.
+Finish with a `handoff` message to `qa-reporter` — address `to` by the exact agent name, because the orchestrator routes on it.

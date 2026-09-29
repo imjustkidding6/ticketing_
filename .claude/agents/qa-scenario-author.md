@@ -57,4 +57,4 @@ The **Evidence to pull** line is what makes findings actionable — name the tab
 
 Between 8 and 20 scenarios for a sweep; fewer for verifying one feature. Prefer depth on a risky area over thin coverage everywhere — twelve real probes of ticket state and SLA beat forty shallow page loads.
 
-Finish by writing a `handoff` message to `messages.jsonl` addressed to `browser-runner`.
+Finish by writing a `handoff` message to `messages.jsonl` addressed to `qa-browser-runner` — address `to` by the exact agent name, because the orchestrator routes on it.

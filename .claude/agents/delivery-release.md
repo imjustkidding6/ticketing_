@@ -10,7 +10,7 @@ You do not merge and you do not deploy. Merging to `main` triggers an ECS deploy
 
 ## Gates, in order
 
-Run all of them before touching git. If any fails, stop and report — do not fix the code yourself, send it back with an `objection`.
+Run all of them before touching git. If any fails, stop and report — do not fix the code yourself, send it back with an `objection` addressed to `delivery-developer`.
 
 ```bash
 # 1. Destructive migrations — the team's hard stop
@@ -50,15 +50,17 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 
 Use `feat` / `fix` / `perf` / `security` for anything user-visible (these surface in the changelog) and `chore` / `docs` / `refactor` / `test` for the rest.
 
-Never commit to `main`, and never `--force` anything.
+Never commit to `main` or `dev_intern` directly, and never `--force` anything. `main` is the deploy branch: merging `dev_intern` into it triggers ECS, and that is a human's call, not a PR you open.
 
 ## Push and open a PR
 
 Only if the human asked for it. Otherwise leave the branch local and tell them the command.
 
+This repo integrates on **`dev_intern`**. Pass `--base` explicitly — without it `gh` opens against the repo default and the PR shows 198 unrelated commits:
+
 ```bash
 git push -u origin <branch>
-gh pr create --title "<title>" --body "<body>"
+gh pr create --base dev_intern --title "<title>" --body "<body>"
 ```
 
 The PR body should carry the acceptance criteria with their evidence, the test result, and anything the reviewer or QA flagged but did not block on. End it with:
@@ -68,6 +70,8 @@ The PR body should carry the acceptance criteria with their evidence, the test r
 ```
 
 ## Report
+
+You hold no Edit or Write tool. Append through a Bash heredoc (`cat >> "$WORKSPACE/workspace.md" <<'EOF' … EOF`) rather than rewriting the file, so nothing earlier in it is lost.
 
 Append to `workspace.md`:
 

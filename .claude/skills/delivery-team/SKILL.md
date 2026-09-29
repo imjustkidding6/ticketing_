@@ -24,10 +24,14 @@ Roles never talk to each other directly. They read `workspace.md`, do their work
 Append to `messages.jsonl` on every transition:
 
 ```json
-{"from":"analyst","to":"architect","type":"handoff","summary":"Acceptance criteria written, 3 open questions flagged","at":"2026-09-18T10:12:00Z"}
+{"at":"2026-09-18T10:12:00Z","from":"delivery-analyst","to":"delivery-architect","type":"handoff","feature":"<slug>","summary":"Acceptance criteria written, 3 open questions flagged"}
 ```
 
-`type` is one of `handoff`, `question`, `answer`, `objection`, `approval`, `escalation`.
+**Required keys:** `at` (ISO 8601 UTC — not `ts`), `from`, `to`, `type`, `summary`. **Optional:** `feature`, `branch`, `round`, plus any role-specific payload the sender wants to carry (`findings`, `tests`, `not_done`, …). A reader that only understands the required five must still get a usable history, so never put something load-bearing *only* in a custom key.
+
+`from` and `to` are **exact dispatch names**, because the orchestrator routes on them — `delivery-analyst`, `delivery-architect`, `delivery-developer`, `delivery-reviewer`, `delivery-release`, `qa-scenario-author`, `qa-browser-runner`, `qa-evidence-correlator`, `qa-reporter`, plus three that are not agents: `lead` (you, the orchestrator), `qa-reality-check` (stage 5 is a skill, which you invoke) and `human`. Short forms like `developer` or `qa` do not resolve to anything.
+
+`type` is one of `handoff`, `question`, `answer`, `objection`, `approval`, `escalation`, `correction` (a role amending something it already sent), and `note` (a role telling the lead something it needs to know without asking for a decision — a declared scope change, a measurement that disagreed with the brief). A `note` never blocks; if the sender needs an answer before continuing, it is a `question`.
 
 ## Running the team
 
@@ -42,7 +46,9 @@ Dispatch each role as a subagent using the Agent tool, passing the workspace pat
 | 5. Proof | the `qa-reality-check` skill | Evidence each acceptance criterion is actually met in the running app |
 | 6. Ship | `delivery-release` | Pint, full suite, commit, branch pushed / PR opened |
 
-Stage 5 is not a subagent of this team — invoke the `qa-reality-check` skill and give it the acceptance criteria as its scope. That team drives the real app and corroborates with the database, which is a stronger claim than "the tests pass". Point it at this workspace so its findings land beside the design they are judging.
+Stage 5 is not a subagent of this team — the reviewer's `approval` is addressed to `qa-reality-check`, and **you** invoke that skill, giving it the acceptance criteria as its scope. Nothing dispatches it automatically, and a run that skips it leaves the QA evidence section empty. That team drives the real app and corroborates with the database, which is a stronger claim than "the tests pass". Point it at this workspace so its findings land beside the design they are judging.
+
+`delivery-reviewer` and `delivery-release` hold no Edit or Write tool on purpose — a reviewer who fixes what they find stops reporting it. They append to `workspace.md` through a Bash heredoc. `delivery-analyst`, `delivery-architect` and `delivery-developer` also hold `Skill`, so they can reach `frontend-design`, `tailwindcss-development` and `dataviz` for UI work; the other roles cannot.
 
 Skip stages only with a stated reason written into `workspace.md`. A one-line copy change does not need an architect; a new database table does.
 
@@ -59,6 +65,9 @@ Before dispatching anyone, write `workspace.md` with the requirement verbatim, a
 
 ## Requirement (verbatim)
 > <exactly what the user asked for>
+
+## Established facts (verified, not inferred)
+_pending — analyst — what was checked in the code or the database, with the file or query that showed it. Keep assumptions out of it; this is the section later roles are allowed to trust._
 
 ## Acceptance criteria
 _pending — analyst_
@@ -80,6 +89,8 @@ _pending — qa_
 |---|---|---|---|
 ```
 
+`Status` is one of `analysis`, `design`, `build`, `review`, `qa`, `release`, `merged`, `abandoned`, optionally followed by a dash and the branch it names. Update it when you read the workspace between stages — a stale status is how a finished feature stays indistinguishable from a stalled one, and six of the seven workspaces here had drifted before this was written down.
+
 The decision log is for the irreversible calls only — scope cut, design chosen, objection overruled. Keeping it separate from the chatter means someone reading this in six months finds the three things that mattered instead of forty messages.
 
 ## Questions and objections
@@ -100,6 +111,16 @@ It exits non-zero on a blocking finding. When it does, write an `escalation` mes
 
 **Deploying.** The team produces a branch. Merging to `main` triggers the ECS deploy, so a human merges.
 
+## Keeping the team's own configuration honest
+
+The roles only work if the definitions agree with each other, and nothing in the harness enforces that. After editing anything under `.claude/agents/` or `.claude/skills/`, run:
+
+```bash
+python3 .claude/skills/delivery-team/scripts/check_team_config.py
+```
+
+It checks that every agent a skill dispatches exists, that every script path an agent tells you to run is real, that every handoff names something dispatchable, and that `messages.jsonl` and the workspace statuses still match the schema above. It found five real defects the first time it ran — including a handoff addressed to `qa`, which matched no agent and is why stage 5 had never once executed.
+
 ## Repo facts every role needs
 
 Read `CLAUDE.md` first — it is long but it is the invariants, and most defects in this codebase are invariant violations rather than logic errors. The ones that bite hardest:
@@ -109,6 +130,8 @@ Read `CLAUDE.md` first — it is long but it is the invariants, and most defects
 - **Plan gating.** 19 features across three tiers; `PlanFeature::forPlan()` matches the slug `start`, not `starter`.
 - **Timezones.** Never `whereDate(..., today())` — use `App\Support\TenantTime`.
 - **Permissions.** Every permission must be enforced somewhere or `RolePermissionMatrixTest` fails the build.
+
+**The integration branch is `dev_intern`, not `main`.** `main` holds a single placeholder commit and is 198 commits behind; it is the deploy branch only. Feature branches cut from `dev_intern`, the reviewer diffs against `dev_intern...HEAD`, and the release role opens PRs with `--base dev_intern`. Diffing or targeting `main` buries the change in unrelated history.
 
 Running tests: use the bundled script, because the repo's `phpunit.xml` pins credentials that do not match the local container and the raw command fails every test on auth.
 

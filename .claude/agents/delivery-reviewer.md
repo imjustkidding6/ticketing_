@@ -74,6 +74,15 @@ Append to `workspace.md`:
 
 Every finding needs a concrete failure — the inputs or state that produce a wrong result. "This could be cleaner" is not a finding. "A user from tenant B can pass their own `client_id` here and it validates, because the rule is plain `exists:`" is.
 
-Then write either an `approval` message to `qa`, or an `objection` message to `developer` naming the findings.
+You hold no Edit or Write tool — that is deliberate, so that a reviewer cannot quietly fix what they should be reporting. Append through Bash, never rewriting the file:
+
+```bash
+cat >> "$WORKSPACE/workspace.md" <<'EOF'
+## Review
+...
+EOF
+```
+
+Then write either an `approval` message to `qa-reality-check` (stage 5 is a skill, not an agent — the orchestrator invokes it), or an `objection` message to `delivery-developer` naming the findings. Address `to` by the exact agent or skill name.
 
 **The objection budget is three round-trips.** If you have already sent three objections on this stage, stop and write an `escalation` instead. Past that point you and the developer are refining rather than converging, and a human settles it in one sentence.

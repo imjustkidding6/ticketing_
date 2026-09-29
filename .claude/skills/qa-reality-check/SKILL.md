@@ -72,7 +72,12 @@ For PHPUnit-level probes use the bundled script — the raw command fails every 
 
 ## Scenarios are data, not code
 
-The author role writes scenarios as structured steps, and the runner interprets them. Do not have an agent generate a `.spec.ts` file and then execute it — that is arbitrary code execution dressed up as testing, and it makes findings unreproducible because the test changes every run. Where a scenario genuinely needs a committed spec, write it into `tests/e2e/` as a reviewable file like any other code.
+The author role writes scenarios as structured steps, and the runner interprets them. There is no browser tool in this project — only `laravel-boost` is configured in `.mcp.json` — so the runner drives Playwright through Bash, and that means it writes driver scripts. The rule is not "never generate a script", which would leave stage 2 with no way to run at all. The rule is that a driver script is **evidence, and is kept as evidence**:
+
+- every script the runner writes is saved under the run's `artifacts/` directory, named for the scenario it drives (`artifacts/s3-driver.mjs`), and is never deleted or rewritten between runs — a finding is only reproducible if the exact thing that produced it still exists;
+- nothing is written into `tests/e2e/` unless it is meant to be a committed, reviewable spec that survives the run, in which case it is code and is reviewed like code.
+
+A script that lives for one invocation and then vanishes is what makes findings unreproducible, not the fact that an agent wrote it.
 
 ## Severity
 
