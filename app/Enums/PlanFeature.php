@@ -26,6 +26,7 @@ enum PlanFeature: string
     case KnowledgeBase = 'knowledge_base';
     case CannedResponses = 'canned_responses';
     case AiChatbot = 'ai_chatbot';
+    case AiAgents = 'ai_agents';
 
     /**
      * Get features included in the Starter plan.
@@ -80,6 +81,7 @@ enum PlanFeature: string
             self::KnowledgeBase,
             self::CannedResponses,
             self::AiChatbot,
+            self::AiAgents,
         ];
     }
 
@@ -123,6 +125,7 @@ enum PlanFeature: string
             self::KnowledgeBase => 'Knowledge Base',
             self::CannedResponses => 'Canned Responses',
             self::AiChatbot => 'AI Assistant',
+            self::AiAgents => 'AI Agents & Skills',
         };
     }
 
@@ -150,7 +153,8 @@ enum PlanFeature: string
             self::ClientComments,
             self::KnowledgeBase,
             self::CannedResponses,
-            self::AiChatbot => 'enterprise',
+            self::AiChatbot,
+            self::AiAgents => 'enterprise',
         };
     }
 }
