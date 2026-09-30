@@ -99,6 +99,9 @@ class DatabaseSeeder extends Seeder
             $roleService->assignRole($admin, 'admin', $tenant);
 
             DepartmentSeeder::seedForTenant($tenant);
+
+            // After the departments, since the catalogue's agents are assigned by code.
+            $this->call(AiAgentCatalogueSeeder::class);
         }
     }
 
