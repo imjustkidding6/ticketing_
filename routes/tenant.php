@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AgentScheduleController;
+use App\Http\Controllers\AiAgentConfigController;
+use App\Http\Controllers\AiAgentController;
+use App\Http\Controllers\AiAgentSkillController;
 use App\Http\Controllers\AiAssistantController;
 use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\CannedResponseController;
@@ -22,6 +25,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ServiceReportController;
+use App\Http\Controllers\SkillController;
 use App\Http\Controllers\SlaPolicyController;
 use App\Http\Controllers\TenantFeedbackController;
 use App\Http\Controllers\TicketCommentController;
@@ -287,6 +291,24 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
         Route::get('schedules', [AgentScheduleController::class, 'index'])->name('schedules.index');
         Route::get('schedules/team', [AgentScheduleController::class, 'team'])->name('schedules.team');
         Route::post('schedules', [AgentScheduleController::class, 'save'])->name('schedules.save');
+    });
+
+    // AI Agents & Skills (Enterprise via feature gate; also opt-in per workspace, which
+    // the controllers enforce — the setup hub is deliberately exempt, since it holds the
+    // switch). Literal paths first, so setup/catalogue are not read as a resource id.
+    Route::middleware('feature:ai_agents')->group(function () {
+        Route::get('ai-agents/setup', [AiAgentConfigController::class, 'setup'])->name('ai-agents.setup');
+        Route::post('ai-agents/setup', [AiAgentConfigController::class, 'saveSetup']);
+        Route::get('ai-agents/catalogue', [AiAgentConfigController::class, 'cataloguePreview'])->name('ai-agents.catalogue.preview');
+        Route::post('ai-agents/catalogue', [AiAgentConfigController::class, 'installCatalogue'])->name('ai-agents.catalogue.install');
+
+        Route::put('ai-agents/{ai_agent}/skills', [AiAgentSkillController::class, 'sync'])->name('ai-agents.skills.sync');
+        Route::delete('ai-agents/{ai_agent}/skills/{skill}', [AiAgentSkillController::class, 'destroy'])->name('ai-agents.skills.destroy');
+        Route::post('ai-agents/{ai_agent}/toggle', [AiAgentController::class, 'toggle'])->name('ai-agents.toggle');
+        Route::resource('ai-agents', AiAgentController::class)->except(['show'])->parameters(['ai-agents' => 'ai_agent']);
+
+        Route::post('skills/{skill}/toggle', [SkillController::class, 'toggle'])->name('skills.toggle');
+        Route::resource('skills', SkillController::class)->except(['show']);
     });
 
     // Custom Roles (Enterprise via feature gate)

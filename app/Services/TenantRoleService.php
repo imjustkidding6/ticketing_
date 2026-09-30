@@ -121,6 +121,7 @@ class TenantRoleService
             'use ai assistant',
             'manage ai settings',
             'manage ai knowledge',
+            'manage ai agents',
         ],
     ];
 
@@ -164,7 +165,7 @@ class TenantRoleService
         'manage users' => ['view members', 'invite members', 'update members', 'remove members'],
         'manage roles' => ['view roles', 'create roles', 'update roles', 'delete roles'],
         'manage departments' => ['view departments', 'create departments', 'update departments', 'delete departments'],
-        'manage settings' => ['view settings', 'update settings', 'manage branding', 'manage email settings', 'manage api tokens', 'manage ai settings', 'manage ai knowledge'],
+        'manage settings' => ['view settings', 'update settings', 'manage branding', 'manage email settings', 'manage api tokens', 'manage ai settings', 'manage ai knowledge', 'manage ai agents'],
     ];
 
     /**
@@ -350,6 +351,13 @@ class TenantRoleService
             'supervisor' => ['use ai assistant'],
             'senior agent' => ['use ai assistant'],
             'agent' => ['use ai assistant'],
+        ],
+        // Agent and skill configuration is administrator-only (spec §35), so there is
+        // one coarse permission and one grant. FEATURE_PERMISSIONS rather than
+        // BASE_ROLE_PERMISSIONS, like the two permissions above it: a Business
+        // workspace cannot reach the feature, so its admin must not hold the key to it.
+        'ai_agents' => [
+            'admin' => ['manage ai agents'],
         ],
         'sla_report' => [
             'admin' => ['view sla reports'],
