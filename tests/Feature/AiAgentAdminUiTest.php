@@ -644,6 +644,9 @@ class AiAgentAdminUiTest extends TestCase
             // are not set in the test process. /ai-agents is deliberately not asserted — it is a
             // prefix of the hub's own URL, which is present and must be.
             ->assertDontSee($this->tenantUrl('/ai-agents/catalogue'))
+            // The agents-index gate, previously unasserted because /ai-agents is a prefix
+            // of the hub's own URL: the closing quote disambiguates it.
+            ->assertDontSee('href="'.$this->tenantUrl('/ai-agents').'"', false)
             ->assertDontSee($this->tenantUrl('/skills'))
             ->assertSee('Enable AI agents above to install the catalogue.');
 
@@ -651,6 +654,7 @@ class AiAgentAdminUiTest extends TestCase
 
         $this->get($this->tenantUrl('/ai-agents/setup'))->assertOk()
             ->assertSee($this->tenantUrl('/ai-agents/catalogue'))
+            ->assertSee('href="'.$this->tenantUrl('/ai-agents').'"', false)
             ->assertSee($this->tenantUrl('/skills'));
     }
 

@@ -38,12 +38,13 @@ class AiAgentCatalogueSeedTest extends TestCase
 
     private function createEnterpriseTenant(): Tenant
     {
-        // firstOrCreate, not create: the isolation test builds two tenants and
-        // plans.slug is unique.
-        $plan = Plan::query()->firstOrCreate(
-            ['slug' => 'enterprise'],
-            Plan::factory()->make(['slug' => 'enterprise', 'features' => PlanFeature::forPlan('enterprise')])->getAttributes(),
-        );
+        // first()-or-create rather than firstOrCreate() with a factory's getAttributes():
+        // the isolation test builds two tenants and plans.slug is unique, but passing
+        // getAttributes() double-encodes the JSON `features` cast, leaving a plan with no
+        // usable features — which surfaces as a 403 from the feature middleware for a
+        // reason that has nothing to do with the test.
+        $plan = Plan::query()->where('slug', 'enterprise')->first()
+            ?? Plan::factory()->create(['slug' => 'enterprise', 'features' => PlanFeature::forPlan('enterprise')]);
         $license = License::factory()->active()->forPlan($plan)->create();
         $tenant = Tenant::factory()->create(['license_id' => $license->id]);
 

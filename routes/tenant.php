@@ -12,6 +12,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientPortalController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DepartmentAiAgentController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EscalationController;
 use App\Http\Controllers\KbArticleController;
@@ -110,6 +111,15 @@ Route::get('/my-activity', [DashboardController::class, 'myActivity'])
 
 // Tenant-scoped routes
 Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
+    // The AI Agents tab on a department (spec §8). Both gates: the tab is part of department
+    // management and the agents feature is Enterprise. Keyed on the two parent models, never
+    // on a department_ai_agent id — that pivot has no tenant scope, so a bare id is an IDOR.
+    Route::middleware(['feature:department_management', 'feature:ai_agents'])->group(function () {
+        Route::get('departments/{department}/ai-agents', [DepartmentAiAgentController::class, 'index'])->name('departments.ai-agents.index');
+        Route::post('departments/{department}/ai-agents', [DepartmentAiAgentController::class, 'store'])->name('departments.ai-agents.store');
+        Route::put('departments/{department}/ai-agents/{ai_agent}', [DepartmentAiAgentController::class, 'update'])->name('departments.ai-agents.update');
+        Route::delete('departments/{department}/ai-agents/{ai_agent}', [DepartmentAiAgentController::class, 'destroy'])->name('departments.ai-agents.destroy');
+    });
     Route::resource('departments', DepartmentController::class)->except(['show'])->middleware('feature:department_management');
     Route::resource('categories', CategoryController::class)->except(['show']);
     Route::resource('products', ProductController::class)->except(['show']);

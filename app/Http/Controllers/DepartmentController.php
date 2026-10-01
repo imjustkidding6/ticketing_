@@ -63,7 +63,12 @@ class DepartmentController extends Controller
     {
         $this->checkPermission('update departments');
 
-        return view('departments.edit', compact('department'));
+        return view('departments.edit', [
+            'department' => $department,
+            // The AI Agents tab is permission-gated as well as plan-gated. Resolved here
+            // rather than in the view because userCan() carries the owner bypass.
+            'canManageAiAgents' => $this->userCan('manage ai agents'),
+        ]);
     }
 
     /**

@@ -263,7 +263,7 @@
                     </div>
 
                     {{-- ========== MANAGEMENT ========== --}}
-                    @php $hasMgmt = $sidebarCan('view departments') || $sidebarCan('view departments') || $sidebarCan('view departments') || ($planService->currentTenantHasFeature(\App\Enums\PlanFeature::DepartmentManagement) && $sidebarCan('view departments')); $hasAiAgents = $planService->currentTenantHasFeature(\App\Enums\PlanFeature::AiAgents) && $sidebarCan('manage ai agents'); $hasMgmt = $hasMgmt || $hasAiAgents; @endphp
+                    @php $hasMgmt = $sidebarCan('view departments') || $sidebarCan('view departments') || $sidebarCan('view departments') || ($planService->currentTenantHasFeature(\App\Enums\PlanFeature::DepartmentManagement) && $sidebarCan('view departments')); @endphp
                     @if($hasMgmt)
                     <div class="mt-6" x-data="{ open: localStorage.getItem('navMgmtOpen') !== 'false' }" x-init="$watch('open', val => localStorage.setItem('navMgmtOpen', val))">
                         <button type="button" @click="open = !open" class="flex w-full items-center justify-between px-3 text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-600 cursor-pointer">
@@ -304,15 +304,6 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
                                 </svg>
                                 {{ __('Departments') }}
-                            </a>
-                            @endif
-                            {{-- Not gated on the ai_agents_enabled opt-in: this entry is the only way to the switch. --}}
-                            @if($hasAiAgents)
-                            <a href="{{ route('ai-agents.setup') }}" class="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium {{ request()->routeIs('ai-agents.*') || request()->routeIs('skills.*') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900' }}">
-                                <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('ai-agents.*') || request()->routeIs('skills.*') ? 'text-indigo-500' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-                                </svg>
-                                {{ __('AI Agents') }}
                             </a>
                             @endif
                         </div>

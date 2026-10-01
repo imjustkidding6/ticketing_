@@ -152,7 +152,7 @@ class AiAgentPermissionTest extends TestCase
         }
     }
 
-    public function test_an_admin_reaches_every_route_and_sees_the_sidebar_entry(): void
+    public function test_an_admin_reaches_every_route_and_the_feature_has_no_sidebar_entry(): void
     {
         $tenant = $this->createTenantOn('enterprise');
         $this->actAs($tenant, 'admin');
@@ -174,7 +174,13 @@ class AiAgentPermissionTest extends TestCase
             }
         }
 
-        $this->get($this->tenantUrl('/dashboard'))->assertOk()->assertSee('ai-agents/setup');
+        // Inverted in P4: AI agents are configured on the Department edit page, so the
+        // standalone module entry is gone. An admin reaching every route and the sidebar
+        // offering none of them is the shape the human asked for, not an omission.
+        $this->get($this->tenantUrl('/dashboard'))->assertOk()
+            ->assertDontSee('ai-agents/setup')
+            ->assertDontSee('href="'.$this->tenantUrl('/ai-agents').'"', false)
+            ->assertDontSee('href="'.$this->tenantUrl('/skills').'"', false);
     }
 
     public function test_a_business_workspace_gets_403_on_every_route(): void

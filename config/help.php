@@ -621,6 +621,12 @@ return [
                     'Assign members to it, or their queue stays empty.',
                 ], 'minutes' => 2, 'permission' => 'create departments'],
                 ['tip' => 'Fewer, broader departments cause fewer support questions than many narrow ones.'],
+                // Gated on the permission only: blocks take no `feature` key, and
+                // `manage ai agents` is granted through FEATURE_PERMISSIONS['ai_agents'],
+                // so a workspace without the plan feature never holds it anyway.
+                ['h' => 'AI agents', 'permission' => 'manage ai agents'],
+                ['p' => 'The AI Agents tab on a department decides which agents handle its tickets. Each assignment carries its own role, priority, active flag and auto-invoke flag, so the same agent can be the primary on one department and a validator on another.', 'permission' => 'manage ai agents'],
+                ['note' => 'Priority is ascending and 0 means unranked, so unranked agents sort after every ranked one. The agents themselves, and the skills they hold, are defined once and reused — the tab links through to those screens.', 'permission' => 'manage ai agents'],
             ],
 
             'tour' => [
