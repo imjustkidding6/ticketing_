@@ -66,9 +66,7 @@ class ClientPortalController extends Controller
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
             'priority' => ['required', 'in:low,medium,high,critical'],
-            'department_id' => ['required', 'integer'],
-            'category_id' => ['nullable', 'integer'],
-        ]);
+        ] + $this->publicCatalogRules($tenant, $request), $this->publicCatalogMessages());
 
         $client = $this->findOrCreateGuestClient($tenant, $validated['email'], $validated['name']);
         $trackingToken = Str::random(64);
@@ -79,7 +77,8 @@ class ClientPortalController extends Controller
             'description' => $validated['description'],
             'priority' => $validated['priority'],
             'department_id' => $validated['department_id'],
-            'category_id' => $validated['category_id'],
+            // 'nullable' leaves the key absent when the select isn't submitted at all.
+            'category_id' => $validated['category_id'] ?? null,
             'client_id' => $client->id,
             'created_by' => null,
             'tracking_token' => $trackingToken,
@@ -104,9 +103,7 @@ class ClientPortalController extends Controller
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
             'priority' => ['required', 'in:low,medium,high,critical'],
-            'department_id' => ['required', 'integer'],
-            'category_id' => ['nullable', 'integer'],
-        ]);
+        ] + $this->publicCatalogRules($tenant, $request), $this->publicCatalogMessages());
 
         $ticket = $this->ticketService->createTicket([
             'tenant_id' => $tenant->id,
@@ -114,7 +111,8 @@ class ClientPortalController extends Controller
             'description' => $validated['description'],
             'priority' => $validated['priority'],
             'department_id' => $validated['department_id'],
-            'category_id' => $validated['category_id'],
+            // 'nullable' leaves the key absent when the select isn't submitted at all.
+            'category_id' => $validated['category_id'] ?? null,
             'client_id' => $client->id,
             'created_by' => Auth::id(),
         ]);
@@ -258,7 +256,8 @@ class ClientPortalController extends Controller
                 'user_id' => $user->id,
                 'name' => $validated['company'] ?? $validated['name'],
                 'email' => $validated['email'],
-                'phone' => $validated['phone'],
+                // 'phone' is nullable, so the key is absent when it isn't submitted.
+                'phone' => $validated['phone'] ?? null,
                 'contact_person' => $validated['name'],
                 'tier' => Client::TIER_BASIC,
                 'status' => Client::STATUS_ACTIVE,
@@ -430,13 +429,39 @@ class ClientPortalController extends Controller
 
         $catParam = $request->query('category', $request->query('category_id'));
         if (filled($catParam)) {
-            // Prefer a match within the resolved department, but fall back to any
-            // category with that name so a category that isn't linked to (or is
-            // linked to a different) department still fills from the link.
-            $cat = $prefill['department_id']
-                ? $this->matchByIdOrName($categories->where('department_id', $prefill['department_id']), $catParam)
-                : null;
-            $cat ??= $this->matchByIdOrName($categories, $catParam);
+            // The pair must be consistent, because publicSubmitStore() refuses a
+            // category from another department — and a locked field renders as a
+            // hidden input, so an inconsistent prefill would be a dead end on a
+            // control the visitor cannot even see (these URLs get printed onto QR
+            // stickers by ClientController@autofillQr).
+            //
+            // So: with a department named in the link, that department wins and the
+            // category must be one of its own; a category naming a different
+            // department is dropped rather than locked, leaving the (department-
+            // filtered) select for the visitor. With no department named, a
+            // name match from any department is still accepted and its own
+            // department is adopted and locked alongside it.
+            if ($prefill['department_id']) {
+                $cat = $this->matchByIdOrName(
+                    $categories->where('department_id', $prefill['department_id']),
+                    $catParam
+                );
+            } else {
+                // Only categories whose own department is one we would offer. An active
+                // category under a deactivated department is still loaded (the loader
+                // filters the category, and deactivating a department cascades nothing),
+                // and adopting its department would lock a hidden department_id that
+                // `exists ... is_active` then refuses — a dead-end link.
+                $cat = $this->matchByIdOrName(
+                    $categories->whereIn('department_id', $departments->pluck('id')),
+                    $catParam
+                );
+                if ($cat) {
+                    $prefill['department_id'] = $cat->department_id;
+                    $locked['department_id'] = true;
+                }
+            }
+
             if ($cat) {
                 $prefill['category_id'] = $cat->id;
                 $locked['category_id'] = true;
@@ -501,19 +526,15 @@ class ClientPortalController extends Controller
             'email' => ['required', 'email', 'max:255'],
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
-            'department_id' => ['required', 'integer'],
-            'category_id' => ['nullable', 'integer'],
             'incident_date' => ['nullable', 'date'],
-            'product_ids' => ['nullable', 'array'],
-            'product_ids.*' => ['integer'],
-        ];
+        ] + $this->publicCatalogRules($tenant, $request);
 
         if ($allowAttachments) {
             $rules['attachments'] = ['nullable', 'array', 'max:3'];
             $rules['attachments.*'] = ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,pdf,doc,docx,txt'];
         }
 
-        $validated = $request->validate($rules);
+        $validated = $request->validate($rules, $this->publicCatalogMessages());
 
         $attachments = [];
         if ($allowAttachments && $request->hasFile('attachments')) {
@@ -537,7 +558,8 @@ class ClientPortalController extends Controller
             'description' => $validated['description'],
             'priority' => null,
             'department_id' => $validated['department_id'],
-            'category_id' => $validated['category_id'],
+            // 'nullable' leaves the key absent when the select isn't submitted at all.
+            'category_id' => $validated['category_id'] ?? null,
             'incident_date' => $validated['incident_date'] ?? null,
             'client_id' => $client->id,
             'created_by' => null,
@@ -721,6 +743,75 @@ class ClientPortalController extends Controller
 
         return redirect()->route('tenant.track-ticket.token', ['slug' => $slug, 'token' => $token])
             ->with('success', 'Your reply has been submitted.');
+    }
+
+    /**
+     * Validation rules for the foreign keys a public submit form accepts.
+     *
+     * These routes are unauthenticated and have no tenant session: the tenant comes
+     * from the URL slug, which is why the rest of this controller drops the global
+     * scopes and filters by tenant id by hand. The ScopesRulesToTenant trait
+     * deliberately cannot be used here — its tenantExists() reads
+     * session('current_tenant_id') and makes the rule unsatisfiable when it is
+     * absent, so switching this file over to the trait would reject every
+     * legitimate public submission. The rules below are the same guarantee built
+     * against the already-resolved $tenant instead.
+     *
+     * Only *active* rows are accepted, because those are the only ones the form
+     * offers, and a category must belong to the submitted department, which is what
+     * the form's own department/category linkage enforces client-side. The messages
+     * are deliberately generic: a distinct "does not exist" would turn an anonymous
+     * route into an existence oracle for other workspaces' ids.
+     *
+     * The two unrouted siblings (storeGuestTicket/storeTicket) get the product_ids
+     * rules too although they persist no products: one rule set for the whole public
+     * surface cannot drift, and a field they ignore cannot refuse a submission their
+     * forms never send.
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    private function publicCatalogRules(Tenant $tenant, Request $request): array
+    {
+        $departmentId = $request->input('department_id');
+
+        return [
+            'department_id' => [
+                'required',
+                'integer',
+                Rule::exists('departments', 'id')
+                    ->where('tenant_id', $tenant->id)
+                    ->where('is_active', true),
+            ],
+            'category_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('ticket_categories', 'id')
+                    ->where('tenant_id', $tenant->id)
+                    ->where('is_active', true)
+                    ->where('department_id', is_numeric($departmentId) ? (int) $departmentId : 0),
+            ],
+            'product_ids' => ['nullable', 'array'],
+            'product_ids.*' => [
+                'integer',
+                Rule::exists('products', 'id')
+                    ->where('tenant_id', $tenant->id)
+                    ->where('is_active', true),
+            ],
+        ];
+    }
+
+    /**
+     * Error messages for publicCatalogRules() — generic by design (see above).
+     *
+     * @return array<string, string>
+     */
+    private function publicCatalogMessages(): array
+    {
+        return [
+            'department_id.exists' => 'The selected department is invalid.',
+            'category_id.exists' => 'The selected category is invalid.',
+            'product_ids.*.exists' => 'One of the selected products is invalid.',
+        ];
     }
 
     /**
