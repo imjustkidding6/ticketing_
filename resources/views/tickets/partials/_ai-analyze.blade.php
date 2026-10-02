@@ -12,6 +12,24 @@
     // on the page must not exist, or clicking it banks a verdict for work that never
     // happened — which is a false row in the table the pilot's metric comes from.
     $analyzeCanComment = ! in_array($ticket->status, ['closed', 'cancelled'], true);
+
+    // Suggestion 4 applies through the EXISTING tickets.tasks.polish-apply endpoint, which
+    // requires `manage ticket tasks`. A control whose endpoint would 403 must not render —
+    // the verdict is written before the form submits, so an Apply that cannot land would
+    // bank minutes_saved for work that never happened.
+    $analyzeTaskRole = optional(Auth::user())->roleInTenant($ticket->tenant);
+    $analyzeCanTasks = $analyzeCanComment
+        && ($analyzeTaskRole === 'owner' || (Auth::user()?->can('manage ticket tasks') ?? false));
+
+    // polish-apply REPLACES every open task, so the ticket's current open tasks ride along
+    // as untouched hidden rows. They are deliberately NOT part of the verdict's
+    // applied_value: the metric asks what the engineer did with the AI's checks, and
+    // folding pre-existing tasks in would report every apply as an edit.
+    $analyzeOpenTasks = $ticket->tasks
+        ->whereIn('status', ['pending', 'in_progress'])
+        ->pluck('description')
+        ->filter()
+        ->values();
 @endphp
 {{--
     ANALYZE TICKET (P6a-1).
@@ -144,6 +162,86 @@
             </div>
         </template>
 
+        {{-- Proposed troubleshooting checks (suggestion 4) --}}
+        <template x-if="result?.checks?.length">
+            <div class="rounded-md bg-white p-2.5 ring-1 ring-gray-200">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{{ __('Proposed checks') }}</span>
+                    <div class="flex items-center gap-1.5" x-show="!decided.checks">
+                        @if($analyzeCanTasks)
+                            <button type="button" @click="applyChecks()" class="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50">{{ __('Add to checklist') }}</button>
+                        @endif
+                        <button type="button" @click="dismiss('checks')" class="rounded-md px-2 py-0.5 text-[11px] font-medium text-gray-500 hover:text-gray-700">{{ __('Dismiss') }}</button>
+                    </div>
+                    <span x-show="decided.checks" x-cloak class="text-[11px] font-medium text-gray-400" x-text="decidedLabel('checks')"></span>
+                </div>
+
+                @if($analyzeCanTasks)
+                    {{--
+                        The ticket's own task endpoint, posted by "Add to checklist". Each
+                        proposed check is an editable row, so an engineer who rewrites one
+                        produces a genuine `edited` verdict from the server's hash
+                        comparison rather than a claim the browser made.
+                    --}}
+                    <form x-ref="checksForm" method="POST" action="{{ route('tickets.tasks.polish-apply', $ticket) }}" class="mt-1.5">
+                        @csrf
+                        @foreach($analyzeOpenTasks as $analyzeOpenTask)
+                            <input type="hidden" name="tasks[]" value="{{ $analyzeOpenTask }}">
+                        @endforeach
+                        <div class="flex flex-col gap-1">
+                            <template x-for="(check, i) in drafts.checks" :key="i">
+                                <div class="flex items-center gap-1.5">
+                                    <input type="text" name="tasks[]" x-model="drafts.checks[i]" class="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    <button type="button" @click="drafts.checks.splice(i, 1)" title="{{ __('Remove') }}" class="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-gray-400 hover:text-red-600">&times;</button>
+                                </div>
+                            </template>
+                        </div>
+                        <p class="mt-1 text-[11px] text-gray-400">{{ __('Open tasks already on this ticket are kept.') }}</p>
+                    </form>
+                @else
+                    <ul class="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-gray-700">
+                        <template x-for="(check, i) in result.checks" :key="i">
+                            <li x-text="check"></li>
+                        </template>
+                    </ul>
+                @endif
+            </div>
+        </template>
+
+        {{-- Suggested engineer (suggestion 7) --}}
+        <template x-if="result?.engineer">
+            <div class="rounded-md bg-white p-2.5 ring-1 ring-gray-200">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{{ __('Suggested engineer') }}</span>
+                        <p x-show="!editing.engineer" class="mt-0.5 truncate text-xs font-medium text-gray-800" x-text="result.engineer.name"></p>
+                        <p x-show="!editing.engineer && result.engineer.reason" x-cloak class="mt-0.5 text-[11px] text-gray-500" x-text="result.engineer.reason"></p>
+                    </div>
+                    <div class="flex items-center gap-1.5" x-show="!decided.engineer">
+                        <button type="button" @click="applySuggested('engineer')" x-show="!editing.engineer" class="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50">{{ __('Assign') }}</button>
+                        <button type="button" @click="startEdit('engineer')" x-show="!editing.engineer && result.engineer_candidates?.length > 1" class="rounded-md px-2 py-0.5 text-[11px] font-medium text-indigo-700 hover:underline">{{ __('Edit & apply') }}</button>
+                        <button type="button" @click="dismiss('engineer')" x-show="!editing.engineer" class="rounded-md px-2 py-0.5 text-[11px] font-medium text-gray-500 hover:text-gray-700">{{ __('Dismiss') }}</button>
+                    </div>
+                    <span x-show="decided.engineer" x-cloak class="text-[11px] font-medium text-gray-400" x-text="decidedLabel('engineer')"></span>
+                </div>
+
+                {{--
+                    The picker lists only this ticket's department, from the analysis
+                    response — not a Blade-rendered roster. The id it posts is re-validated
+                    by UpdateTicketRequest's tenantMemberRules(); the name is only hashed.
+                --}}
+                <div x-show="editing.engineer" x-cloak class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <select x-model="drafts.engineer" class="rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <template x-for="candidate in (result.engineer_candidates || [])" :key="candidate.id">
+                            <option :value="String(candidate.id)" x-text="candidate.name"></option>
+                        </template>
+                    </select>
+                    <button type="button" @click="applyEdited('engineer')" class="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50">{{ __('Apply edited') }}</button>
+                    <button type="button" @click="cancelEdit('engineer')" class="rounded-md px-2 py-0.5 text-[11px] font-medium text-gray-500 hover:text-gray-700">{{ __('Cancel') }}</button>
+                </div>
+            </div>
+        </template>
+
         {{-- Similar resolved tickets (suggestion 5) --}}
         <template x-if="result?.context_tickets?.length">
             <div class="rounded-md bg-white p-2.5 ring-1 ring-gray-200">
@@ -185,7 +283,7 @@
         <input type="hidden" name="status" value="{{ $ticket->status }}">
         <input type="hidden" name="client_id" value="{{ $ticket->client_id }}">
         <input type="hidden" name="department_id" value="{{ $ticket->department_id }}">
-        <input type="hidden" name="assigned_to" value="{{ $ticket->assigned_to }}">
+        <input type="hidden" name="assigned_to" value="{{ $ticket->assigned_to }}" x-ref="field_engineer">
         <input type="hidden" name="incident_date" value="{{ optional($ticket->incident_date)->format('Y-m-d') }}">
         @foreach($ticket->products as $product)
             <input type="hidden" name="product_ids[]" value="{{ $product->id }}">
@@ -203,12 +301,13 @@
             result: null,
             decided: {},
             editing: {},
-            drafts: {},
+            drafts: { checks: [] },
             // id -> name for the department's categories, so an edited category can be
             // reported to the verdict endpoint by NAME: that is what the stored suggestion
             // holds, and the server hashes the two names to decide accepted vs edited.
             categoryNames: @js($analyzeCategories->pluck('name', 'id')),
             canComment: @js($analyzeCanComment),
+            canTasks: @js($analyzeCanTasks),
             analyzeUrl: '{{ route('tickets.ai.analyze', $ticket) }}',
             // Built from the named routes with a placeholder id, so the tenant prefix
             // comes from SetTenantUrlDefaults rather than being re-assembled by hand.
@@ -221,7 +320,7 @@
             },
             async analyze() {
                 this.error = ''; this.loading = true; this.result = null;
-                this.decided = {}; this.editing = {}; this.drafts = {};
+                this.decided = {}; this.editing = {}; this.drafts = { checks: [] };
                 try {
                     const res = await fetch(this.analyzeUrl, {
                         method: 'POST',
@@ -230,6 +329,9 @@
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok) throw new Error(data.error || @js(__('The AI request failed.')));
                     this.result = data;
+                    // Editable copy: the proposed checks are rows the engineer may rewrite
+                    // or remove before applying, and what is applied is what gets hashed.
+                    this.drafts.checks = Array.isArray(data.checks) ? data.checks.slice() : [];
                 } catch (e) {
                     this.error = e.message;
                 } finally {
@@ -237,7 +339,13 @@
                 }
             },
             startEdit(type) {
-                this.drafts[type] = type === 'category' ? String(this.result.category.id) : this.result[type];
+                if (type === 'category') {
+                    this.drafts[type] = String(this.result.category.id);
+                } else if (type === 'engineer') {
+                    this.drafts[type] = String(this.result.engineer.id);
+                } else {
+                    this.drafts[type] = this.result[type];
+                }
                 this.editing[type] = true;
             },
             cancelEdit(type) { this.editing[type] = false; },
@@ -267,21 +375,30 @@
                 }
             },
             dismiss(type) { return this.decide(type, 'rejected', null); },
+            // The name of a record-valued suggestion (category, engineer) is what the
+            // stored suggestion holds, so the name is what the verdict endpoint compares.
+            // The id is only ever the form value, re-validated by UpdateTicketRequest.
+            nameFor(type, id) {
+                if (type === 'category') return this.categoryNames[id] ?? '';
+                if (type === 'engineer') {
+                    const match = (this.result.engineer_candidates || []).find(c => String(c.id) === String(id));
+
+                    return match ? match.name : '';
+                }
+
+                return id;
+            },
             applySuggested(type) {
-                return this.apply(
-                    type,
-                    type === 'category' ? this.result.category.id : this.result[type],
-                    type === 'category' ? this.result.category.name : this.result[type],
-                );
+                const id = type === 'category'
+                    ? this.result.category.id
+                    : (type === 'engineer' ? this.result.engineer.id : this.result[type]);
+
+                return this.apply(type, id, this.nameFor(type, id));
             },
             applyEdited(type) {
                 const value = this.drafts[type];
 
-                return this.apply(
-                    type,
-                    value,
-                    type === 'category' ? (this.categoryNames[value] ?? '') : value,
-                );
+                return this.apply(type, value, this.nameFor(type, value));
             },
             // Record the verdict BEFORE navigating: the form submit unloads the page.
             // appliedValue is what the engineer actually applied, edited or not — that is
@@ -292,6 +409,32 @@
                 const input = this.$refs['field_' + (type === 'category' ? 'category_id' : type)];
                 if (input) input.value = formValue;
                 this.$refs.applyForm.submit();
+            },
+            // Suggestion 4 applies through the ticket's OWN task endpoint
+            // (tickets.tasks.polish-apply) — there is no second apply path. The verdict
+            // carries the applied rows only, so the server's hash comparison reports
+            // `accepted` for an untouched list and `edited` for a rewritten one.
+            // Records NOTHING when the form is absent (no permission, or a closed ticket).
+            async applyChecks() {
+                const form = this.$refs.checksForm;
+                if (!this.canTasks || !form) {
+                    this.error = @js(__('You cannot change this ticket\'s checklist, so nothing was applied.'));
+
+                    return false;
+                }
+
+                const applied = (this.drafts.checks || []).map(c => String(c).trim()).filter(c => c !== '');
+                if (applied.length === 0) {
+                    this.error = @js(__('There are no checks left to apply.'));
+
+                    return false;
+                }
+
+                const ok = await this.decide('checks', 'accepted', applied.join('\n'));
+                if (!ok) return false;
+                form.submit();
+
+                return true;
             },
             // Fills the note box and forces the type select to Internal. A triage summary
             // is internal: the public reply box would make this the client-facing draft

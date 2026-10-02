@@ -17,12 +17,15 @@ use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\TicketComment;
 use App\Models\User;
+use App\Services\AI\AnalyzeTicketService;
 use App\Services\PlanService;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -61,6 +64,10 @@ class AnalyzeTicketTest extends TestCase
         'summary' => "- The printer is offline\n- Restarting the spooler did not help\n- Next: check the queue",
         'category_ref' => 'K1',
         'priority' => 'high',
+        'checks' => ['Confirm the printer is powered and on the network', 'Reinstall the printer driver'],
+        // Null by default: an unissued ref is a rejection, and the shared default reply
+        // must not add one to every test that asserts `rejected_fields` is empty.
+        'engineer_ref' => null,
     ];
 
     private function fakeOpenAi(): void
@@ -556,5 +563,321 @@ class AnalyzeTicketTest extends TestCase
             ->assertOk()
             ->assertSee('Use as internal note')
             ->assertSee("type.value = 'internal'", false);
+    }
+
+    /* ==================== P6a-2: suggestion 7 (engineer) ==================== */
+
+    /**
+     * Add a department member who is a legitimate candidate, so the issued list is
+     * non-empty and the decoys below are provably excluded rather than trivially absent.
+     */
+    private function member(Tenant $tenant, Department $department, array $overrides = []): User
+    {
+        $user = User::factory()->create(array_merge(['is_available' => true], $overrides));
+        $tenant->addUser($user, 'member');
+        $user->departments()->attach($department->id);
+
+        return $user;
+    }
+
+    public function test_the_suggested_engineer_is_resolved_locally_from_an_opaque_ref(): void
+    {
+        $this->modelReply = ['summary' => 'A summary.', 'category_ref' => null, 'priority' => null, 'engineer_ref' => 'C1', 'engineer_reason' => 'Lightest load at a sufficient tier.'];
+
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket, $department] = $this->ticketFor($tenant);
+        $candidate = $this->member($tenant, $department, ['name' => 'Dana Candidate']);
+
+        $this->analyze($ticket)
+            ->assertOk()
+            ->assertJsonPath('engineer.id', $candidate->id)
+            ->assertJsonPath('engineer.name', 'Dana Candidate')
+            ->assertJsonPath('engineer.reason', 'Lightest load at a sufficient tier.')
+            ->assertJsonPath('rejected_fields', []);
+
+        // Nothing was assigned: the AI suggests, the engineer applies.
+        $this->assertNull($ticket->fresh()->assigned_to);
+    }
+
+    public function test_no_engineer_name_email_or_id_reaches_openai(): void
+    {
+        $this->modelReply = ['summary' => 'A summary.', 'category_ref' => null, 'priority' => null, 'engineer_ref' => 'C1'];
+
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket, $department] = $this->ticketFor($tenant);
+        $candidate = $this->member($tenant, $department, [
+            'name' => 'Zebediah Identifiable',
+            'email' => 'zebediah.identifiable@example.net',
+            'support_tier' => 'tier_2',
+        ]);
+
+        $this->analyze($ticket)->assertOk();
+
+        $body = $this->chatBody();
+        $this->assertStringNotContainsString('Zebediah Identifiable', $body);
+        $this->assertStringNotContainsString('zebediah.identifiable@example.net', $body);
+        $this->assertStringNotContainsString('"id":'.$candidate->id, $body);
+        // What DOES go: a ref, a tier, a load. Nothing that identifies a person.
+        $this->assertStringContainsString('{\"ref\":\"C1\",\"tier\":\"tier_2\",\"open_tickets\":0}', $body);
+    }
+
+    public function test_a_member_of_another_workspace_is_never_an_engineer_candidate(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket, $department] = $this->ticketFor($tenant);
+        $ours = $this->member($tenant, $department, ['name' => 'Ours Only']);
+
+        // User carries no global scope, so the `tenants` pivot predicate is the ONLY
+        // thing separating workspaces here. To make it load-bearing the foreigner is
+        // attached to THIS ticket's department row by raw insert: a decoy sitting in its
+        // own department is excluded by the department predicate alone and would leave
+        // the tenant predicate unexercised — which is exactly what this test did before.
+        $other = $this->createTenant();
+        $foreigner = User::factory()->create(['name' => 'Foreign Workspace Agent', 'is_available' => true]);
+        $other->addUser($foreigner, 'member');
+        DB::table('department_user')->insert([
+            'department_id' => $department->id,
+            'user_id' => $foreigner->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->analyze($ticket)->assertOk();
+
+        $this->assertSame([$ours->id], array_column($response->json('engineer_candidates'), 'id'));
+        $this->assertStringNotContainsString('Foreign Workspace Agent', $response->getContent());
+        // One candidate issued, so C2 was never offered to the model either.
+        $this->assertStringNotContainsString('C2', $this->chatBody());
+    }
+
+    public function test_a_member_outside_the_tickets_department_is_never_an_engineer_candidate(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket, $department] = $this->ticketFor($tenant);
+        $ours = $this->member($tenant, $department, ['name' => 'Ours Only']);
+
+        $sibling = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Hardware', 'code' => 'HW']);
+        $siblingMember = $this->member($tenant, $sibling, ['name' => 'Sibling Department Agent']);
+        $departmentless = User::factory()->create(['name' => 'Departmentless Agent', 'is_available' => true]);
+        $tenant->addUser($departmentless, 'member');
+
+        $response = $this->analyze($ticket)->assertOk();
+
+        $this->assertSame([$ours->id], array_column($response->json('engineer_candidates'), 'id'));
+        $this->assertStringNotContainsString('Sibling Department Agent', $response->getContent());
+        $this->assertStringNotContainsString('Departmentless Agent', $response->getContent());
+        $this->assertNotContains($siblingMember->id, array_column($response->json('engineer_candidates'), 'id'));
+    }
+
+    public function test_an_unavailable_member_is_never_an_engineer_candidate(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket, $department] = $this->ticketFor($tenant);
+        $ours = $this->member($tenant, $department, ['name' => 'Ours Only']);
+        $this->member($tenant, $department, ['name' => 'Away On Leave', 'is_available' => false]);
+
+        $response = $this->analyze($ticket)->assertOk();
+
+        $this->assertSame([$ours->id], array_column($response->json('engineer_candidates'), 'id'));
+        $this->assertStringNotContainsString('Away On Leave', $response->getContent());
+    }
+
+    public function test_a_ticket_with_no_department_omits_the_engineer_suggestion_entirely(): void
+    {
+        $this->modelReply = ['summary' => 'A summary.', 'category_ref' => null, 'priority' => null, 'engineer_ref' => 'C1'];
+
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket, $department] = $this->ticketFor($tenant, ['department_id' => null]);
+        // A member of SOME department in this workspace: failing closed means they are not
+        // offered, rather than the suggestion widening to the whole workspace.
+        $this->member($tenant, $department, ['name' => 'Would Be Widened In']);
+
+        $response = $this->analyze($ticket)->assertOk();
+
+        $this->assertNull($response->json('engineer'));
+        $this->assertSame([], $response->json('engineer_candidates'));
+        $this->assertStringNotContainsString('Would Be Widened In', $this->chatBody());
+        $this->assertStringContainsString('ENGINEER OPTIONS (choose one reference or null)\n(none available', $this->chatBody());
+    }
+
+    public function test_an_engineer_ref_the_service_did_not_issue_resolves_to_nobody(): void
+    {
+        $this->modelReply = ['summary' => 'A summary.', 'category_ref' => null, 'priority' => null, 'engineer_ref' => 'C77', 'engineer_reason' => 'Invented.'];
+
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket, $department] = $this->ticketFor($tenant);
+        $this->member($tenant, $department, ['name' => 'Dana Candidate']);
+
+        $this->analyze($ticket)
+            ->assertOk()
+            ->assertJsonPath('engineer', null)
+            ->assertJsonPath('rejected_fields', ['engineer']);
+
+        $analysis = AiTicketAnalysis::query()->latest('id')->first();
+        $this->assertSame(['engineer'], $analysis->rejected_fields);
+        $this->assertNull($analysis->suggestions['engineer']);
+    }
+
+    public function test_an_escalated_ticket_drops_candidates_below_its_tier(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket, $department] = $this->ticketFor($tenant, ['current_tier' => 'tier_3']);
+        $senior = $this->member($tenant, $department, ['name' => 'Senior Enough', 'support_tier' => 'tier_3']);
+        $this->member($tenant, $department, ['name' => 'Too Junior', 'support_tier' => 'tier_1']);
+
+        $response = $this->analyze($ticket)->assertOk();
+
+        // The ladder comes from EscalationService, the same comparison the escalate action
+        // applies — not a second copy in this service.
+        $this->assertSame([$senior->id], array_column($response->json('engineer_candidates'), 'id'));
+        $this->assertStringNotContainsString('tier_1', $this->chatBody());
+    }
+
+    /* ==================== P6a-2: suggestion 4 (checks) ==================== */
+
+    public function test_the_proposed_checks_are_normalised_and_capped(): void
+    {
+        $this->modelReply = ['summary' => 'A summary.', 'category_ref' => null, 'priority' => null, 'checks' => [
+            '  "Confirm   the printer is powered on."  ',
+            'Reinstall the driver.',
+            '',
+            'Check the spooler service',
+            'Check the spooler service',
+            'Five', 'Six', 'Seven', 'Eight',
+        ]];
+
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket] = $this->ticketFor($tenant);
+
+        $response = $this->analyze($ticket)->assertOk();
+
+        $checks = $response->json('checks');
+        $this->assertCount(AnalyzeTicketService::MAX_CHECKS, $checks);
+        // Quotes, runs of whitespace and the trailing period are stripped, blanks dropped,
+        // duplicates collapsed — the same normalisation polishTaskList() performs, so
+        // tickets.tasks.polish-apply sees nothing new.
+        $this->assertSame('Confirm the printer is powered on', $checks[0]);
+        $this->assertSame('Reinstall the driver', $checks[1]);
+        $this->assertSame('Check the spooler service', $checks[2]);
+        $this->assertSame([], $response->json('rejected_fields'));
+    }
+
+    public function test_a_non_list_checks_reply_is_rejected_and_nothing_is_offered(): void
+    {
+        $this->modelReply = ['summary' => 'A summary.', 'category_ref' => null, 'priority' => null, 'checks' => 'Check the spooler'];
+
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket] = $this->ticketFor($tenant);
+
+        $this->analyze($ticket)
+            ->assertOk()
+            ->assertJsonPath('checks', [])
+            ->assertJsonPath('rejected_fields', ['checks']);
+    }
+
+    public function test_the_checks_apply_control_is_absent_without_the_task_permission(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->actAs($tenant);
+        [$ticket] = $this->ticketFor($tenant);
+
+        // A custom role, because every SEEDED role that holds `use ai assistant` also
+        // holds `manage ticket tasks` — so this combination only exists on an Enterprise
+        // workspace that built its own role, which is exactly the case that must not get
+        // a control whose endpoint would 403. Apply records the verdict before submitting
+        // the form, so a refused apply would bank minutes_saved for work never done.
+        $custom = Role::create(['name' => 'triage reader', 'guard_name' => 'web', 'tenant_id' => $tenant->id]);
+        $custom->syncPermissions(['view tickets', 'view all tickets', 'use ai assistant']);
+        $user->syncRoles([$custom]);
+
+        $this->get($this->tenantUrl("tickets/{$ticket->id}"))
+            ->assertOk()
+            ->assertSee('Analyze ticket')
+            ->assertDontSee('Add to checklist')
+            ->assertSee('canTasks: false', false);
+    }
+
+    /**
+     * The three decoys at once, on the surface the picker is actually built from.
+     *
+     * The engineer picker has no Blade-rendered roster: its `<option>`s come only from
+     * the analyze response's `engineer_candidates`, so that JSON *is* the rendered list
+     * of tenant records and the one place the scoping can be defeated. Asserted here
+     * together rather than one decoy per test, because a query that drops one predicate
+     * but keeps the others is the realistic regression.
+     */
+    public function test_the_engineer_picker_has_no_second_unscoped_source_and_excludes_all_three_decoys(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket, $department] = $this->ticketFor($tenant);
+        $eligible = $this->member($tenant, $department, ['name' => 'Eligible Engineer']);
+
+        // Raw-inserted into THIS ticket's department, so only the `tenants` pivot
+        // predicate can exclude them. See the sibling test for why that matters.
+        $foreign = $this->createTenant();
+        $foreignUser = User::factory()->create(['name' => 'Foreign Tenant Decoy', 'is_available' => true]);
+        $foreign->addUser($foreignUser, 'member');
+        DB::table('department_user')->insert([
+            'department_id' => $department->id,
+            'user_id' => $foreignUser->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $sibling = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Hardware', 'code' => 'HW']);
+        $outside = $this->member($tenant, $sibling, ['name' => 'Outside Department Decoy']);
+        $ineligible = $this->member($tenant, $department, ['name' => 'Unavailable Decoy', 'is_available' => false]);
+
+        // The ticket page itself must carry no candidate roster for the panel — if it did,
+        // that copy would not be scoped by the service's query at all.
+        // The panel's only server-rendered payload is the category map (`categoryNames:
+        // @js(...)`); the candidates must arrive from the analyze response alone. Both
+        // shapes a Blade-rendered roster could take are asserted absent — an Alpine data
+        // key and an embedded JSON array. (`result.engineer_candidates` reads are Alpine
+        // expressions over the response and are expected in the markup.)
+        $page = $this->get($this->tenantUrl("tickets/{$ticket->id}"))->assertOk();
+        $this->assertStringNotContainsString('engineer_candidates:', $page->getContent());
+        $this->assertStringNotContainsString('"engineer_candidates":', $page->getContent());
+
+        $response = $this->analyze($ticket)->assertOk();
+        $candidateIds = array_column($response->json('engineer_candidates'), 'id');
+
+        $this->assertSame([$eligible->id], $candidateIds);
+
+        foreach ([$foreignUser, $outside, $ineligible] as $decoy) {
+            $this->assertNotContains($decoy->id, $candidateIds, "{$decoy->name} reached the picker");
+            $this->assertStringNotContainsString($decoy->name, $response->getContent(), "{$decoy->name} reached the picker");
+            $this->assertStringNotContainsString($decoy->name, $this->chatBody(), "{$decoy->name} reached OpenAI");
+        }
+
+        // One candidate issued, so C2 was never an offerable ref either.
+        $this->assertStringNotContainsString('C2', $this->chatBody());
+    }
+
+    public function test_the_checks_apply_posts_to_the_existing_task_endpoint_and_keeps_open_tasks(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket] = $this->ticketFor($tenant);
+        $ticket->tasks()->create(['description' => 'An existing open task', 'sort_order' => 1]);
+
+        $this->get($this->tenantUrl("tickets/{$ticket->id}"))
+            ->assertOk()
+            ->assertSee('Add to checklist')
+            // No second apply path: the existing endpoint, which replaces open tasks — so
+            // the ticket's current open tasks ride along as hidden rows.
+            ->assertSee(route('tickets.tasks.polish-apply', $ticket), false)
+            ->assertSee('value="An existing open task"', false);
     }
 }

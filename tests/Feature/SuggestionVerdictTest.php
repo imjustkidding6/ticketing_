@@ -35,9 +35,15 @@ class SuggestionVerdictTest extends TestCase
 
     private const SUMMARY = 'The printer is offline after a Windows update.';
 
+    /** @var list<string> */
+    private const CHECKS = ['Confirm the printer is powered and on the network', 'Reinstall the printer driver'];
+
     protected function setUp(): void
     {
         parent::setUp();
+        // Structural, not circumstantial: the live key in this environment must not be
+        // reachable even if a path here grew an outbound call.
+        Http::preventStrayRequests();
         Http::fake();
     }
 
@@ -90,6 +96,9 @@ class SuggestionVerdictTest extends TestCase
             'name' => 'Printer Faults',
         ]);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $engineer = User::factory()->create(['name' => 'Dana Candidate', 'is_available' => true]);
+        $tenant->addUser($engineer, 'member');
+        $engineer->departments()->attach($department->id);
         $ticket = Ticket::factory()->create([
             'tenant_id' => $tenant->id,
             'department_id' => $department->id,
@@ -109,6 +118,10 @@ class SuggestionVerdictTest extends TestCase
                 'summary' => self::SUMMARY,
                 'category' => ['id' => $category->id, 'name' => $category->name],
                 'priority' => 'high',
+                // P6a-2's two types. Stored on the analysis, which is where
+                // suggestedValueFor() reads them from — never from the request.
+                'checks' => self::CHECKS,
+                'engineer' => ['id' => $engineer->id, 'name' => $engineer->name, 'reason' => 'Lightest load.'],
             ],
         ]);
 
@@ -219,9 +232,11 @@ class SuggestionVerdictTest extends TestCase
         $user = $this->actAs($tenant);
         [, $analysis] = $this->analysisFor($tenant, $user);
 
-        // `checks` and `engineer` arrive in P6a-2; until they are produced a verdict on
-        // either is meaningless, and accepting one would let a client invent accept-rate.
-        $this->postVerdict($analysis, ['suggestion_type' => 'checks', 'verdict' => 'accepted', 'applied_value' => 'x'])
+        // A verdict on a type this analysis holds no suggestion for is meaningless, and
+        // accepting one would let a client invent accept-rate out of nothing. The probe
+        // type was `checks` until P6a-2 started producing it; `context` is the type this
+        // fixture genuinely does not offer (it stores no context_ticket_ids).
+        $this->postVerdict($analysis, ['suggestion_type' => 'context', 'verdict' => 'accepted', 'applied_value' => 'x'])
             ->assertStatus(422);
 
         $this->assertSame(0, AiSuggestionVerdict::query()->count());
@@ -356,5 +371,101 @@ class SuggestionVerdictTest extends TestCase
             config('ai.minutes_saved.category'),
             AiSuggestionVerdict::query()->sole()->minutes_saved,
         );
+    }
+    /* ==================== P6a-2 ==================== */
+
+    /**
+     * The round-2 lesson, carried to the two new types: the verdict word for anything but
+     * an explicit Dismiss is the server's, decided by comparing hashes. A client that
+     * claims `edited` on an untouched suggestion is recorded `accepted`.
+     */
+    public function test_a_request_claiming_edited_on_the_engineer_suggestion_still_records_accepted(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [, $analysis] = $this->analysisFor($tenant);
+
+        $this->postVerdict($analysis, [
+            'suggestion_type' => AiSuggestionVerdict::TYPE_ENGINEER,
+            'verdict' => AiSuggestionVerdict::VERDICT_EDITED,
+            'applied_value' => 'Dana Candidate',
+        ])->assertOk()->assertJsonPath('verdict', AiSuggestionVerdict::VERDICT_ACCEPTED);
+
+        $this->assertDatabaseHas('ai_suggestion_verdicts', [
+            'ai_ticket_analysis_id' => $analysis->id,
+            'suggestion_type' => AiSuggestionVerdict::TYPE_ENGINEER,
+            'verdict' => AiSuggestionVerdict::VERDICT_ACCEPTED,
+            'minutes_saved' => 2,
+        ]);
+    }
+
+    public function test_assigning_a_different_engineer_records_edited(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [, $analysis] = $this->analysisFor($tenant);
+
+        $this->postVerdict($analysis, [
+            'suggestion_type' => AiSuggestionVerdict::TYPE_ENGINEER,
+            // The browser still claims 'accepted' (meaning "applied"); the server sees a
+            // different name against the stored suggestion and records the edit.
+            'verdict' => AiSuggestionVerdict::VERDICT_ACCEPTED,
+            'applied_value' => 'Somebody Else Entirely',
+        ])->assertOk()->assertJsonPath('verdict', AiSuggestionVerdict::VERDICT_EDITED);
+    }
+
+    public function test_an_unchanged_checklist_records_accepted_and_a_rewritten_one_records_edited(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [, $analysis] = $this->analysisFor($tenant);
+
+        // The checks suggestion is compared as the newline-joined list, which is exactly
+        // what the panel sends from its editable rows.
+        $this->postVerdict($analysis, [
+            'suggestion_type' => AiSuggestionVerdict::TYPE_CHECKS,
+            'verdict' => AiSuggestionVerdict::VERDICT_ACCEPTED,
+            'applied_value' => implode("\n", self::CHECKS),
+        ])->assertOk()->assertJsonPath('verdict', AiSuggestionVerdict::VERDICT_ACCEPTED);
+
+        $this->postVerdict($analysis, [
+            'suggestion_type' => AiSuggestionVerdict::TYPE_CHECKS,
+            'verdict' => AiSuggestionVerdict::VERDICT_ACCEPTED,
+            'applied_value' => implode("\n", [self::CHECKS[0], 'Swap the USB cable for a known good one']),
+        ])->assertOk()->assertJsonPath('verdict', AiSuggestionVerdict::VERDICT_EDITED);
+
+        $row = AiSuggestionVerdict::query()
+            ->where('ai_ticket_analysis_id', $analysis->id)
+            ->where('suggestion_type', AiSuggestionVerdict::TYPE_CHECKS)
+            ->sole();
+
+        $this->assertSame(AiSuggestionVerdict::VERDICT_EDITED, $row->verdict);
+        $this->assertGreaterThan(0.0, $row->edit_ratio);
+        $this->assertSame(5, $row->minutes_saved);
+        // Still no copy of the engineer's final text in the analytics table.
+        $this->assertStringNotContainsString('USB cable', json_encode($row->toArray()));
+    }
+
+    public function test_a_verdict_on_an_engineer_the_analysis_never_suggested_is_refused(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket, $analysis] = $this->analysisFor($tenant);
+
+        // An analysis whose engineer ref was invented and dropped stores null, so there is
+        // nothing to have a verdict about — an unissued ref records nothing.
+        $analysis->update(['suggestions' => ['summary' => self::SUMMARY, 'engineer' => null]]);
+
+        $this->postVerdict($analysis, [
+            'suggestion_type' => AiSuggestionVerdict::TYPE_ENGINEER,
+            'verdict' => AiSuggestionVerdict::VERDICT_ACCEPTED,
+            'applied_value' => 'Anybody At All',
+        ])->assertStatus(422);
+
+        $this->assertDatabaseMissing('ai_suggestion_verdicts', [
+            'ai_ticket_analysis_id' => $analysis->id,
+            'suggestion_type' => AiSuggestionVerdict::TYPE_ENGINEER,
+        ]);
+        $this->assertSame(0, $ticket->fresh()->tasks()->count());
     }
 }

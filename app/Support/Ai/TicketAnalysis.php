@@ -21,6 +21,8 @@ final readonly class TicketAnalysis
      * @param  list<array{id: int, ticket_number: string, subject: string, score: float}>  $contextTickets
      * @param  list<string>  $rejectedFields
      * @param  list<AgentRecommendation>  $agentRecommendations
+     * @param  list<string>  $checks
+     * @param  list<array{id: int, name: string, tier: string|null}>  $engineerCandidates
      */
     public function __construct(
         public string $status,
@@ -33,6 +35,13 @@ final readonly class TicketAnalysis
         public array $rejectedFields = [],
         public array $agentRecommendations = [],
         public ?string $errorMessage = null,
+        // P6a-2. Appended rather than inserted: every field is a named optional
+        // parameter, so nothing that constructs this DTO positionally breaks.
+        public array $checks = [],
+        public ?int $engineerId = null,
+        public ?string $engineerName = null,
+        public ?string $engineerReason = null,
+        public array $engineerCandidates = [],
     ) {}
 
     public function succeeded(): bool
@@ -66,6 +75,14 @@ final readonly class TicketAnalysis
                 'name' => $this->categoryName,
             ],
             'priority' => $this->priority,
+            'checks' => $this->checks,
+            'engineer' => $this->engineerId === null ? null : [
+                'id' => $this->engineerId,
+                'name' => $this->engineerName,
+                'reason' => $this->engineerReason,
+            ],
+            // Only for the panel's picker, and only ever this ticket's department.
+            'engineer_candidates' => $this->engineerCandidates,
             'context_tickets' => $this->contextTickets,
             'rejected_fields' => $this->rejectedFields,
             'agents' => array_map(fn (AgentRecommendation $a) => $a->toArray(), $this->agentRecommendations),
