@@ -245,9 +245,31 @@
                             <p class="text-sm text-gray-400 text-center py-4">{{ __('No comments yet.') }}</p>
                         @endif
 
+                        {{--
+                            ANALYZE TICKET. Outside the comment form on purpose: the panel owns a
+                            form of its own (the ticket's update form, which Apply submits) and a
+                            nested form does not submit. Outside the closed/cancelled guard too —
+                            analysis is read-only, and a closed ticket is exactly what you want to
+                            analyse when it is reopened.
+                            Enterprise plan (both AI features), both workspace switches, and the
+                            engineer's own `use ai assistant` permission with the owner bypass the
+                            sidebar applies.
+                        --}}
+                        @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot)
+                            && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiAgents)
+                            && (bool) \App\Models\AppSetting::get('ai_enabled', false)
+                            && (bool) \App\Models\AppSetting::get('ai_agents_enabled', false)
+                            && (auth()->user()?->roleInTenant(auth()->user()->currentTenant()) === 'owner'
+                                || auth()->user()?->can('use ai assistant')))
+                            <div class="mt-4 border-t border-gray-200 pt-4">
+                                @include('tickets.partials._ai-analyze', ['ticket' => $ticket])
+                            </div>
+                        @endif
+
                         {{-- Add Comment Form --}}
                         @if(!in_array($ticket->status, ['closed', 'cancelled']))
-                            <form method="POST" action="{{ route('tickets.comments.store', $ticket) }}" enctype="multipart/form-data" class="mt-4 border-t border-gray-200 pt-4">
+                            {{-- id so the Analyze panel can force the note type to Internal when it fills the box. --}}
+                            <form id="add-comment-form" method="POST" action="{{ route('tickets.comments.store', $ticket) }}" enctype="multipart/form-data" class="mt-4 border-t border-gray-200 pt-4">
                                 @csrf
                                 {{-- AI Copilot (draft / summarize) --}}
                                 @if(app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot) && (bool) \App\Models\AppSetting::get('ai_agent_copilot_enabled', false))

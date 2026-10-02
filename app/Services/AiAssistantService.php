@@ -33,6 +33,16 @@ class AiAssistantService
 {
     private const MAX_TOOL_ITERATIONS = 8;
 
+    /**
+     * The wording every ticket summary in this product is produced with.
+     *
+     * Extracted from summarizeTicket() so ANALYZE TICKET reuses it verbatim rather
+     * than growing a second summariser with its own drift. One wording, one place,
+     * greppable — change this and both surfaces change together.
+     */
+    public const SUMMARY_INSTRUCTION = 'You summarize support tickets for agents. Produce a tight summary: the customer\'s issue, '
+        .'what has happened so far, and the recommended next action. Use short bullet points.';
+
     public function __construct(
         private OpenAiService $openAi,
         private TicketService $ticketService,
@@ -192,8 +202,7 @@ class AiAssistantService
 
     public function summarizeTicket(Ticket $ticket): string
     {
-        $system = 'You summarize support tickets for agents. Produce a tight summary: the customer\'s issue, '
-            .'what has happened so far, and the recommended next action. Use short bullet points.';
+        $system = self::SUMMARY_INSTRUCTION;
         $user = "TICKET\nSubject: {$ticket->subject}\nDescription: {$ticket->description}\n\n"
             ."CONVERSATION SO FAR:\n".$this->ticketContext($ticket);
 

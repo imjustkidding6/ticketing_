@@ -6,6 +6,7 @@ use App\Http\Controllers\AiAgentConfigController;
 use App\Http\Controllers\AiAgentController;
 use App\Http\Controllers\AiAgentSkillController;
 use App\Http\Controllers\AiAssistantController;
+use App\Http\Controllers\AiTicketAnalysisController;
 use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\CannedResponseController;
 use App\Http\Controllers\CategoryController;
@@ -188,6 +189,17 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::post('tickets/{ticket}/ai/polish-task', [AiAssistantController::class, 'polishTask'])->name('tickets.ai.polish-task')->middleware('feature:ai_chatbot');
     Route::post('tickets/{ticket}/ai/polish-tasks', [AiAssistantController::class, 'polishTaskList'])->name('tickets.ai.polish-tasks')->middleware('feature:ai_chatbot');
     // AI clean-up of a rough ticket draft on the create form (subject/description/tasks)
+    // ANALYZE TICKET (P6a). Both Enterprise features: ai_chatbot owns the AI runtime and
+    // the ai_enabled master switch, ai_agents is what makes the department's agents part
+    // of the prompt. The analyze route is throttled with the existing agent-ai limiter;
+    // the verdict post is a local write and spends nothing.
+    Route::post('tickets/{ticket}/ai/analyze', [AiTicketAnalysisController::class, 'analyze'])
+        ->name('tickets.ai.analyze')
+        ->middleware(['feature:ai_chatbot,ai_agents', 'throttle:agent-ai']);
+    Route::post('tickets-ai/analyses/{analysis}/verdict', [AiTicketAnalysisController::class, 'verdict'])
+        ->name('tickets.ai.analysis-verdict')
+        ->middleware('feature:ai_chatbot,ai_agents');
+
     Route::post('tickets-ai/structure', [AiAssistantController::class, 'structureDraft'])->name('tickets.ai.structure')->middleware('feature:ai_chatbot');
 
     // In-app AI assistant (per-user memory) — feature-gated
