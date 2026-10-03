@@ -9,6 +9,7 @@ use App\Exceptions\OpenAiException;
 use App\Models\AiAgent;
 use App\Models\AiSuggestionVerdict;
 use App\Models\AiTicketAnalysis;
+use App\Models\Department;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\User;
@@ -22,6 +23,7 @@ use App\Services\PlanService;
 use App\Services\PromptInjectionService;
 use App\Support\Ai\AgentRecommendation;
 use App\Support\Ai\TicketAnalysis;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -55,8 +57,14 @@ use Illuminate\Support\Str;
  * Anything the model invented lands in `rejected_fields` and is never rendered.
  *
  * The plan gate, the `ai_enabled` switch and the `ai_agents_enabled` opt-in belong to the
- * caller (see AiTicketAnalysisController) — AppSetting::get() reads the session, and this
- * service must not pretend to be able to.
+ * caller (see AiTicketAnalysisController and AnalyzePublicTicketJob) — AppSetting::get()
+ * reads the session, and this service must not pretend to be able to.
+ *
+ * **Two triggers, one code path.** An engineer pressing Analyze and a customer submitting
+ * a ticket on the public portal run exactly this service; the only differences are a null
+ * `$user` and the recorded `trigger`. P6b added no second analysis path, deliberately —
+ * the automatic run is the one with no human in the loop at call time, so it must sit
+ * behind the same guardrail chain and the same validators, not beside them.
  */
 class AnalyzeTicketService
 {
@@ -73,6 +81,24 @@ class AnalyzeTicketService
      * whole analysis becomes `failed`.
      */
     public const MAX_CHECKS = 6;
+
+    /**
+     * The polish instruction, extracted rather than copied from
+     * AiAssistantService::structureTicketDraft() — the same wording, proven on the create
+     * form, plus the two sentences this surface needs: the author is a CUSTOMER, and the
+     * original is kept.
+     */
+    public const POLISH_INSTRUCTION = 'Also rewrite the ticket into a clean, professional form. '
+        .'Do NOT invent facts, names, numbers, or causes that are not stated or clearly implied. '
+        .'"polished_subject" is a concise, specific one-line title (max ~80 chars, no trailing period). '
+        .'"polished_description" is a clear, well-formatted description; when the text supports it, '
+        .'organize it under short labelled sections such as "Issue", "Steps to Reproduce", "Expected", '
+        .'"Actual" and "Environment". If the text is too vague for a field, keep the original wording '
+        .'rather than fabricating. '
+        .'The text was written by a customer, not a colleague. Preserve every fact, every error message '
+        .'and every quantity exactly; fix only grammar, structure and spelling. '
+        .'These are suggestions an engineer will review. The customer\'s original text is kept and is '
+        .'not replaced by yours.';
 
     public function __construct(
         private readonly OpenAiService $openAi,
@@ -93,10 +119,16 @@ class AnalyzeTicketService
      * circuit breaker, which OpenAiService::post() raises before any HTTP) propagates,
      * because "the provider is down" is a different answer from "we declined".
      *
+     * `$user` is null for an automatic run: there is no requester, and `trigger` — not
+     * `requested_by IS NULL` — is what separates the two populations.
+     *
      * @throws OpenAiException
      */
-    public function analyze(Ticket $ticket, User $user): TicketAnalysis
-    {
+    public function analyze(
+        Ticket $ticket,
+        ?User $user = null,
+        string $trigger = AiTicketAnalysis::TRIGGER_MANUAL,
+    ): TicketAnalysis {
         $sanitised = $this->sanitisedTicketText($ticket);
 
         // Guardrails first, and before any HTTP. On a publicly created ticket the
@@ -104,28 +136,35 @@ class AnalyzeTicketService
         // the normal case on the surface triage pays most on — not a hypothetical. Both
         // services write their own AiModerationLog row, and both are passed the tenant
         // and the user so the row is attributable.
-        if ($this->injection->isInjection($sanitised, $ticket->tenant_id, (int) $user->getKey())) {
-            return $this->refuse($ticket, $user, AiTicketAnalysis::STATUS_REFUSED_INJECTION);
+        if ($this->injection->isInjection($sanitised, $ticket->tenant_id, $user?->getKey())) {
+            return $this->refuse($ticket, $user, AiTicketAnalysis::STATUS_REFUSED_INJECTION, $trigger);
         }
 
-        if ($this->moderation->isFlagged($sanitised, 'balanced', $ticket->tenant_id, (int) $user->getKey())) {
-            return $this->refuse($ticket, $user, AiTicketAnalysis::STATUS_REFUSED_MODERATION);
+        if ($this->moderation->isFlagged($sanitised, 'balanced', $ticket->tenant_id, $user?->getKey())) {
+            return $this->refuse($ticket, $user, AiTicketAnalysis::STATUS_REFUSED_MODERATION, $trigger);
         }
 
         // CircuitBreakerService is NOT invoked here: OpenAiService::post() already wraps
         // every endpoint, and a second ensureAvailable()/recordFailure() pair would
         // double-count a single outage.
 
-        $recommendations = $this->recommendationsFor($ticket, $sanitised);
-        $categories = $this->categoryCandidates($ticket);
-        $engineers = $this->engineerCandidates($ticket);
+        // Resolved ONCE, explicitly against the ticket's tenant, and passed down rather
+        // than re-read from the relation in three places. A foreign department makes all
+        // three candidate lists empty, so every suggestion that depends on the department
+        // is omitted instead of answered from another workspace.
+        $department = $this->departmentFor($ticket);
+
+        $recommendations = $this->recommendationsFor($department, $sanitised);
+        $categories = $this->categoryCandidates($ticket, $department);
+        $engineers = $this->engineerCandidates($ticket, $department);
 
         $startedAt = microtime(true);
 
         /** @var array{context: array<int, array{ticket: Ticket, score: float}>, response: array<string, mixed>} $calls */
         $calls = $this->usage->withContext([
             'tenant_id' => $ticket->tenant_id,
-            'user_id' => (int) $user->getKey(),
+            // Null on the automatic path, and correct: nobody asked for it.
+            'user_id' => $user?->getKey(),
             // The chat call is the agent-copilot family, not the conversational channel.
             // The embedding call keeps its own `embed`, which post() derives from the
             // endpoint and applyContext() leaves alone.
@@ -167,7 +206,23 @@ class AnalyzeTicketService
             $contextTickets,
             $usageLogIds,
             $latencyMs,
+            $trigger,
         );
+    }
+
+    /**
+     * Has this ticket already had its one automatic analysis?
+     *
+     * The cheap guard that short-circuits before any OpenAI spend. It is NOT the
+     * correctness guarantee — the unique index on `auto_for_ticket_id` is, because two
+     * workers reaching this check in the same millisecond both pass it.
+     */
+    public function alreadyAutoAnalysed(Ticket $ticket): bool
+    {
+        return AiTicketAnalysis::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->where('auto_for_ticket_id', $ticket->getKey())
+            ->exists();
     }
 
     /**
@@ -186,6 +241,10 @@ class AnalyzeTicketService
         ];
 
         $comments = $ticket->comments()
+            // `ticket_id` already pins these rows to a ticket this service resolved against
+            // an explicit tenant, but TicketComment is a BelongsToTenant model and the scope
+            // adds nothing in a worker, so the predicate is stated rather than assumed.
+            ->where('tenant_id', $ticket->tenant_id)
             ->where('is_public', true)
             ->oldest()
             ->pluck('content')
@@ -211,10 +270,8 @@ class AnalyzeTicketService
      *
      * @return list<AgentRecommendation>
      */
-    private function recommendationsFor(Ticket $ticket, string $text): array
+    private function recommendationsFor(?Department $department, string $text): array
     {
-        $department = $ticket->department;
-
         if ($department === null) {
             return [];
         }
@@ -230,18 +287,60 @@ class AnalyzeTicketService
     }
 
     /**
+     * The ticket's department, resolved against the TICKET's tenant explicitly.
+     *
+     * `$ticket->department` goes through `Department`'s global `TenantScope`, and
+     * `TenantScope::getCurrentTenantId()` returns null — applying NO predicate — whenever
+     * `auth()->check()` is false. In the queued automatic run there is no authenticated
+     * user, so the relation would resolve a department belonging to ANOTHER workspace
+     * whenever `tickets.department_id` held a foreign id. That matters beyond the
+     * department row itself: `AgentSelectionService::assignedAgents()` pins the AI agents
+     * to `$department->tenant_id`, so a foreign department would put another paying
+     * workspace's agent names and system prompts into this tenant's prompt and onto its
+     * stored analysis. Setting `session('current_tenant_id')` does NOT fix this — the
+     * session is not what the scope reads.
+     *
+     * Fails closed: a department that is not this tenant's is treated as no department at
+     * all, which omits the category suggestion, the engineer suggestion and the agent
+     * instructions rather than answering from the wrong workspace.
+     */
+    private function departmentFor(Ticket $ticket): ?Department
+    {
+        if ($ticket->department_id === null) {
+            return null;
+        }
+
+        return Department::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->find($ticket->department_id);
+    }
+
+    /**
+     * True when the ticket's department really belongs to the ticket's workspace.
+     *
+     * Public so the queued job can refuse the whole run before spending anything: once
+     * the portal's tenant-scoped validation rules are in place this state is impossible,
+     * and a ticket that still reaches it is not a ticket to analyse.
+     */
+    public function departmentIsOwnedByTicketTenant(Ticket $ticket): bool
+    {
+        return $ticket->department_id === null || $this->departmentFor($ticket) !== null;
+    }
+
+    /**
      * The categories the model may choose from, keyed by a service-issued ref.
      *
-     * Scoped to the tenant (BelongsToTenant) AND to the ticket's own department — the
-     * category/department pairing the portal fix closed. A ticket with no department
-     * gets an EMPTY list and no category suggestion at all, rather than being offered
-     * the whole workspace's categories; widening is how a suggestion becomes a leak.
+     * Scoped to the tenant EXPLICITLY and to the ticket's own department — the
+     * category/department pairing the portal fix closed. A ticket with no department, or
+     * one whose department belongs to another workspace, gets an EMPTY list and no
+     * category suggestion at all, rather than being offered another workspace's
+     * categories; widening is how a suggestion becomes a leak.
      *
      * @return array<string, TicketCategory>
      */
-    private function categoryCandidates(Ticket $ticket): array
+    private function categoryCandidates(Ticket $ticket, ?Department $department): array
     {
-        if ($ticket->department_id === null) {
+        if ($department === null) {
             return [];
         }
 
@@ -251,7 +350,13 @@ class AnalyzeTicketService
         foreach (
             TicketCategory::query()
                 ->active()
-                ->where('department_id', $ticket->department_id)
+                // `tenant_id` EXPLICITLY. The department predicate only contains the
+                // tenant while `tickets.department_id` is known to be this workspace's,
+                // and TenantScope adds nothing in a session-less worker — so without this
+                // a forged department id offered another workspace's category names to
+                // the model and stored them on this tenant's analysis.
+                ->where('tenant_id', $ticket->tenant_id)
+                ->where('department_id', $department->getKey())
                 ->orderBy('name')
                 ->get(['id', 'name', 'department_id', 'tenant_id']) as $category
         ) {
@@ -271,8 +376,8 @@ class AnalyzeTicketService
      * handed, and a resolver that infers the workspace is the `TenantTime::timezone()`
      * mistake.
      *
-     * **Department membership fails closed.** A ticket with no department, or a
-     * department with no members, yields an EMPTY list and suggestion 7 is omitted
+     * **Department membership fails closed.** A ticket with no department, a department
+     * belonging to another workspace, or a department with no members, yields an EMPTY list and suggestion 7 is omitted
      * entirely. Widening to the workspace would turn a triage suggestion into a staff
      * directory, which is precisely what an AI panel must not become.
      *
@@ -282,18 +387,25 @@ class AnalyzeTicketService
      *
      * @return array<string, User>
      */
-    private function engineerCandidates(Ticket $ticket): array
+    private function engineerCandidates(Ticket $ticket, ?Department $department): array
     {
-        if ($ticket->department_id === null) {
+        if ($department === null) {
             return [];
         }
 
         $members = User::query()
             // User is NOT auto-scoped. Explicit, and on the ticket's tenant.
             ->whereHas('tenants', fn ($q) => $q->where('tenant_id', $ticket->tenant_id))
-            ->whereHas('departments', fn ($q) => $q->where('departments.id', $ticket->department_id))
+            ->whereHas('departments', fn ($q) => $q->where('departments.id', $department->getKey()))
             ->where('is_available', true)
-            ->withCount(['tickets' => fn ($q) => $q->whereIn('status', Ticket::OPEN_STATUSES)])
+            // `tickets.tenant_id` EXPLICITLY. TenantScope applies no predicate at all when
+            // auth()->check() is false, so relying on it was correct only while every
+            // caller was a signed-in agent — in the queued automatic run a candidate who
+            // belongs to two workspaces would have their open tickets counted across both,
+            // and that cross-tenant figure would go into the prompt.
+            ->withCount(['tickets' => fn ($q) => $q
+                ->where('tickets.tenant_id', $ticket->tenant_id)
+                ->whereIn('status', Ticket::OPEN_STATUSES)])
             ->orderBy('name')
             ->get(['id', 'name', 'support_tier', 'is_available']);
 
@@ -356,11 +468,15 @@ class AnalyzeTicketService
 
         $lines[] = 'Reply with a single JSON object and nothing else, with exactly these keys:'
             ."\n".'{"summary": "string, at most 1200 characters", '
+            .'"polished_subject": "string, at most 80 characters, or null", '
+            .'"polished_description": "string, structured, or null", '
             .'"category_ref": "one of the supplied category references, or null", '
             .'"priority": "one of low|medium|high|critical, or null", '
             .'"checks": ["an imperative troubleshooting step, 2 to '.self::MAX_CHECKS.' items"], '
             .'"engineer_ref": "one of the supplied engineer references, or null", '
             .'"engineer_reason": "string, at most 200 characters, or null"}';
+
+        $lines[] = self::POLISH_INSTRUCTION;
 
         $lines[] = 'The checks are a proposed troubleshooting checklist for the engineer: '
             .'imperative phrases, one action each, ordered cheapest-to-verify first. Do not '
@@ -449,7 +565,7 @@ class AnalyzeTicketService
      */
     private function persist(
         Ticket $ticket,
-        User $user,
+        ?User $user,
         array $response,
         array $categories,
         array $engineers,
@@ -457,12 +573,16 @@ class AnalyzeTicketService
         array $contextTickets,
         array $usageLogIds,
         int $latencyMs,
+        string $trigger,
     ): TicketAnalysis {
         $usage = $response['usage'] ?? [];
         $base = [
             'tenant_id' => $ticket->tenant_id,
             'ticket_id' => $ticket->getKey(),
-            'requested_by' => $user->getKey(),
+            'requested_by' => $user?->getKey(),
+            'trigger' => $trigger,
+            // Written only on the automatic path; NULL leaves manual runs unconstrained.
+            'auto_for_ticket_id' => $trigger === AiTicketAnalysis::TRIGGER_AUTO ? $ticket->getKey() : null,
             'department_id' => $ticket->department_id,
             'model' => (string) ($response['model'] ?? config('services.openai.model', 'gpt-5')),
             'prompt_tokens' => (int) ($usage['prompt_tokens'] ?? 0),
@@ -483,7 +603,7 @@ class AnalyzeTicketService
             // Unparseable or truncated. A reasoning model whose hidden tokens ate the
             // output budget lands here, and the honest answer is "nothing", not half a
             // panel the engineer cannot tell is half.
-            $analysis = AiTicketAnalysis::create($base + [
+            $analysis = $this->createAnalysis($ticket, $base + [
                 'status' => AiTicketAnalysis::STATUS_FAILED,
                 'suggestions' => null,
                 'rejected_fields' => [],
@@ -496,6 +616,7 @@ class AnalyzeTicketService
                 contextTickets: $contextTickets,
                 agentRecommendations: $recommendations,
                 errorMessage: 'The AI returned a response we could not read.',
+                trigger: $trigger,
             );
         }
 
@@ -507,9 +628,25 @@ class AnalyzeTicketService
         $checks = $this->validateChecks($decoded['checks'] ?? null, $rejected);
         $engineer = $this->validateEngineer($decoded['engineer_ref'] ?? null, $engineers, $ticket, $rejected);
         $engineerReason = $engineer === null ? null : $this->validateEngineerReason($decoded['engineer_reason'] ?? null);
+        $polishedSubject = $this->validatePolishedText(
+            $decoded['polished_subject'] ?? null,
+            (string) $ticket->subject,
+            (int) config('ai.analyze.polished_subject_chars', 255),
+            AiSuggestionVerdict::TYPE_SUBJECT,
+            $rejected,
+        );
+        $polishedDescription = $this->validatePolishedText(
+            $decoded['polished_description'] ?? null,
+            (string) $ticket->description,
+            (int) config('ai.analyze.polished_description_chars', 8000),
+            AiSuggestionVerdict::TYPE_DESCRIPTION,
+            $rejected,
+        );
 
         $suggestions = [
             'summary' => $summary,
+            'polished_subject' => $polishedSubject,
+            'polished_description' => $polishedDescription,
             'category' => $category === null ? null : ['id' => (int) $category->getKey(), 'name' => (string) $category->name],
             'priority' => $priority,
             'checks' => $checks === [] ? null : $checks,
@@ -520,7 +657,7 @@ class AnalyzeTicketService
             ],
         ];
 
-        $analysis = AiTicketAnalysis::create($base + [
+        $analysis = $this->createAnalysis($ticket, $base + [
             'status' => AiTicketAnalysis::STATUS_SUCCEEDED,
             'suggestions' => $suggestions,
             'rejected_fields' => $rejected,
@@ -541,7 +678,90 @@ class AnalyzeTicketService
             engineerName: $engineer === null ? null : (string) $engineer->name,
             engineerReason: $engineerReason,
             engineerCandidates: $this->presentCandidates($engineers),
+            polishedSubject: $polishedSubject,
+            polishedDescription: $polishedDescription,
+            trigger: $trigger,
         );
+    }
+
+    /**
+     * Write the row, surviving the automatic path's unique-index race — and ONLY that.
+     *
+     * Two workers reaching alreadyAutoAnalysed() in the same millisecond both pass it;
+     * `ai_analyses_auto_for_ticket_unique` is what actually stops the second row. A race
+     * is not an error the engineer should see, so the existing analysis is returned
+     * instead of failing the job.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function createAnalysis(Ticket $ticket, array $attributes): AiTicketAnalysis
+    {
+        try {
+            return AiTicketAnalysis::create($attributes);
+        } catch (UniqueConstraintViolationException $e) {
+            // The AUTO path only. Recovering on the manual path would hand an engineer's
+            // fresh Analyze the ticket's old automatic analysis whenever their insert failed
+            // for an unrelated reason (a deadlock, a lock-wait timeout, a bad FK), and the
+            // verdict they then posted would be written under the AUTO parent — mixing the
+            // two populations `trigger` exists to keep apart.
+            if (($attributes['trigger'] ?? null) !== AiTicketAnalysis::TRIGGER_AUTO) {
+                throw $e;
+            }
+
+            $existing = AiTicketAnalysis::withoutGlobalScopes()
+                ->where('tenant_id', $ticket->tenant_id)
+                ->where('auto_for_ticket_id', $ticket->getKey())
+                ->first();
+
+            if ($existing === null) {
+                throw $e;
+            }
+
+            report($e);
+
+            return $existing;
+        }
+    }
+
+    /**
+     * One validator for both polished fields — the same rules, different ceilings.
+     *
+     * The cap is hard, not advisory: the polished subject is bounded by the WIDTH of
+     * `tickets.subject` and the description by `applied_value`'s 8,000, so a long
+     * suggestion is truncated here rather than 422-ing the apply after the verdict row
+     * has already been written.
+     *
+     * A value byte-identical to the original is OMITTED, not offered: nothing was
+     * improved, and an Apply that changes nothing would bank minutes_saved for no work.
+     *
+     * @param  list<string>  $rejected
+     */
+    private function validatePolishedText(
+        mixed $value,
+        string $original,
+        int $limit,
+        string $type,
+        array &$rejected,
+    ): ?string {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (! is_string($value)) {
+            $rejected[] = $type;
+
+            return null;
+        }
+
+        $clean = trim((string) preg_replace('/[ \t]+/u', ' ', $value));
+
+        if ($clean === '') {
+            return null;
+        }
+
+        $clean = Str::limit($clean, $limit, '');
+
+        return $clean === trim($original) ? null : $clean;
     }
 
     private function validateSummary(mixed $value): ?string
@@ -724,12 +944,14 @@ class AnalyzeTicketService
      * A refusal is a row, not an exception: a workspace being refused repeatedly is a
      * thing to see in the data next to the AiModerationLog that explains it.
      */
-    private function refuse(Ticket $ticket, User $user, string $status): TicketAnalysis
+    private function refuse(Ticket $ticket, ?User $user, string $status, string $trigger): TicketAnalysis
     {
-        $analysis = AiTicketAnalysis::create([
+        $analysis = $this->createAnalysis($ticket, [
             'tenant_id' => $ticket->tenant_id,
             'ticket_id' => $ticket->getKey(),
-            'requested_by' => $user->getKey(),
+            'requested_by' => $user?->getKey(),
+            'trigger' => $trigger,
+            'auto_for_ticket_id' => $trigger === AiTicketAnalysis::TRIGGER_AUTO ? $ticket->getKey() : null,
             'department_id' => $ticket->department_id,
             'status' => $status,
             'error_message' => $status === AiTicketAnalysis::STATUS_REFUSED_INJECTION
@@ -741,6 +963,7 @@ class AnalyzeTicketService
             status: $status,
             analysisId: (int) $analysis->getKey(),
             errorMessage: 'This ticket\'s text cannot be sent for analysis.',
+            trigger: $trigger,
         );
     }
 }

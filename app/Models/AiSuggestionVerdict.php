@@ -43,6 +43,12 @@ class AiSuggestionVerdict extends Model
 
     public const TYPE_CONTEXT = 'context';
 
+    /** P6b: the polished subject, offered beside the customer's own. */
+    public const TYPE_SUBJECT = 'subject';
+
+    /** P6b: the polished description, offered beside the customer's own. */
+    public const TYPE_DESCRIPTION = 'description';
+
     /**
      * varchar columns, so these constants are the only enumeration (the
      * `Ticket::STATUSES` rule).
@@ -61,6 +67,8 @@ class AiSuggestionVerdict extends Model
         self::TYPE_CHECKS,
         self::TYPE_ENGINEER,
         self::TYPE_CONTEXT,
+        self::TYPE_SUBJECT,
+        self::TYPE_DESCRIPTION,
     ];
 
     public const VERDICT_ACCEPTED = 'accepted';

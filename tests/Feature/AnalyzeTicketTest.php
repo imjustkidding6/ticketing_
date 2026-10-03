@@ -850,6 +850,48 @@ class AnalyzeTicketTest extends TestCase
         $this->assertStringNotContainsString('engineer_candidates:', $page->getContent());
         $this->assertStringNotContainsString('"engineer_candidates":', $page->getContent());
 
+        // The SAME assertion on a page that carries a STORED analysis. Without this the
+        // guard is blind rather than holding: P6b's panel hydration embeds the analysis
+        // into the page, so a roster rebuilt for the hydrated panel would be exactly the
+        // second unscoped source this test exists to forbid, and the assertions above
+        // would never see it — this ticket has no analysis.
+        $hydrated = AiTicketAnalysis::query()->create([
+            'tenant_id' => $tenant->id,
+            'ticket_id' => $ticket->id,
+            'department_id' => $department->id,
+            'trigger' => AiTicketAnalysis::TRIGGER_AUTO,
+            'auto_for_ticket_id' => $ticket->id,
+            'status' => AiTicketAnalysis::STATUS_SUCCEEDED,
+            'suggestions' => [
+                'summary' => 'A stored analysis, so the panel hydrates.',
+                'engineer' => ['id' => $eligible->id, 'name' => $eligible->name, 'reason' => null],
+            ],
+        ]);
+
+        $hydratedPage = $this->get($this->tenantUrl("tickets/{$ticket->id}"))->assertOk();
+        $this->assertStringNotContainsString('engineer_candidates:', $hydratedPage->getContent());
+        $this->assertStringNotContainsString('"engineer_candidates":', $hydratedPage->getContent());
+
+        // The hydration payload goes through `@js`, i.e. Illuminate\Support\Js::from(),
+        // which emits `JSON.parse('{\u0022key\u0022:…}')` — every quote escaped. The two
+        // assertions above therefore CANNOT see it in any form, which is the precise reason
+        // the original guard was blind rather than merely untested. This is the assertion
+        // that actually watches the hydration path.
+        $this->assertStringNotContainsString('u0022engineer_candidates', $hydratedPage->getContent());
+
+        // Only the FOREIGN-tenant decoy is asserted by name here. The two same-tenant
+        // decoys legitimately appear on this page already — the ticket's own assignment
+        // dropdown lists the whole workspace roster, and always has. The invariant the
+        // hydration must not break is that no *panel* roster is server-rendered (the two
+        // assertions above) and that nothing from another workspace is on the page at all.
+        $this->assertStringNotContainsString(
+            $foreignUser->name,
+            $hydratedPage->getContent(),
+            'Another workspace\'s member reached the hydrated ticket page',
+        );
+
+        $hydrated->delete();
+
         $response = $this->analyze($ticket)->assertOk();
         $candidateIds = array_column($response->json('engineer_candidates'), 'id');
 
@@ -879,5 +921,78 @@ class AnalyzeTicketTest extends TestCase
             // the ticket's current open tasks ride along as hidden rows.
             ->assertSee(route('tickets.tasks.polish-apply', $ticket), false)
             ->assertSee('value="An existing open task"', false);
+    }
+
+    public function test_an_on_demand_analysis_records_the_manual_trigger_and_no_auto_key(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->actAs($tenant);
+        [$ticket] = $this->ticketFor($tenant);
+
+        $this->analyze($ticket)->assertOk();
+
+        $analysis = AiTicketAnalysis::query()->sole();
+
+        $this->assertSame(AiTicketAnalysis::TRIGGER_MANUAL, $analysis->trigger);
+        $this->assertSame($user->id, (int) $analysis->requested_by);
+        // NULL, so the unique index leaves manual runs unconstrained: an engineer may
+        // re-analyse a ticket as often as new information arrives.
+        $this->assertNull($analysis->auto_for_ticket_id);
+    }
+
+    public function test_the_prompt_asks_for_a_polished_subject_and_description(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket] = $this->ticketFor($tenant);
+
+        $this->analyze($ticket)->assertOk();
+
+        $body = $this->chatBody();
+        $this->assertStringContainsString('polished_subject', $body);
+        $this->assertStringContainsString('polished_description', $body);
+        // The two sentences this surface adds to the shared instruction.
+        $this->assertStringContainsString('written by a customer, not a colleague', $body);
+        $this->assertStringContainsString('original text is kept', $body);
+    }
+
+    public function test_the_polished_text_is_returned_as_two_more_suggestions(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket] = $this->ticketFor($tenant);
+
+        $this->modelReply = array_merge((array) $this->modelReply, [
+            'polished_subject' => 'Printer offline following the latest Windows update',
+            'polished_description' => "Issue\nThe office printer stopped responding.",
+        ]);
+
+        $response = $this->analyze($ticket)->assertOk();
+
+        $response->assertJsonPath('polished_subject', 'Printer offline following the latest Windows update');
+        $response->assertJsonPath('polished_description', "Issue\nThe office printer stopped responding.");
+        $response->assertJsonPath('trigger', AiTicketAnalysis::TRIGGER_MANUAL);
+
+        // And the ticket itself is untouched: the polished text is a suggestion, stored on
+        // the analysis, never written to tickets.subject / tickets.description.
+        $ticket->refresh();
+        $this->assertSame('Printer offline after update', $ticket->subject);
+        $this->assertSame('The office printer stopped responding after the Windows update.', $ticket->description);
+    }
+
+    public function test_a_non_string_polished_value_is_rejected_not_rendered(): void
+    {
+        $tenant = $this->createTenant();
+        $this->actAs($tenant);
+        [$ticket] = $this->ticketFor($tenant);
+
+        $this->modelReply = array_merge((array) $this->modelReply, [
+            'polished_subject' => ['not', 'a', 'string'],
+        ]);
+
+        $response = $this->analyze($ticket)->assertOk();
+
+        $this->assertNull($response->json('polished_subject'));
+        $this->assertContains('subject', $response->json('rejected_fields'));
     }
 }

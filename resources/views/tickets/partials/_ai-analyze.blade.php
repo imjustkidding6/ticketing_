@@ -25,6 +25,15 @@
     // as untouched hidden rows. They are deliberately NOT part of the verdict's
     // applied_value: the metric asks what the engineer did with the AI's checks, and
     // folding pre-existing tasks in would report every apply as an edit.
+    // P6b: the panel is HYDRATED from the newest stored analysis, so an agent opening a
+    // publicly submitted ticket finds the suggestions already there without pressing
+    // Analyze. Only a succeeded run is hydrated — a refusal or a failure has no
+    // suggestions to show, and an empty panel is the honest render for it.
+    $analyzeHydrated = ($latestAnalysis ?? null) !== null
+        && $latestAnalysis->status === \App\Models\AiTicketAnalysis::STATUS_SUCCEEDED
+            ? $latestAnalysis->toPanelArray()
+            : null;
+
     $analyzeOpenTasks = $ticket->tasks
         ->whereIn('status', ['pending', 'in_progress'])
         ->pluck('description')
@@ -62,6 +71,20 @@
         <div>
             <span class="text-xs font-semibold text-indigo-700">{{ __('Analyze ticket') }}</span>
             <p class="mt-0.5 text-[11px] text-indigo-600/80">{{ __('Suggestions from this department\'s AI agents. You decide what is applied.') }}</p>
+            {{--
+                Who caused this analysis. An agent must never be unsure whether a human
+                asked for it: an automatic run happened on submission, before anyone had
+                read the ticket.
+            --}}
+            @if($analyzeHydrated !== null)
+                <p class="mt-1 inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-indigo-700 ring-1 ring-indigo-200" x-show="!reanalyzed" x-cloak>
+                    @if($latestAnalysis->trigger === \App\Models\AiTicketAnalysis::TRIGGER_AUTO)
+                        {{ __('Analyzed automatically on submission') }} &middot; @localdt($latestAnalysis->created_at)
+                    @else
+                        {{ __('Analyzed by :name', ['name' => $latestAnalysis->requestedBy?->name ?? __('a colleague')]) }} &middot; @localdt($latestAnalysis->created_at)
+                    @endif
+                </p>
+            @endif
         </div>
         <button type="button" @click="analyze()" :disabled="loading"
                 class="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50 disabled:opacity-50">
@@ -73,6 +96,87 @@
     <p x-show="error" x-cloak class="mt-2 rounded-md bg-white p-2 text-xs text-red-600 ring-1 ring-red-100" x-text="error"></p>
 
     <div x-show="result" x-cloak class="mt-3 flex flex-col gap-2">
+        {{--
+            POLISHED TICKET (P6b) — the customer's words and the AI's rewrite, side by
+            side, the original labelled and listed first.
+
+            Both panes are ALWAYS rendered together: there is no toggle that could show the
+            rewrite alone and no "replace" affordance. `tickets.subject` and
+            `tickets.description` are never written by any automatic path, so the left pane
+            is the byte-exact record of what the customer submitted — the evidence a
+            dispute, a security incident or a billing argument turns on. "not applied" is in
+            the label, not a tooltip.
+
+            After an Apply the page re-renders from the database and the left pane shows the
+            applied text. The original is not lost: TicketService::addHistory() recorded the
+            field change, so applying a polish is recoverable.
+        --}}
+        <template x-if="result?.polished_subject">
+            <div class="rounded-md bg-white p-2.5 ring-1 ring-gray-200">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{{ __('Subject') }}</span>
+                    <div class="flex items-center gap-1.5" x-show="!decided.subject">
+                        <button type="button" @click="applySuggested('subject')" x-show="!editing.subject" class="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50">{{ __('Apply') }}</button>
+                        <button type="button" @click="startEdit('subject')" x-show="!editing.subject" class="rounded-md px-2 py-0.5 text-[11px] font-medium text-indigo-700 hover:underline">{{ __('Edit & apply') }}</button>
+                        <button type="button" @click="dismiss('subject')" x-show="!editing.subject" class="rounded-md px-2 py-0.5 text-[11px] font-medium text-gray-500 hover:text-gray-700">{{ __('Dismiss') }}</button>
+                    </div>
+                    <span x-show="decided.subject" x-cloak class="text-[11px] font-medium text-gray-400" x-text="decidedLabel('subject')"></span>
+                </div>
+
+                <div class="mt-1.5 grid gap-2 sm:grid-cols-2">
+                    <div class="rounded-md bg-gray-50 p-2 ring-1 ring-gray-200">
+                        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{{ __('Customer\'s words') }}</p>
+                        <p class="mt-1 text-xs text-gray-800">{{ $ticket->subject }}</p>
+                        <p class="mt-1 text-[10px] text-gray-400">{{ __('Stored exactly as submitted. This is the ticket.') }}</p>
+                    </div>
+                    <div class="rounded-md bg-indigo-50/70 p-2 ring-1 ring-indigo-100">
+                        <p class="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">{{ __('AI suggestion — not applied') }}</p>
+                        <p x-show="!editing.subject" class="mt-1 text-xs text-gray-800" x-text="result.polished_subject"></p>
+                        <div x-show="editing.subject" x-cloak class="mt-1">
+                            <input type="text" x-model="drafts.subject" maxlength="255" class="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <div class="mt-1.5 flex items-center gap-1.5">
+                                <button type="button" @click="applyEdited('subject')" class="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50">{{ __('Apply edited') }}</button>
+                                <button type="button" @click="cancelEdit('subject')" class="rounded-md px-2 py-0.5 text-[11px] font-medium text-gray-500 hover:text-gray-700">{{ __('Cancel') }}</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <template x-if="result?.polished_description">
+            <div class="rounded-md bg-white p-2.5 ring-1 ring-gray-200">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{{ __('Description') }}</span>
+                    <div class="flex items-center gap-1.5" x-show="!decided.description">
+                        <button type="button" @click="applySuggested('description')" x-show="!editing.description" class="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50">{{ __('Apply') }}</button>
+                        <button type="button" @click="startEdit('description')" x-show="!editing.description" class="rounded-md px-2 py-0.5 text-[11px] font-medium text-indigo-700 hover:underline">{{ __('Edit & apply') }}</button>
+                        <button type="button" @click="dismiss('description')" x-show="!editing.description" class="rounded-md px-2 py-0.5 text-[11px] font-medium text-gray-500 hover:text-gray-700">{{ __('Dismiss') }}</button>
+                    </div>
+                    <span x-show="decided.description" x-cloak class="text-[11px] font-medium text-gray-400" x-text="decidedLabel('description')"></span>
+                </div>
+
+                <div class="mt-1.5 grid gap-2 sm:grid-cols-2">
+                    <div class="rounded-md bg-gray-50 p-2 ring-1 ring-gray-200">
+                        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{{ __('Customer\'s words') }}</p>
+                        <div class="mt-1 max-h-48 overflow-y-auto whitespace-pre-line text-xs text-gray-800">{{ $ticket->description }}</div>
+                        <p class="mt-1 text-[10px] text-gray-400">{{ __('Stored exactly as submitted. This is the ticket.') }}</p>
+                    </div>
+                    <div class="rounded-md bg-indigo-50/70 p-2 ring-1 ring-indigo-100">
+                        <p class="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">{{ __('AI suggestion — not applied') }}</p>
+                        <div x-show="!editing.description" class="mt-1 max-h-48 overflow-y-auto whitespace-pre-line text-xs text-gray-800" x-text="result.polished_description"></div>
+                        <div x-show="editing.description" x-cloak class="mt-1">
+                            <textarea x-model="drafts.description" rows="8" maxlength="8000" class="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                            <div class="mt-1.5 flex items-center gap-1.5">
+                                <button type="button" @click="applyEdited('description')" class="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50">{{ __('Apply edited') }}</button>
+                                <button type="button" @click="cancelEdit('description')" class="rounded-md px-2 py-0.5 text-[11px] font-medium text-gray-500 hover:text-gray-700">{{ __('Cancel') }}</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
         {{-- Summary --}}
         <template x-if="result?.summary">
             <div class="rounded-md bg-white p-2.5 ring-1 ring-gray-200">
@@ -278,8 +382,8 @@
     <form x-ref="applyForm" method="POST" action="{{ route('tickets.update', $ticket) }}" class="hidden">
         @csrf
         @method('PUT')
-        <input type="hidden" name="subject" value="{{ $ticket->subject }}">
-        <textarea name="description" class="hidden">{{ $ticket->description }}</textarea>
+        <input type="hidden" name="subject" value="{{ $ticket->subject }}" x-ref="field_subject">
+        <textarea name="description" class="hidden" x-ref="field_description">{{ $ticket->description }}</textarea>
         <input type="hidden" name="status" value="{{ $ticket->status }}">
         <input type="hidden" name="client_id" value="{{ $ticket->client_id }}">
         <input type="hidden" name="department_id" value="{{ $ticket->department_id }}">
@@ -298,10 +402,16 @@
         return {
             loading: false,
             error: '',
-            result: null,
+            // Hydrated from the newest stored analysis, so an automatically analysed
+            // ticket arrives with its suggestions already on screen. Null when there is
+            // none, which is exactly the pre-P6b state.
+            result: @js($analyzeHydrated),
+            // True once Analyze has been pressed in this page view, so the "analyzed
+            // automatically" badge stops describing a result it is no longer about.
+            reanalyzed: false,
             decided: {},
             editing: {},
-            drafts: { checks: [] },
+            drafts: { checks: @js(is_array($analyzeHydrated['checks'] ?? null) ? $analyzeHydrated['checks'] : []) },
             // id -> name for the department's categories, so an edited category can be
             // reported to the verdict endpoint by NAME: that is what the stored suggestion
             // holds, and the server hashes the two names to decide accepted vs edited.
@@ -319,7 +429,7 @@
                 return { accepted: @js(__('Accepted')), edited: @js(__('Edited')), rejected: @js(__('Dismissed')) }[this.decided[type]] || '';
             },
             async analyze() {
-                this.error = ''; this.loading = true; this.result = null;
+                this.error = ''; this.loading = true; this.result = null; this.reanalyzed = true;
                 this.decided = {}; this.editing = {}; this.drafts = { checks: [] };
                 try {
                     const res = await fetch(this.analyzeUrl, {
@@ -339,7 +449,9 @@
                 }
             },
             startEdit(type) {
-                if (type === 'category') {
+                if (type === 'subject' || type === 'description') {
+                    this.drafts[type] = this.result['polished_' + type];
+                } else if (type === 'category') {
                     this.drafts[type] = String(this.result.category.id);
                 } else if (type === 'engineer') {
                     this.drafts[type] = String(this.result.engineer.id);
@@ -391,7 +503,11 @@
             applySuggested(type) {
                 const id = type === 'category'
                     ? this.result.category.id
-                    : (type === 'engineer' ? this.result.engineer.id : this.result[type]);
+                    : (type === 'engineer'
+                        ? this.result.engineer.id
+                        : (type === 'subject' || type === 'description'
+                            ? this.result['polished_' + type]
+                            : this.result[type]));
 
                 return this.apply(type, id, this.nameFor(type, id));
             },

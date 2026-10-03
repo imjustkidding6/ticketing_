@@ -291,7 +291,12 @@ class TicketController extends Controller
             $cannedResponses = CannedResponse::query()->ordered()->get(['id', 'name', 'category', 'content']);
         }
 
-        return view('tickets.show', compact('ticket', 'agents', 'mergeableTickets', 'cannedResponses'));
+        // The newest analysis of ANY trigger, so the agent finds an automatic analysis
+        // already in the panel and a later manual re-run supersedes it. Both rows survive;
+        // the panel says which trigger produced the one it is showing.
+        $latestAnalysis = $ticket->analyses()->with('requestedBy:id,name')->latest('id')->first();
+
+        return view('tickets.show', compact('ticket', 'agents', 'mergeableTickets', 'cannedResponses', 'latestAnalysis'));
     }
 
     /**

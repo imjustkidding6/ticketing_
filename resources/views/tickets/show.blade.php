@@ -262,7 +262,7 @@
                             && (auth()->user()?->roleInTenant(auth()->user()->currentTenant()) === 'owner'
                                 || auth()->user()?->can('use ai assistant')))
                             <div class="mt-4 border-t border-gray-200 pt-4">
-                                @include('tickets.partials._ai-analyze', ['ticket' => $ticket])
+                                @include('tickets.partials._ai-analyze', ['ticket' => $ticket, 'latestAnalysis' => $latestAnalysis ?? null])
                             </div>
                         @endif
 

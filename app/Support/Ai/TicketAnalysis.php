@@ -42,6 +42,11 @@ final readonly class TicketAnalysis
         public ?string $engineerName = null,
         public ?string $engineerReason = null,
         public array $engineerCandidates = [],
+        // P6b. Appended by the same rule: trailing named optional parameters, so nothing
+        // that constructs this DTO breaks.
+        public ?string $polishedSubject = null,
+        public ?string $polishedDescription = null,
+        public string $trigger = AiTicketAnalysis::TRIGGER_MANUAL,
     ) {}
 
     public function succeeded(): bool
@@ -69,7 +74,12 @@ final readonly class TicketAnalysis
         return [
             'status' => $this->status,
             'analysis_id' => $this->analysisId,
+            'trigger' => $this->trigger,
             'summary' => $this->summary,
+            // Suggestions, never applied. tickets.subject / tickets.description are not
+            // written by any P6b code path; the customer's words stay byte-exact.
+            'polished_subject' => $this->polishedSubject,
+            'polished_description' => $this->polishedDescription,
             'category' => $this->categoryId === null ? null : [
                 'id' => $this->categoryId,
                 'name' => $this->categoryName,
