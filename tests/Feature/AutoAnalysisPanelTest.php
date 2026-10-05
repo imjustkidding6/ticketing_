@@ -332,10 +332,14 @@ class AutoAnalysisPanelTest extends TestCase
         $ticket = $this->submitAndAnalyse($tenant, $department, $category);
 
         $user = $this->actAs($tenant);
+        // The name is compared as Blade renders it. With escaping disabled, a Faker name
+        // carrying an apostrophe ("Jany O'Kon" -> "O&#039;Kon") fails the assertSee below
+        // and makes the assertDontSee above pass vacuously -- the more dangerous half.
+        $byUser = 'Analyzed by '.e($user->name);
 
         $this->get($this->tenantUrl("tickets/{$ticket->id}"))
             ->assertSee('Analyzed automatically on submission', false)
-            ->assertDontSee('Analyzed by '.$user->name, false);
+            ->assertDontSee($byUser, false);
 
         AiTicketAnalysis::withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
@@ -348,7 +352,7 @@ class AutoAnalysisPanelTest extends TestCase
         ]);
 
         $this->get($this->tenantUrl("tickets/{$ticket->id}"))
-            ->assertSee('Analyzed by '.$user->name, false)
+            ->assertSee($byUser, false)
             ->assertDontSee('Analyzed automatically on submission', false);
     }
 
