@@ -6,6 +6,7 @@ namespace App\Services\AI;
 
 use App\Enums\PlanFeature;
 use App\Exceptions\OpenAiException;
+use App\Models\AgentSchedule;
 use App\Models\AiAgent;
 use App\Models\AiSuggestionVerdict;
 use App\Models\AiTicketAnalysis;
@@ -23,6 +24,7 @@ use App\Services\PlanService;
 use App\Services\PromptInjectionService;
 use App\Support\Ai\AgentRecommendation;
 use App\Support\Ai\TicketAnalysis;
+use App\Support\TenantTime;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -158,6 +160,10 @@ class AnalyzeTicketService
         $categories = $this->categoryCandidates($ticket, $department);
         $engineers = $this->engineerCandidates($ticket, $department);
 
+        // An ANNOTATION on the candidates already chosen, never a filter on them: see
+        // availabilityFor(). Null here means the signal is not sent at all.
+        $availability = $this->availabilityFor($ticket, $engineers);
+
         $startedAt = microtime(true);
 
         /** @var array{context: array<int, array{ticket: Ticket, score: float}>, response: array<string, mixed>} $calls */
@@ -169,7 +175,7 @@ class AnalyzeTicketService
             // The embedding call keeps its own `embed`, which post() derives from the
             // endpoint and applyContext() leaves alone.
             'feature' => 'copilot',
-        ], function () use ($ticket, $sanitised, $categories, $engineers, $recommendations) {
+        ], function () use ($ticket, $sanitised, $categories, $engineers, $recommendations, $availability) {
             $context = $this->embeddings->searchSimilarResolvedTickets(
                 $ticket->tenant_id,
                 $sanitised,
@@ -178,8 +184,8 @@ class AnalyzeTicketService
 
             $response = $this->openAi->chat(
                 [
-                    ['role' => 'system', 'content' => $this->systemPrompt($ticket, $recommendations)],
-                    ['role' => 'user', 'content' => $this->userPrompt($sanitised, $categories, $engineers, $context)],
+                    ['role' => 'system', 'content' => $this->systemPrompt($ticket, $recommendations, $availability !== null)],
+                    ['role' => 'user', 'content' => $this->userPrompt($sanitised, $categories, $engineers, $context, $availability)],
                 ],
                 [],
                 [
@@ -435,9 +441,145 @@ class AnalyzeTicketService
     }
 
     /**
+     * Is each issued candidate on shift right now, by the WORKSPACE's clock?
+     *
+     * A tri-state per candidate — true (on shift), false (has a schedule, not on shift
+     * now), null (unknown: no applicable rows) — and a null return for the whole map,
+     * which omits the `available` key from the prompt altogether. Three degradation
+     * levels, in order, each falling back to the signals the suggestion already had
+     * rather than suggesting nobody:
+     *
+     *   1. the workspace does not hold the `agent_schedule` feature — the rows are then
+     *      meaningless data rather than absent data, so the signal is not sent;
+     *   2. the feature is on but NO candidate has any schedule row — a uniformly-unknown
+     *      column invites the model to reason about it, so the prompt stays byte-identical
+     *      to the shape it had before this slice;
+     *   3. some candidates are scheduled — the key is sent for every candidate, `null` for
+     *      the unscheduled ones.
+     *
+     * **This never filters the candidate list.** It annotates the list engineerCandidates()
+     * already chose. Filtering would hand an entirely off-shift department an EMPTY list
+     * and omit suggestion 7 at exactly the hour triage help matters most.
+     *
+     * **TenantTime::now(), never now().** `start_time`/`end_time` are bare `time` columns a
+     * human typed on a workspace screen, so they mean tenant-local wall clock. Comparing
+     * them against the UTC clock would put a UTC+8 workspace's 09:00-17:00 shift at
+     * 01:00-09:00 UTC and report the whole department off shift during their working day —
+     * a wrong suggestion that looks authoritative. TenantTime reads the workspace's own
+     * `timezone` setting through the session, which the queued job sets from an explicit
+     * Tenant before it calls analyze() and restores in a `finally`.
+     *
+     * ONE query for every candidate, not one per candidate: an N+1 inside a prompt builder
+     * is paid on every analysis.
+     *
+     * @param  array<string, User>  $engineers
+     * @return array<string, bool|null>|null
+     */
+    private function availabilityFor(Ticket $ticket, array $engineers): ?array
+    {
+        if ($engineers === []) {
+            return null;
+        }
+
+        // Level 1. `agent_schedule` is Business+ and this feature is Enterprise, so it is
+        // present in practice — but a plan's feature list is data an administrator can
+        // edit, and a workspace without it has no schedule screen to have filled in.
+        if (! $this->plans->tenantHasFeature($ticket->tenant, PlanFeature::AgentSchedule)) {
+            return null;
+        }
+
+        $memberIds = array_map(fn (User $member) => (int) $member->getKey(), array_values($engineers));
+
+        // `tenant_id` EXPLICITLY. AgentSchedule is a BelongsToTenant model, which is
+        // exactly the thing that will NOT protect this query: TenantScope returns before
+        // it reads the session whenever auth()->check() is false, so in the queued
+        // automatic run it applies no predicate at all. `notes` is deliberately not
+        // selected — it never needs to leave the server.
+        $rows = AgentSchedule::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->whereIn('user_id', $memberIds)
+            ->get(['user_id', 'day_of_week', 'start_time', 'end_time', 'is_available', 'effective_date', 'end_date'])
+            ->groupBy('user_id');
+
+        // Level 2.
+        if ($rows->isEmpty()) {
+            return null;
+        }
+
+        $now = TenantTime::now();
+        $dayOfWeek = (int) $now->dayOfWeek;          // 0 = Sunday, matching day_of_week
+        $time = $now->format('H:i:s');
+        $date = $now->toDateString();                // a tenant-local date, for date columns
+
+        $availability = [];
+
+        // Level 3.
+        foreach ($engineers as $ref => $member) {
+            $theirs = $rows->get((int) $member->getKey());
+
+            // No rows at all is UNKNOWN; rows that do not cover today is OFF shift. The
+            // difference is the whole point of the tri-state.
+            $availability[$ref] = $theirs === null || $theirs->isEmpty()
+                ? null
+                : $theirs->contains(fn (AgentSchedule $row) => $this->isOnShift($row, $dayOfWeek, $time, $date));
+        }
+
+        return $availability;
+    }
+
+    /**
+     * One schedule row against one tenant-local instant.
+     */
+    private function isOnShift(AgentSchedule $row, int $dayOfWeek, string $time, string $date): bool
+    {
+        if ($row->is_available !== true || (int) $row->day_of_week !== $dayOfWeek) {
+            return false;
+        }
+
+        if ($row->effective_date !== null && $row->effective_date->toDateString() > $date) {
+            return false;
+        }
+
+        if ($row->end_date !== null && $row->end_date->toDateString() < $date) {
+            return false;
+        }
+
+        $start = $this->wallClock($row->start_time);
+        $end = $this->wallClock($row->end_time);
+
+        if ($start === null || $end === null) {
+            return false;
+        }
+
+        // An overnight shift (22:00-06:00) reads as off shift all night under a naive
+        // BETWEEN, and a 24/7 MSP desk is exactly this product's customer.
+        return $start > $end
+            ? ($time >= $start || $time <= $end)
+            : ($time >= $start && $time <= $end);
+    }
+
+    /**
+     * A `time` column as a comparable HH:MM:SS string. MySQL hands back HH:MM:SS, but a
+     * seeder or an import may have stored HH:MM, and '9:00' sorts after '10:00:00' as a
+     * string, so the shape is normalised rather than trusted.
+     */
+    private function wallClock(mixed $value): ?string
+    {
+        if (! is_string($value) && ! is_int($value)) {
+            return null;
+        }
+
+        if (preg_match('/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/', trim((string) $value), $m) !== 1) {
+            return null;
+        }
+
+        return sprintf('%02d:%02d:%02d', (int) $m[1], (int) $m[2], (int) ($m[3] ?? 0));
+    }
+
+    /**
      * @param  list<AgentRecommendation>  $recommendations
      */
-    private function systemPrompt(Ticket $ticket, array $recommendations): string
+    private function systemPrompt(Ticket $ticket, array $recommendations, bool $withAvailability = false): string
     {
         $lines = [
             'You are the triage assistant for '.$ticket->tenant->displayName().'.',
@@ -489,6 +631,14 @@ class AnalyzeTicketService
             .'the open-ticket load given. Prefer a lighter load at a sufficient tier. The '
             .'reason must not claim to know who the person is.';
 
+        if ($withAvailability) {
+            // Only said when the key is actually sent. Describing an attribute the payload
+            // does not carry invites the model to reason about data it was never given.
+            $lines[] = '"available" may be true, false or null. null means UNKNOWN, not '
+                .'unavailable. Prefer an available engineer when one exists; if none is marked '
+                .'available, still choose the best candidate on tier and load.';
+        }
+
         return implode("\n\n", $lines);
     }
 
@@ -496,9 +646,15 @@ class AnalyzeTicketService
      * @param  array<string, TicketCategory>  $categories
      * @param  array<string, User>  $engineers
      * @param  array<int, array{ticket: Ticket, score: float}>  $context
+     * @param  array<string, bool|null>|null  $availability  Null omits the key entirely.
      */
-    private function userPrompt(string $sanitised, array $categories, array $engineers, array $context): string
-    {
+    private function userPrompt(
+        string $sanitised,
+        array $categories,
+        array $engineers,
+        array $context,
+        ?array $availability = null,
+    ): string {
         $sections = ["TICKET\n".$sanitised];
 
         $sections[] = "CATEGORY OPTIONS (choose one reference or null)\n".($categories === []
@@ -516,11 +672,23 @@ class AnalyzeTicketService
         $sections[] = "ENGINEER OPTIONS (choose one reference or null)\n".($engineers === []
             ? '(none available — return null)'
             : implode("\n", array_map(
-                fn (string $ref, User $member) => (string) json_encode([
-                    'ref' => $ref,
-                    'tier' => $member->support_tier,
-                    'open_tickets' => (int) ($member->tickets_count ?? 0),
-                ]),
+                fn (string $ref, User $member) => (string) json_encode(
+                    $availability === null
+                        ? [
+                            'ref' => $ref,
+                            'tier' => $member->support_tier,
+                            'open_tickets' => (int) ($member->tickets_count ?? 0),
+                        ]
+                        : [
+                            'ref' => $ref,
+                            'tier' => $member->support_tier,
+                            'open_tickets' => (int) ($member->tickets_count ?? 0),
+                            // One boolean-ish key, and nothing else: no shift times, and
+                            // never `agent_schedules.notes`, which is free text a human
+                            // wrote about a colleague.
+                            'available' => $availability[$ref] ?? null,
+                        ],
+                ),
                 array_keys($engineers),
                 array_values($engineers),
             )));
