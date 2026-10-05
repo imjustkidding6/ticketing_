@@ -1,14 +1,22 @@
 {{-- AI "Polish with Nexus AI" card for the ticket create/edit forms.
      Reads #subject and #description, rewrites them in place, and (when $withTasks)
-     fills the task checklist via an `ai-fill-tasks` event. Param: $withTasks (default true). --}}
+     fills the task checklist via an `ai-fill-tasks` event.
+
+     On the create form it additionally pre-fills #priority with a suggestion the
+     workspace's SLA policies can actually honour, and explains in words any priority it
+     could not offer. Nothing auto-applies — the engineer still submits the form, and
+     TicketService::createTicket() still runs every guard it runs today.
+
+     Params: $withTasks (default true), $context ('create' | 'edit', default 'create'). --}}
 @php
     $withTasks = $withTasks ?? true;
+    $aiContext = ($context ?? 'create') === 'edit' ? 'edit' : 'create';
     $aiAssist = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot)
         && (bool) \App\Models\AppSetting::get('ai_enabled', false)
         && (bool) \App\Models\AppSetting::get('ai_agent_copilot_enabled', false);
 @endphp
 @if($aiAssist)
-<div x-data="ticketAiAssist({{ $withTasks ? 'true' : 'false' }})" class="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 p-4">
+<div x-data="ticketAiAssist({{ $withTasks ? 'true' : 'false' }}, @js($aiContext))" x-init="init()" class="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 p-4">
     <div class="flex items-start gap-2.5">
         <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
             <svg class="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
@@ -32,20 +40,42 @@
                 <button type="button" x-show="canRevert" x-cloak @click="revert()" class="text-xs font-medium text-gray-500 underline hover:text-gray-700">{{ __('Revert changes') }}</button>
                 <span x-show="note" x-cloak class="text-xs font-medium" :class="error ? 'text-red-600' : 'text-emerald-600'" x-text="note"></span>
             </div>
+            <p x-show="priorityNote" x-cloak class="mt-2 text-xs font-medium text-indigo-800" x-text="priorityNote"></p>
+            <p x-show="priorityGap" x-cloak class="mt-1 text-xs text-amber-700" x-text="priorityGap"></p>
+            @if($aiContext === 'create')
+                {{-- An opaque cache key, so the Accept / Edit / Reject capture is computed
+                     from what the server suggested rather than from anything the browser
+                     can author. Empty until a draft has been polished. --}}
+                <input type="hidden" name="ai_draft_token" x-model="draftToken">
+            @endif
         </div>
     </div>
 </div>
 <script>
-    function ticketAiAssist(withTasks = true) {
+    function ticketAiAssist(withTasks = true, context = 'create') {
         return {
             withTasks: withTasks,
+            context: context,
             loading: false,
             canRevert: false,
             note: '',
+            priorityNote: '',
+            priorityGap: '',
+            draftToken: '',
             error: false,
             backup: null,
             url: '{{ route('tickets.ai.structure') }}',
             csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
+            init() {
+                // Changing the client changes which SLA policies cover the draft, so a
+                // priority suggested for the previous one stops being a statement about
+                // this ticket. The value stays (the engineer may well want it) — the claim
+                // that AI suggested it does not.
+                document.getElementById('client_id')?.addEventListener('change', () => {
+                    this.priorityNote = '';
+                    this.priorityGap = '';
+                });
+            },
             currentTasks() {
                 return Array.from(document.querySelectorAll('input[name^="tasks["]')).map((i) => i.value);
             },
@@ -62,12 +92,26 @@
                 this.loading = true;
                 this.note = '';
                 this.error = false;
-                this.backup = { subject: subjectEl?.value || '', description: descEl?.value || '', tasks: this.currentTasks() };
+                const priorityEl = document.getElementById('priority');
+                const clientEl = document.getElementById('client_id');
+                this.backup = {
+                    subject: subjectEl?.value || '',
+                    description: descEl?.value || '',
+                    tasks: this.currentTasks(),
+                    priority: priorityEl?.value || '',
+                };
                 try {
                     const res = await fetch(this.url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' },
-                        body: JSON.stringify({ subject: subjectEl?.value || '', description }),
+                        body: JSON.stringify({
+                            subject: subjectEl?.value || '',
+                            description,
+                            // The client decides which SLA policies cover the draft, so the
+                            // suggestion is computed against the one that is selected right now.
+                            client_id: clientEl?.value || null,
+                            context: this.context,
+                        }),
                     });
                     if (!res.ok) throw new Error('request failed');
                     const data = await res.json();
@@ -76,6 +120,19 @@
                     if (this.withTasks && Array.isArray(data.tasks) && data.tasks.length) {
                         window.dispatchEvent(new CustomEvent('ai-fill-tasks', { detail: data.tasks }));
                     }
+                    // Both keys are absent on the edit form, and the element may not exist
+                    // at all — a missing suggestion leaves the form exactly as it was.
+                    this.priorityNote = '';
+                    if (priorityEl && data.priority) {
+                        priorityEl.value = data.priority;
+                        priorityEl.dispatchEvent(new Event('change'));
+                        priorityEl.dispatchEvent(new Event('input'));
+                        const label = data.priority.charAt(0).toUpperCase() + data.priority.slice(1);
+                        this.priorityNote = @js(__('Priority set to')) + ' ' + label
+                            + (data.priority_reason ? ' — ' + data.priority_reason : '');
+                    }
+                    this.priorityGap = data.priority_gap?.message || '';
+                    this.draftToken = data.draft_token || '';
                     this.canRevert = true;
                     this.note = @js(__('Cleaned up by AI ✨'));
                 } catch (e) {
@@ -94,6 +151,16 @@
                 if (this.withTasks) {
                     window.dispatchEvent(new CustomEvent('ai-fill-tasks', { detail: this.backup.tasks }));
                 }
+                const priorityEl = document.getElementById('priority');
+                if (priorityEl && this.backup.priority) {
+                    priorityEl.value = this.backup.priority;
+                    priorityEl.dispatchEvent(new Event('change'));
+                }
+                // The token goes with the suggestion: a reverted draft has nothing landed
+                // to derive a verdict from, so it records nothing rather than a false reject.
+                this.draftToken = '';
+                this.priorityNote = '';
+                this.priorityGap = '';
                 this.canRevert = false;
                 this.error = false;
                 this.note = @js(__('Reverted.'));

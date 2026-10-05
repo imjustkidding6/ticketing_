@@ -110,6 +110,65 @@ class TicketService
     }
 
     /**
+     * Would createTicket() admit this (priority, assignee) pair for this tenant/client?
+     *
+     * A DRY RUN over the same three private guards createTicket() runs, in the same
+     * order and under the same preconditions — never a copy of their predicates. The AI
+     * draft on the create form needs to know, before it suggests anything, which
+     * priorities the workspace can actually honour; a fourth encoding of the SLA-coverage
+     * and tier ladders is how a suggestion gets satisfied here and refused at submit.
+     *
+     * Only the first blocking message is returned: the guards throw, so the first one to
+     * fire is the only verdict there is — which is exactly what the engineer will see.
+     *
+     * @return list<string> Blocking messages; empty when admissible.
+     */
+    public function draftAdmissionErrors(Tenant $tenant, ?int $clientId, ?string $priority, ?User $assignee = null): array
+    {
+        $clientTier = null;
+        if ($clientId) {
+            // Pinned to this tenant, exactly as createTicket() reads it: a client from
+            // another workspace must not decide which policies cover the draft.
+            $clientTier = Client::withoutGlobalScopes()
+                ->where('tenant_id', $tenant->getKey())
+                ->find($clientId)?->tier;
+        }
+
+        $probe = new Ticket([
+            'tenant_id' => $tenant->getKey(),
+            'priority' => $priority,
+        ]);
+        // The guards read $ticket->tenant for the feature check; handing them the tenant
+        // we were given avoids a lookup and keeps the workspace explicit.
+        $probe->setRelation('tenant', $tenant);
+
+        try {
+            $this->guardSlaPolicy((int) $tenant->getKey(), $clientTier, $priority, $tenant);
+
+            // createTicket() reaches the agent guards only when BOTH an assignee and a
+            // priority are present; a dry run that checked more would refuse drafts the
+            // real path admits.
+            if ($assignee !== null && ! empty($priority)) {
+                $this->guardAgentTier($probe, $assignee);
+                $this->guardAgentAvailability($probe, $assignee);
+            }
+        } catch (\InvalidArgumentException $e) {
+            return [$e->getMessage()];
+        }
+
+        return [];
+    }
+
+    /**
+     * The priority-only convenience over draftAdmissionErrors(), for building the set of
+     * priorities an AI draft may offer.
+     */
+    public function draftWouldAdmitPriority(Tenant $tenant, ?int $clientId, string $priority): bool
+    {
+        return $this->draftAdmissionErrors($tenant, $clientId, $priority) === [];
+    }
+
+    /**
      * Create a new ticket.
      *
      * @param  array<string, mixed>  $data

@@ -200,7 +200,11 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
         ->name('tickets.ai.analysis-verdict')
         ->middleware('feature:ai_chatbot,ai_agents');
 
-    Route::post('tickets-ai/structure', [AiAssistantController::class, 'structureDraft'])->name('tickets.ai.structure')->middleware('feature:ai_chatbot');
+    // throttle:agent-ai: the declared limiter for agent-facing AI, which this route did
+    // not carry. One press is one OpenAI call and an SLA-coverage sweep.
+    Route::post('tickets-ai/structure', [AiAssistantController::class, 'structureDraft'])
+        ->name('tickets.ai.structure')
+        ->middleware(['feature:ai_chatbot', 'throttle:agent-ai']);
 
     // In-app AI assistant (per-user memory) — feature-gated
     Route::post('assistant/message', [AiAssistantController::class, 'message'])->name('assistant.message')->middleware('feature:ai_chatbot');

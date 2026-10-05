@@ -16,6 +16,7 @@ use App\Models\SlaPolicy;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\User;
+use App\Services\AI\DraftSuggestionService;
 use App\Services\PlanService;
 use App\Services\TicketMergeService;
 use App\Services\TicketService;
@@ -177,6 +178,10 @@ class TicketController extends Controller
 
         $data = $request->validated();
 
+        // A key, not ticket data: pulled out before createTicket() ever sees it.
+        $draftToken = $data['ai_draft_token'] ?? null;
+        unset($data['ai_draft_token']);
+
         if ($request->hasFile('attachments') && app(PlanService::class)->currentTenantHasFeature(PlanFeature::Attachments)) {
             $data['attachments'] = $this->storeAttachments($request);
         } else {
@@ -198,6 +203,18 @@ class TicketController extends Controller
             $ticket = $this->ticketService->createTicket($data);
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withInput()->withErrors(['assigned_to' => $e->getMessage()]);
+        }
+
+        // The AI draft's Accept / Edit / Reject capture, derived from what LANDED on the
+        // ticket rather than from a button. Wrapped because a measurement row must never
+        // be able to fail a ticket creation: the engineer's work is the product, the
+        // pilot's metric is not.
+        if ($draftToken !== null && $request->user() !== null) {
+            try {
+                app(DraftSuggestionService::class)->recordOutcome($ticket, $request->user(), (string) $draftToken);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
         $this->rememberSubmission('ticket', $fingerprint, $ticket->id);

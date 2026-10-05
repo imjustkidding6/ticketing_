@@ -12,7 +12,7 @@
 
                     <div class="space-y-6">
                         {{-- AI clean-up (Enterprise + copilot enabled) --}}
-                        @include('tickets.partials._ai-assist', ['withTasks' => false])
+                        @include('tickets.partials._ai-assist', ['withTasks' => false, 'context' => 'edit'])
 
                         <div>
                             <label for="subject" class="block text-sm font-medium text-gray-700">{{ __('Subject') }}</label>

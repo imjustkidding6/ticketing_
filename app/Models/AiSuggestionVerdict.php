@@ -144,6 +144,64 @@ class AiSuggestionVerdict extends Model
     }
 
     /**
+     * Write the verdict for ONE suggestion — the single writer for every surface.
+     *
+     * `accepted` vs `edited` is decided HERE, by hashing what was applied against what
+     * the stored analysis suggested, so neither the browser (the panel's verdict post)
+     * nor a second copy of this ladder (the draft capture) can choose the pilot's
+     * headline metric. `$rejected` is the one input a comparison cannot infer: an
+     * explicit Dismiss on the panel, or a draft suggestion that was never pre-filled into
+     * the form and so was never offered to the engineer at all.
+     *
+     * The caller must have established that the analysis offered this suggestion
+     * (`suggestedValueFor()` non-null); a verdict on a suggestion that was never made is
+     * refused at the surface, where the refusal can be explained.
+     */
+    public static function record(
+        AiTicketAnalysis $analysis,
+        string $type,
+        ?string $applied,
+        bool $rejected,
+        ?int $decidedBy,
+    ): self {
+        $suggested = $analysis->suggestedValueFor($type);
+        $applied = $rejected ? null : $applied;
+        $appliedHash = self::hash($applied);
+        $suggestedHash = self::hash($suggested);
+
+        $verdict = match (true) {
+            $rejected => self::VERDICT_REJECTED,
+            $appliedHash === null || $appliedHash === $suggestedHash => self::VERDICT_ACCEPTED,
+            default => self::VERDICT_EDITED,
+        };
+
+        return self::updateOrCreate(
+            [
+                'ai_ticket_analysis_id' => $analysis->getKey(),
+                'suggestion_type' => $type,
+            ],
+            [
+                'tenant_id' => $analysis->tenant_id,
+                // Taken from the analysis, never from the request body.
+                'ticket_id' => $analysis->ticket_id,
+                'decided_by' => $decidedBy,
+                'verdict' => $verdict,
+                'suggested_hash' => $suggestedHash,
+                'applied_hash' => $appliedHash,
+                'edit_ratio' => $verdict === self::VERDICT_REJECTED
+                    ? null
+                    : self::editRatio($suggested, $applied ?? $suggested),
+                // Copied from config at decision time so revising the estimate later does
+                // not rewrite history. Zero for a rejection: nothing was saved.
+                'minutes_saved' => $verdict === self::VERDICT_REJECTED
+                    ? 0
+                    : (int) config('ai.minutes_saved.'.$type, 0),
+                'decided_at' => now(),
+            ],
+        );
+    }
+
+    /**
      * Whitespace-collapsed, trimmed. Case is preserved: a capitalisation change IS an
      * edit, and normalising it away would report it as an acceptance.
      */

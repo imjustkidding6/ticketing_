@@ -51,6 +51,14 @@ class AiTicketAnalysis extends Model
     public const TRIGGER_AUTO = 'auto';
 
     /**
+     * An engineer polished a draft on the create form, and the ticket was then created
+     * (P6c). Its own population deliberately: a draft row's verdicts are derived from
+     * what LANDED on the new ticket, while the manual/auto populations record what the
+     * engineer ATTEMPTED to apply. Mixing them would average two different metrics.
+     */
+    public const TRIGGER_DRAFT = 'draft';
+
+    /**
      * varchar in the database, so this constant is the only enumeration — the
      * `Ticket::STATUSES` rule. Adding a refusal reason needs no migration.
      *
@@ -75,6 +83,7 @@ class AiTicketAnalysis extends Model
     public const TRIGGERS = [
         self::TRIGGER_MANUAL,
         self::TRIGGER_AUTO,
+        self::TRIGGER_DRAFT,
     ];
 
     /** @var list<string> */
@@ -198,6 +207,15 @@ class AiTicketAnalysis extends Model
     public function scopeAuto(Builder $query): Builder
     {
         return $query->where('trigger', self::TRIGGER_AUTO);
+    }
+
+    /**
+     * @param  Builder<$this>  $query
+     * @return Builder<$this>
+     */
+    public function scopeDraft(Builder $query): Builder
+    {
+        return $query->where('trigger', self::TRIGGER_DRAFT);
     }
 
     /**

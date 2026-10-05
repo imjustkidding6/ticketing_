@@ -34,6 +34,31 @@ return [
         'description' => 4,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | The create-form draft polish (P6c)
+    |--------------------------------------------------------------------------
+    |
+    | The same one strict-JSON call that has always polished the draft, now also
+    | carrying a suggested priority. 800 is the ceiling this path has always used;
+    | it is here so it is tunable without a code change.
+    |
+    */
+
+    'draft' => [
+        'max_tokens' => 800,
+
+        /*
+         * How long the suggestion payload waits in the cache for the engineer to
+         * submit the form. Long enough to write a ticket, short enough that an
+         * abandoned draft evaporates on its own — there is nothing to prune.
+         */
+        'token_ttl_minutes' => 120,
+
+        /* Hard cap on the draft text sent to OpenAI. */
+        'input_chars' => 8000,
+    ],
+
     'analyze' => [
         /*
          * Requested output ceiling for the single strict-JSON chat call. On a

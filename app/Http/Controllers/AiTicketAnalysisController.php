@@ -75,12 +75,12 @@ class AiTicketAnalysisController extends Controller
     /**
      * Record what the engineer did with one suggestion.
      *
-     * `accepted` vs `edited` is decided here, by comparing a hash of what was applied
-     * against a hash of what the stored analysis suggested — never from the request's own
-     * `verdict` field for those two, or the pilot's headline metric would be a number the
-     * browser chooses. Only `rejected` is taken from the request, because an explicit
-     * Dismiss is the one verdict no comparison can infer (and a closed tab must never
-     * count as one).
+     * `accepted` vs `edited` is decided in AiSuggestionVerdict::record() — the one writer
+     * this and the draft capture share — by comparing a hash of what was applied against a
+     * hash of what the stored analysis suggested, never from the request's own `verdict`
+     * field for those two, or the pilot's headline metric would be a number the browser
+     * chooses. Only `rejected` is taken from the request, because an explicit Dismiss is
+     * the one verdict no comparison can infer (and a closed tab must never count as one).
      */
     public function verdict(StoreSuggestionVerdictRequest $request, AiTicketAnalysis $analysis): JsonResponse
     {
@@ -102,40 +102,12 @@ class AiTicketAnalysisController extends Controller
             ], 422);
         }
 
-        $isRejection = $request->validated('verdict') === AiSuggestionVerdict::VERDICT_REJECTED;
-        $applied = $isRejection ? null : $request->validated('applied_value');
-        $appliedHash = AiSuggestionVerdict::hash($applied);
-        $suggestedHash = AiSuggestionVerdict::hash($suggested);
-
-        $verdict = match (true) {
-            $isRejection => AiSuggestionVerdict::VERDICT_REJECTED,
-            $appliedHash === null || $appliedHash === $suggestedHash => AiSuggestionVerdict::VERDICT_ACCEPTED,
-            default => AiSuggestionVerdict::VERDICT_EDITED,
-        };
-
-        $row = AiSuggestionVerdict::updateOrCreate(
-            [
-                'ai_ticket_analysis_id' => $analysis->getKey(),
-                'suggestion_type' => $type,
-            ],
-            [
-                'tenant_id' => $analysis->tenant_id,
-                // Taken from the analysis, never from the request body.
-                'ticket_id' => $analysis->ticket_id,
-                'decided_by' => Auth::id(),
-                'verdict' => $verdict,
-                'suggested_hash' => $suggestedHash,
-                'applied_hash' => $appliedHash,
-                'edit_ratio' => $verdict === AiSuggestionVerdict::VERDICT_REJECTED
-                    ? null
-                    : AiSuggestionVerdict::editRatio($suggested, $applied ?? $suggested),
-                // Copied from config at decision time so revising the estimate later does
-                // not rewrite history. Zero for a rejection: nothing was saved.
-                'minutes_saved' => $verdict === AiSuggestionVerdict::VERDICT_REJECTED
-                    ? 0
-                    : (int) config('ai.minutes_saved.'.$type, 0),
-                'decided_at' => now(),
-            ],
+        $row = AiSuggestionVerdict::record(
+            $analysis,
+            $type,
+            $request->validated('applied_value'),
+            $request->validated('verdict') === AiSuggestionVerdict::VERDICT_REJECTED,
+            Auth::id(),
         );
 
         return response()->json([
