@@ -315,6 +315,20 @@ class Ticket extends Model
         return $this->hasMany(TicketEscalation::class);
     }
 
+    /**
+     * Every ANALYZE TICKET run against this ticket, automatic or on demand.
+     *
+     * A ticket may carry both: the automatic run happened before anyone commented, so a
+     * later manual run is often strictly better information. The panel shows the newest
+     * and says which trigger produced it.
+     *
+     * @return HasMany<AiTicketAnalysis, $this>
+     */
+    public function analyses(): HasMany
+    {
+        return $this->hasMany(AiTicketAnalysis::class);
+    }
+
     public function serviceReports(): HasMany
     {
         return $this->hasMany(ServiceReport::class);

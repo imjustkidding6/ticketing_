@@ -8,6 +8,7 @@ use App\Models\Ticket;
 use App\Observers\KbArticleObserver;
 use App\Observers\LearnedSnippetObserver;
 use App\Observers\TicketObserver;
+use App\Services\AiUsageTrackerService;
 use App\Services\OpenAiService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\CommandStarting;
@@ -25,6 +26,13 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(OpenAiService::class);
+
+        // A singleton because AiUsageTrackerService::withContext() holds the tenant,
+        // user and surface of the call in progress, and OpenAiService::post() resolves
+        // the tracker out of the container on its own. A fresh instance per resolution
+        // would hand post() an empty context and the attribution would silently be null
+        // again — which is the gap withContext() exists to close.
+        $this->app->singleton(AiUsageTrackerService::class);
     }
 
     /**

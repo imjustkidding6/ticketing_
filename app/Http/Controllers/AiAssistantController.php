@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\OpenAiException;
+use App\Http\Requests\StructureTicketDraftRequest;
 use App\Models\AppSetting;
 use App\Models\BugReport;
 use App\Models\ChatConversation;
@@ -11,6 +12,7 @@ use App\Models\LearnedSnippet;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\AI\DraftSuggestionService;
 use App\Services\AiAssistantService;
 use App\Services\PageContextResolver;
 use App\Support\FileParser;
@@ -109,27 +111,28 @@ class AiAssistantController extends Controller
     }
 
     /**
-     * Clean up & structure a rough ticket draft (subject, description, tasks)
-     * on the create-ticket form, so the stored data — and the self-learning
-     * dataset built from it — stays consistent.
+     * Clean up & structure a rough ticket draft (subject, description, tasks) on the
+     * create/edit ticket form, and — on the create form — suggest a PRIORITY the
+     * workspace can actually honour.
+     *
+     * One route, one OpenAI call, additive nullable keys. The edit form and the public
+     * portal's own polish cannot drift from this one if there is only one of it.
      */
-    public function structureDraft(Request $request): JsonResponse
+    public function structureDraft(StructureTicketDraftRequest $request, DraftSuggestionService $drafts): JsonResponse
     {
         $this->checkPermission('use ai assistant');
         abort_unless((bool) AppSetting::get('ai_enabled', false), 404);
 
-        $validated = $request->validate([
-            'subject' => ['nullable', 'string', 'max:2000'],
-            'description' => ['required', 'string', 'max:8000'],
-        ]);
-
         $tenant = Tenant::findOrFail(session('current_tenant_id'));
 
         try {
-            $result = $this->assistant->structureTicketDraft(
+            $suggestion = $drafts->suggest(
                 $tenant,
-                (string) ($validated['subject'] ?? ''),
-                $validated['description'],
+                $request->user(),
+                (string) ($request->validated('subject') ?? ''),
+                (string) $request->validated('description'),
+                $request->validated('client_id') === null ? null : (int) $request->validated('client_id'),
+                (string) ($request->validated('context') ?? DraftSuggestionService::CONTEXT_CREATE),
             );
         } catch (OpenAiException $e) {
             report($e);
@@ -137,7 +140,13 @@ class AiAssistantController extends Controller
             return response()->json(['error' => 'The AI assistant is unavailable right now.'], 503);
         }
 
-        return response()->json($result);
+        // A refused draft is shown to the engineer who wrote it, rather than silently
+        // returning their own text back as though the AI had agreed with it.
+        if ($suggestion->refused()) {
+            return response()->json(['error' => $suggestion->refusal], 422);
+        }
+
+        return response()->json($suggestion->toArray());
     }
 
     // ─────────── In-app assistant (per-user, multi-conversation) ───────────

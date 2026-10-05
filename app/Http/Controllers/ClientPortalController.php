@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\PlanFeature;
+use App\Jobs\AnalyzePublicTicketJob;
 use App\Models\AppSetting;
 use App\Models\Client;
 use App\Models\Department;
@@ -23,6 +24,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Throwable;
 
 class ClientPortalController extends Controller
 {
@@ -572,6 +574,26 @@ class ClientPortalController extends Controller
         }
 
         $this->notifyClientOfNewTicket($tenant, $client->email, $ticket);
+
+        // THE ONLY automatic-analysis trigger in the application, and it is here rather
+        // than on a Ticket observer so that the REST API, agent-created tickets, the Jude
+        // connector, seeders and imports cannot reach it.
+        //
+        // After createTicket()'s own transaction has committed (this method opens none of
+        // its own), so the worker cannot pick up a row that does not exist yet. After the
+        // customer's acknowledgement email, which is the thing the submitter is owed — a
+        // queue misconfiguration must not be able to swallow it. Never
+        // dispatchAfterResponse(): that runs in the web process and would reintroduce the
+        // latency and the shared failure surface the job exists to remove.
+        //
+        // Wrapped, because "the submission can never fail because of AI" includes the
+        // dispatch itself: a broken queue connection must leave a normal ticket, not a 500
+        // for a visitor whose ticket has already been created and acknowledged.
+        try {
+            AnalyzePublicTicketJob::dispatch($tenant->id, $ticket->id);
+        } catch (Throwable $e) {
+            report($e);
+        }
 
         return redirect()->route('tenant.track-ticket.token', [
             'slug' => $tenant->slug,

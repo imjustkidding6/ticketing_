@@ -2,13 +2,18 @@
 
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AgentScheduleController;
+use App\Http\Controllers\AiAgentConfigController;
+use App\Http\Controllers\AiAgentController;
+use App\Http\Controllers\AiAgentSkillController;
 use App\Http\Controllers\AiAssistantController;
+use App\Http\Controllers\AiTicketAnalysisController;
 use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\CannedResponseController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientPortalController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DepartmentAiAgentController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EscalationController;
 use App\Http\Controllers\KbArticleController;
@@ -22,6 +27,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ServiceReportController;
+use App\Http\Controllers\SkillController;
 use App\Http\Controllers\SlaPolicyController;
 use App\Http\Controllers\TenantFeedbackController;
 use App\Http\Controllers\TicketCommentController;
@@ -106,6 +112,15 @@ Route::get('/my-activity', [DashboardController::class, 'myActivity'])
 
 // Tenant-scoped routes
 Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
+    // The AI Agents tab on a department (spec §8). Both gates: the tab is part of department
+    // management and the agents feature is Enterprise. Keyed on the two parent models, never
+    // on a department_ai_agent id — that pivot has no tenant scope, so a bare id is an IDOR.
+    Route::middleware(['feature:department_management', 'feature:ai_agents'])->group(function () {
+        Route::get('departments/{department}/ai-agents', [DepartmentAiAgentController::class, 'index'])->name('departments.ai-agents.index');
+        Route::post('departments/{department}/ai-agents', [DepartmentAiAgentController::class, 'store'])->name('departments.ai-agents.store');
+        Route::put('departments/{department}/ai-agents/{ai_agent}', [DepartmentAiAgentController::class, 'update'])->name('departments.ai-agents.update');
+        Route::delete('departments/{department}/ai-agents/{ai_agent}', [DepartmentAiAgentController::class, 'destroy'])->name('departments.ai-agents.destroy');
+    });
     Route::resource('departments', DepartmentController::class)->except(['show'])->middleware('feature:department_management');
     Route::resource('categories', CategoryController::class)->except(['show']);
     Route::resource('products', ProductController::class)->except(['show']);
@@ -174,7 +189,22 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     Route::post('tickets/{ticket}/ai/polish-task', [AiAssistantController::class, 'polishTask'])->name('tickets.ai.polish-task')->middleware('feature:ai_chatbot');
     Route::post('tickets/{ticket}/ai/polish-tasks', [AiAssistantController::class, 'polishTaskList'])->name('tickets.ai.polish-tasks')->middleware('feature:ai_chatbot');
     // AI clean-up of a rough ticket draft on the create form (subject/description/tasks)
-    Route::post('tickets-ai/structure', [AiAssistantController::class, 'structureDraft'])->name('tickets.ai.structure')->middleware('feature:ai_chatbot');
+    // ANALYZE TICKET (P6a). Both Enterprise features: ai_chatbot owns the AI runtime and
+    // the ai_enabled master switch, ai_agents is what makes the department's agents part
+    // of the prompt. The analyze route is throttled with the existing agent-ai limiter;
+    // the verdict post is a local write and spends nothing.
+    Route::post('tickets/{ticket}/ai/analyze', [AiTicketAnalysisController::class, 'analyze'])
+        ->name('tickets.ai.analyze')
+        ->middleware(['feature:ai_chatbot,ai_agents', 'throttle:agent-ai']);
+    Route::post('tickets-ai/analyses/{analysis}/verdict', [AiTicketAnalysisController::class, 'verdict'])
+        ->name('tickets.ai.analysis-verdict')
+        ->middleware('feature:ai_chatbot,ai_agents');
+
+    // throttle:agent-ai: the declared limiter for agent-facing AI, which this route did
+    // not carry. One press is one OpenAI call and an SLA-coverage sweep.
+    Route::post('tickets-ai/structure', [AiAssistantController::class, 'structureDraft'])
+        ->name('tickets.ai.structure')
+        ->middleware(['feature:ai_chatbot', 'throttle:agent-ai']);
 
     // In-app AI assistant (per-user memory) — feature-gated
     Route::post('assistant/message', [AiAssistantController::class, 'message'])->name('assistant.message')->middleware('feature:ai_chatbot');
@@ -287,6 +317,24 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
         Route::get('schedules', [AgentScheduleController::class, 'index'])->name('schedules.index');
         Route::get('schedules/team', [AgentScheduleController::class, 'team'])->name('schedules.team');
         Route::post('schedules', [AgentScheduleController::class, 'save'])->name('schedules.save');
+    });
+
+    // AI Agents & Skills (Enterprise via feature gate; also opt-in per workspace, which
+    // the controllers enforce — the setup hub is deliberately exempt, since it holds the
+    // switch). Literal paths first, so setup/catalogue are not read as a resource id.
+    Route::middleware('feature:ai_agents')->group(function () {
+        Route::get('ai-agents/setup', [AiAgentConfigController::class, 'setup'])->name('ai-agents.setup');
+        Route::post('ai-agents/setup', [AiAgentConfigController::class, 'saveSetup']);
+        Route::get('ai-agents/catalogue', [AiAgentConfigController::class, 'cataloguePreview'])->name('ai-agents.catalogue.preview');
+        Route::post('ai-agents/catalogue', [AiAgentConfigController::class, 'installCatalogue'])->name('ai-agents.catalogue.install');
+
+        Route::put('ai-agents/{ai_agent}/skills', [AiAgentSkillController::class, 'sync'])->name('ai-agents.skills.sync');
+        Route::delete('ai-agents/{ai_agent}/skills/{skill}', [AiAgentSkillController::class, 'destroy'])->name('ai-agents.skills.destroy');
+        Route::post('ai-agents/{ai_agent}/toggle', [AiAgentController::class, 'toggle'])->name('ai-agents.toggle');
+        Route::resource('ai-agents', AiAgentController::class)->except(['show'])->parameters(['ai-agents' => 'ai_agent']);
+
+        Route::post('skills/{skill}/toggle', [SkillController::class, 'toggle'])->name('skills.toggle');
+        Route::resource('skills', SkillController::class)->except(['show']);
     });
 
     // Custom Roles (Enterprise via feature gate)

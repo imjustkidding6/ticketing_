@@ -24,7 +24,7 @@ class EscalationController extends Controller
         $this->checkPermission('escalate tickets');
 
         $validated = $request->validate([
-            'to_tier' => ['required', 'in:tier_1,tier_2,tier_3'],
+            'to_tier' => ['required', Rule::in(EscalationService::TIERS)],
             'reason' => ['nullable', 'string', 'max:1000'],
             'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNull('deleted_at')],
         ]);
@@ -32,7 +32,7 @@ class EscalationController extends Controller
         $currentTier = $ticket->current_tier ?? 'tier_1';
         $toTier = $validated['to_tier'];
 
-        if ($this->tierRank($toTier) <= $this->tierRank($currentTier)) {
+        if ($this->escalationService->tierRank($toTier) <= $this->escalationService->tierRank($currentTier)) {
             return redirect()->route('tickets.show', $ticket)
                 ->with('error', 'Cannot escalate to the same or lower tier.');
         }
@@ -57,18 +57,6 @@ class EscalationController extends Controller
     }
 
     /**
-     * Resolve the numeric rank for a tier string.
-     */
-    private function tierRank(?string $tier): int
-    {
-        if ($tier === null) {
-            return 0;
-        }
-
-        return (int) filter_var($tier, FILTER_SANITIZE_NUMBER_INT);
-    }
-
-    /**
      * Resolve the target agent from validated input.
      */
     private function resolveAgent(array $validated): ?User
@@ -84,12 +72,17 @@ class EscalationController extends Controller
 
     /**
      * Check whether an agent's tier (or owner status) allows handling the target tier.
+     *
+     * The ladder itself lives in EscalationService, which AnalyzeTicketService also uses
+     * to filter engineer candidates. Only the "which workspace" answer is the
+     * controller's: here it is the one in the URL.
      */
     private function agentCanHandleTier(User $agent, string $toTier): bool
     {
-        $isOwner = Tenant::find(session('current_tenant_id'))
-            ?->isOwner($agent) ?? false;
-
-        return $isOwner || $this->tierRank($agent->support_tier) >= $this->tierRank($toTier);
+        return $this->escalationService->canHandleTier(
+            $agent,
+            $toTier,
+            Tenant::find(session('current_tenant_id')),
+        );
     }
 }

@@ -31,7 +31,35 @@ use Illuminate\Support\Str;
  */
 class AiAssistantService
 {
+    /**
+     * The draft-polish instruction, extracted to a constant rather than copied — the
+     * SUMMARY_INSTRUCTION precedent.
+     *
+     * P6c's DraftSuggestionService composes this same wording plus its own additional
+     * schema keys, so the create form and the PUBLIC SUBMIT form (the portal's polish,
+     * which calls structureTicketDraft() and is out of P6c's scope) cannot drift apart in
+     * what they ask for. The prompt the portal sends is byte-identical to what it sent
+     * before the extraction, and a test pins that.
+     */
+    public const DRAFT_INSTRUCTION = 'An agent has typed rough notes for a NEW ticket. Rewrite them into a clean, professional, well-structured ticket. '
+        .'Do NOT invent facts, names, numbers, or causes that are not stated or clearly implied by the notes. '
+        ."Return STRICT JSON with exactly these keys:\n"
+        .'"subject": a concise, specific one-line title (max ~80 chars, no trailing period).'."\n"
+        .'"description": a clear, well-formatted description. When the notes support it, organize it under short bold-style labelled sections such as "Issue", "Steps to Reproduce", "Expected", "Actual", and "Environment". Keep it factual, fix grammar and spelling, and remove filler. Do not pad it out.'."\n"
+        .'"tasks": an array of 2 to 6 short, actionable resolution steps an agent should follow to investigate and fix this issue. Each task is a plain imperative phrase (e.g. "Reproduce the error on a test account"), no numbering, no trailing period.'."\n"
+        .'If the notes are too vague for a field, keep the original wording rather than fabricating. Respond with JSON only.';
+
     private const MAX_TOOL_ITERATIONS = 8;
+
+    /**
+     * The wording every ticket summary in this product is produced with.
+     *
+     * Extracted from summarizeTicket() so ANALYZE TICKET reuses it verbatim rather
+     * than growing a second summariser with its own drift. One wording, one place,
+     * greppable — change this and both surfaces change together.
+     */
+    public const SUMMARY_INSTRUCTION = 'You summarize support tickets for agents. Produce a tight summary: the customer\'s issue, '
+        .'what has happened so far, and the recommended next action. Use short bullet points.';
 
     public function __construct(
         private OpenAiService $openAi,
@@ -192,8 +220,7 @@ class AiAssistantService
 
     public function summarizeTicket(Ticket $ticket): string
     {
-        $system = 'You summarize support tickets for agents. Produce a tight summary: the customer\'s issue, '
-            .'what has happened so far, and the recommended next action. Use short bullet points.';
+        $system = self::SUMMARY_INSTRUCTION;
         $user = "TICKET\nSubject: {$ticket->subject}\nDescription: {$ticket->description}\n\n"
             ."CONVERSATION SO FAR:\n".$this->ticketContext($ticket);
 
@@ -282,14 +309,7 @@ class AiAssistantService
      */
     public function structureTicketDraft(Tenant $tenant, string $subject, string $description): array
     {
-        $system = 'You are a support-ticket editor for '.$tenant->displayName().'. '
-            .'An agent has typed rough notes for a NEW ticket. Rewrite them into a clean, professional, well-structured ticket. '
-            .'Do NOT invent facts, names, numbers, or causes that are not stated or clearly implied by the notes. '
-            ."Return STRICT JSON with exactly these keys:\n"
-            .'"subject": a concise, specific one-line title (max ~80 chars, no trailing period).'."\n"
-            .'"description": a clear, well-formatted description. When the notes support it, organize it under short bold-style labelled sections such as "Issue", "Steps to Reproduce", "Expected", "Actual", and "Environment". Keep it factual, fix grammar and spelling, and remove filler. Do not pad it out.'."\n"
-            .'"tasks": an array of 2 to 6 short, actionable resolution steps an agent should follow to investigate and fix this issue. Each task is a plain imperative phrase (e.g. "Reproduce the error on a test account"), no numbering, no trailing period.'."\n"
-            .'If the notes are too vague for a field, keep the original wording rather than fabricating. Respond with JSON only.';
+        $system = self::draftSystemPrompt($tenant);
 
         $user = "ROUGH NOTES\nSubject: ".trim($subject)."\n\nDescription:\n".trim($description);
 
@@ -317,6 +337,17 @@ class AiAssistantService
             'description' => trim((string) ($data['description'] ?? '')) ?: $description,
             'tasks' => array_slice($tasks, 0, 8),
         ];
+    }
+
+    /**
+     * The system prompt for a draft polish, identical for every caller.
+     *
+     * Static so DraftSuggestionService can extend it with its own keys without holding an
+     * instance of this 1,200-line service, and without a second copy of the preamble.
+     */
+    public static function draftSystemPrompt(Tenant $tenant): string
+    {
+        return 'You are a support-ticket editor for '.$tenant->displayName().'. '.self::DRAFT_INSTRUCTION;
     }
 
     private function oneShot(string $system, string $user, int $maxTokens): string

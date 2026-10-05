@@ -39,6 +39,10 @@ class StoreTicketRequest extends FormRequest
             'tasks' => ['nullable', 'array', 'max:20'],
             'tasks.*' => ['nullable', 'string', 'max:1000'],
             'attachments' => ['nullable', 'array', 'max:5'],
+            // An opaque cache KEY, re-scoped to this workspace and this user when it is
+            // redeemed — never an id, and never the suggestion data itself. A tampered
+            // value simply finds nothing and the ticket is created exactly as it is today.
+            'ai_draft_token' => ['nullable', 'string', 'size:32', 'alpha_num'],
             'attachments.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,doc,docx,xlsx,csv,txt,zip'],
         ];
     }

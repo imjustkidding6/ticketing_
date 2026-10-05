@@ -5,6 +5,8 @@
 
     <div class="py-6">
         <div class="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
+            @include('departments.partials._tabs')
+
             <div class="overflow-hidden rounded-xl bg-white p-6 shadow-sm">
                 <form method="POST" action="{{ route('departments.update', $department) }}">
                     @csrf

@@ -360,6 +360,33 @@ return [
             ],
         ],
 
+        'analyze-ticket' => [
+            'group' => 'work',
+            'title' => 'Analyze a ticket with AI',
+            'icon' => 'sparkles',
+            'permission' => 'use ai assistant',
+            'feature' => 'ai_agents',
+            'minutes' => 3,
+            'keywords' => 'analyze analyse ai triage suggestion summary category priority checks engineer assign accept edit dismiss',
+            'summary' => 'What Analyze offers, and why none of it is applied for you.',
+            'blocks' => [
+                ['p' => 'The Analyze panel sits on a ticket and runs on request — it never runs on its own. It reads the subject, the description and the public replies, and asks this department\'s AI agents for a read on the ticket.'],
+                ['ul' => [
+                    'A short triage summary you can paste into an internal note.',
+                    'A category and a priority, chosen from the ones this department already has.',
+                    'A proposed troubleshooting checklist you can edit before it becomes tasks.',
+                    'An engineer to consider, judged on tier and how much open work they already carry.',
+                    'Similar tickets that were already resolved, for the reasoning behind all of it.',
+                ]],
+                ['warn' => 'Every output is a suggestion. Nothing is applied until you apply it, and when you do, it goes through the same forms and the same rules as a manual edit — a priority change still recalculates the SLA deadline, and an assignment is still an ordinary assignment.'],
+                ['h' => 'Accept, edit or dismiss'],
+                ['p' => 'Each suggestion carries three choices and your choice is recorded: applied as offered, applied after you changed it, or dismissed. That record is how the workspace tells whether the suggestions are worth having — it stores which suggestion you decided on and whether you changed it, not the text you finally wrote.'],
+                ['note' => 'Closing the panel is not a dismissal. Nothing is recorded unless you press one of the three.'],
+                ['tip' => 'The engineer suggestion only ever offers members of the ticket\'s own department. A ticket with no department gets no engineer suggestion rather than a list of everyone.'],
+                ['p' => 'If the AI returns something this workspace does not have — a category that is not yours, a priority that is not one of ours — the panel discards it and says so rather than showing it.'],
+            ],
+        ],
+
         /* ---------------------------------------------------------------- */
 
         'settings-configuration' => [
@@ -621,6 +648,12 @@ return [
                     'Assign members to it, or their queue stays empty.',
                 ], 'minutes' => 2, 'permission' => 'create departments'],
                 ['tip' => 'Fewer, broader departments cause fewer support questions than many narrow ones.'],
+                // Gated on the permission only: blocks take no `feature` key, and
+                // `manage ai agents` is granted through FEATURE_PERMISSIONS['ai_agents'],
+                // so a workspace without the plan feature never holds it anyway.
+                ['h' => 'AI agents', 'permission' => 'manage ai agents'],
+                ['p' => 'The AI Agents tab on a department decides which agents handle its tickets. Each assignment carries its own role, priority, active flag and auto-invoke flag, so the same agent can be the primary on one department and a validator on another.', 'permission' => 'manage ai agents'],
+                ['note' => 'Priority is ascending and 0 means unranked, so unranked agents sort after every ranked one. The agents themselves, and the skills they hold, are defined once and reused — the tab links through to those screens.', 'permission' => 'manage ai agents'],
             ],
 
             'tour' => [
