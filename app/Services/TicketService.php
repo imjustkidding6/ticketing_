@@ -169,6 +169,45 @@ class TicketService
     }
 
     /**
+     * Would createTicket() admit this priority WHICHEVER client the engineer goes on to
+     * pick? The intersection over every tier a client can actually hold.
+     *
+     * Needed because `guardSlaPolicy()` with no client evaluates `client_tier = null`,
+     * and `SlaPolicy::hasPolicyFor()` matches a null tier against CATCH-ALL policies
+     * only. On a workspace whose twelve policies are all tier-specific — the common
+     * shape — that admits nothing, so the draft could suggest no priority at all until a
+     * client was chosen and the button read as broken.
+     *
+     * **The probe set is `Client::tiers()`, not the tiers the workspace has configured.**
+     * `clients.tier` is NOT NULL and defaults to `basic`, so every one of those three can
+     * turn up; enumerating only the *configured* ones skips an unconfigured tier
+     * entirely, which suggests a priority and then refuses the ticket — the original
+     * complaint inside out, and with the gap message saying nothing is wrong. A workspace
+     * covering basic and premium but not enterprise is therefore told so, which is the
+     * honest answer. The no-policy workspace needs no special case: every tier refuses,
+     * the set is empty and the gap message names the missing configuration.
+     *
+     * Still the real guard, once per tier: a priority admitted here cannot be refused by
+     * `createTicket()` afterwards, whichever client lands on the ticket. Catch-all
+     * policies need no special case either — they match every tier, so they pass every
+     * iteration by construction. The tenant is pinned inside `guardSlaPolicy()` itself
+     * (`hasPolicyFor($tenantId, …)`), so another workspace's SLA configuration cannot
+     * widen or narrow this one's; a draft test asserts that directly.
+     */
+    public function draftWouldAdmitPriorityForAnyClient(Tenant $tenant, string $priority): bool
+    {
+        foreach (Client::tiers() as $tier) {
+            try {
+                $this->guardSlaPolicy((int) $tenant->getKey(), $tier, $priority, $tenant);
+            } catch (\InvalidArgumentException) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Create a new ticket.
      *
      * @param  array<string, mixed>  $data

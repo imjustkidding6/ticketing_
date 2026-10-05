@@ -17,8 +17,8 @@ namespace App\Support\Ai;
  * a 422 from the result rather than from an exception — the engineer is in the loop here
  * and is shown why the text was declined.
  *
- * Trailing named optional parameters, the `TicketAnalysis` rule, so P6c-2's engineer keys
- * can be appended without breaking anything that constructs this.
+ * Trailing named optional parameters, the `TicketAnalysis` rule — which is how P6c-2's
+ * engineer keys were appended without touching a single existing construction site.
  */
 final readonly class DraftSuggestion
 {
@@ -35,6 +35,11 @@ final readonly class DraftSuggestion
         public ?string $priority = null,
         public ?string $priorityReason = null,
         public ?array $priorityGap = null,
+        public ?int $engineerId = null,
+        public ?string $engineerName = null,
+        public ?string $engineerReason = null,
+        public bool $engineerPrefill = false,
+        public ?string $engineerBlockedReason = null,
         public array $rejectedFields = [],
         public ?string $draftToken = null,
         public ?string $refusal = null,
@@ -70,6 +75,18 @@ final readonly class DraftSuggestion
             'priority' => $this->priority,
             'priority_reason' => $this->priorityReason,
             'priority_gap' => $this->priorityGap,
+            // The engineer's id and name DO go to the browser — the create form's own
+            // assignee select already lists the whole tenant roster, so this is a
+            // strict subset of what the page holds. Neither ever went to OpenAI.
+            'engineer' => $this->engineerId === null ? null : [
+                'id' => $this->engineerId,
+                'name' => $this->engineerName,
+                'reason' => $this->engineerReason,
+                // False means advisory: suggested in words, never written into the
+                // select, because a guard would refuse the assignment at submit.
+                'prefill' => $this->engineerPrefill,
+                'blocked_reason' => $this->engineerBlockedReason,
+            ],
             'rejected_fields' => $this->rejectedFields,
             'draft_token' => $this->draftToken,
         ];

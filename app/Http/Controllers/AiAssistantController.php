@@ -132,6 +132,7 @@ class AiAssistantController extends Controller
                 (string) ($request->validated('subject') ?? ''),
                 (string) $request->validated('description'),
                 $request->validated('client_id') === null ? null : (int) $request->validated('client_id'),
+                $request->validated('department_id') === null ? null : (int) $request->validated('department_id'),
                 (string) ($request->validated('context') ?? DraftSuggestionService::CONTEXT_CREATE),
             );
         } catch (OpenAiException $e) {

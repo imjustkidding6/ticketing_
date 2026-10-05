@@ -11,6 +11,7 @@ use App\Models\AiAgent;
 use App\Models\AiSuggestionVerdict;
 use App\Models\AiTicketAnalysis;
 use App\Models\Department;
+use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\User;
@@ -162,7 +163,7 @@ class AnalyzeTicketService
 
         // An ANNOTATION on the candidates already chosen, never a filter on them: see
         // availabilityFor(). Null here means the signal is not sent at all.
-        $availability = $this->availabilityFor($ticket, $engineers);
+        $availability = $this->availabilityFor($ticket->tenant, $engineers);
 
         $startedAt = microtime(true);
 
@@ -208,6 +209,7 @@ class AnalyzeTicketService
             $calls['response'],
             $categories,
             $engineers,
+            $department,
             $recommendations,
             $contextTickets,
             $usageLogIds,
@@ -312,13 +314,27 @@ class AnalyzeTicketService
      */
     private function departmentFor(Ticket $ticket): ?Department
     {
-        if ($ticket->department_id === null) {
+        return $this->departmentOwnedBy($ticket->tenant, $ticket->department_id);
+    }
+
+    /**
+     * The ONE department resolver — verify an id against an EXPLICIT workspace.
+     *
+     * The body above moved here unchanged so the create-ticket draft, which has a
+     * department id straight from the browser and no ticket at all, gets byte-for-byte
+     * the same treatment as a ticket's own column: a foreign or missing id is `null`,
+     * which every candidate list then reads as "no department" and fails closed on. A
+     * second copy of this read is the mistake that got `panelCandidates()` deleted.
+     */
+    public function departmentOwnedBy(Tenant $tenant, ?int $departmentId): ?Department
+    {
+        if ($departmentId === null) {
             return null;
         }
 
         return Department::withoutGlobalScopes()
-            ->where('tenant_id', $ticket->tenant_id)
-            ->find($ticket->department_id);
+            ->where('tenant_id', $tenant->getKey())
+            ->find($departmentId);
     }
 
     /**
@@ -395,13 +411,34 @@ class AnalyzeTicketService
      */
     private function engineerCandidates(Ticket $ticket, ?Department $department): array
     {
+        return $this->candidatesFor($ticket->tenant, $department, $ticket->current_tier);
+    }
+
+    /**
+     * The candidate set for an EXPLICIT workspace, department and (optional) tier.
+     *
+     * The moved body of engineerCandidates(), which is now a one-line delegate: every
+     * `$ticket->tenant_id` became `$tenant->getKey()` and `$ticket->current_tier` became
+     * the `$currentTier` parameter, and not one predicate changed. The create-ticket
+     * draft has no ticket to key this on, and a second copy of a staff-roster query is
+     * the one duplication this feature has already paid for once.
+     *
+     * `$currentTier` is null for a draft — a ticket that does not exist has no tier — so
+     * the tier condition below is false and the list is never narrowed. That is the
+     * documented behaviour for an unescalated ticket, applied rather than special-cased.
+     *
+     * @return array<string, User> The C1…Cn ref map.
+     */
+    public function candidatesFor(Tenant $tenant, ?Department $department, ?string $currentTier = null): array
+    {
         if ($department === null) {
             return [];
         }
 
         $members = User::query()
-            // User is NOT auto-scoped. Explicit, and on the ticket's tenant.
-            ->whereHas('tenants', fn ($q) => $q->where('tenant_id', $ticket->tenant_id))
+            // User is NOT auto-scoped. Explicit, and on the workspace we were handed —
+            // never one read back out of the session inside this service.
+            ->whereHas('tenants', fn ($q) => $q->where('tenant_id', $tenant->getKey()))
             ->whereHas('departments', fn ($q) => $q->where('departments.id', $department->getKey()))
             ->where('is_available', true)
             // `tickets.tenant_id` EXPLICITLY. TenantScope applies no predicate at all when
@@ -410,12 +447,12 @@ class AnalyzeTicketService
             // belongs to two workspaces would have their open tickets counted across both,
             // and that cross-tenant figure would go into the prompt.
             ->withCount(['tickets' => fn ($q) => $q
-                ->where('tickets.tenant_id', $ticket->tenant_id)
+                ->where('tickets.tenant_id', $tenant->getKey())
                 ->whereIn('status', Ticket::OPEN_STATUSES)])
             ->orderBy('name')
             ->get(['id', 'name', 'support_tier', 'is_available']);
 
-        $tier = $ticket->current_tier;
+        $tier = $currentTier;
 
         // Only an ESCALATED ticket narrows by tier. `current_tier` defaults to tier_1 for
         // every ticket and `support_tier` is null for every member who was never tiered,
@@ -423,10 +460,10 @@ class AnalyzeTicketService
         // suggestion in most workspaces — an untiered member is a tier-1 agent.
         if ($tier !== null
             && $this->escalation->tierRank($tier) > 1
-            && $this->plans->tenantHasFeature($ticket->tenant, PlanFeature::AgentEscalation)
+            && $this->plans->tenantHasFeature($tenant, PlanFeature::AgentEscalation)
         ) {
             $members = $members->filter(
-                fn (User $member) => $this->escalation->canHandleTier($member, $tier, $ticket->tenant)
+                fn (User $member) => $this->escalation->canHandleTier($member, $tier, $tenant)
             );
         }
 
@@ -467,7 +504,10 @@ class AnalyzeTicketService
      * 01:00-09:00 UTC and report the whole department off shift during their working day —
      * a wrong suggestion that looks authoritative. TenantTime reads the workspace's own
      * `timezone` setting through the session, which the queued job sets from an explicit
-     * Tenant before it calls analyze() and restores in a `finally`.
+     * Tenant before it calls analyze() and restores in a `finally`. The create-ticket
+     * draft needs no such dance: it is a web request whose session already IS the
+     * workspace in the URL. The schedule ROWS are still pinned to the explicit Tenant
+     * either way — only the clock reads the session (follow-up 22).
      *
      * ONE query for every candidate, not one per candidate: an N+1 inside a prompt builder
      * is paid on every analysis.
@@ -475,7 +515,7 @@ class AnalyzeTicketService
      * @param  array<string, User>  $engineers
      * @return array<string, bool|null>|null
      */
-    private function availabilityFor(Ticket $ticket, array $engineers): ?array
+    public function availabilityFor(Tenant $tenant, array $engineers): ?array
     {
         if ($engineers === []) {
             return null;
@@ -484,7 +524,7 @@ class AnalyzeTicketService
         // Level 1. `agent_schedule` is Business+ and this feature is Enterprise, so it is
         // present in practice — but a plan's feature list is data an administrator can
         // edit, and a workspace without it has no schedule screen to have filled in.
-        if (! $this->plans->tenantHasFeature($ticket->tenant, PlanFeature::AgentSchedule)) {
+        if (! $this->plans->tenantHasFeature($tenant, PlanFeature::AgentSchedule)) {
             return null;
         }
 
@@ -496,7 +536,7 @@ class AnalyzeTicketService
         // automatic run it applies no predicate at all. `notes` is deliberately not
         // selected — it never needs to leave the server.
         $rows = AgentSchedule::withoutGlobalScopes()
-            ->where('tenant_id', $ticket->tenant_id)
+            ->where('tenant_id', $tenant->getKey())
             ->whereIn('user_id', $memberIds)
             ->get(['user_id', 'day_of_week', 'start_time', 'end_time', 'is_available', 'effective_date', 'end_date'])
             ->groupBy('user_id');
@@ -672,25 +712,8 @@ class AnalyzeTicketService
         $sections[] = "ENGINEER OPTIONS (choose one reference or null)\n".($engineers === []
             ? '(none available — return null)'
             : implode("\n", array_map(
-                fn (string $ref, User $member) => (string) json_encode(
-                    $availability === null
-                        ? [
-                            'ref' => $ref,
-                            'tier' => $member->support_tier,
-                            'open_tickets' => (int) ($member->tickets_count ?? 0),
-                        ]
-                        : [
-                            'ref' => $ref,
-                            'tier' => $member->support_tier,
-                            'open_tickets' => (int) ($member->tickets_count ?? 0),
-                            // One boolean-ish key, and nothing else: no shift times, and
-                            // never `agent_schedules.notes`, which is free text a human
-                            // wrote about a colleague.
-                            'available' => $availability[$ref] ?? null,
-                        ],
-                ),
-                array_keys($engineers),
-                array_values($engineers),
+                fn (array $row) => (string) json_encode($row),
+                $this->candidatePayload($engineers, $availability),
             )));
 
         $sections[] = "SIMILAR RESOLVED TICKETS (for your reasoning; do not quote references)\n"
@@ -703,6 +726,44 @@ class AnalyzeTicketService
                 )));
 
         return implode("\n\n", $sections);
+    }
+
+    /**
+     * The ONE outbound per-candidate payload — a ref, a tier, a count, and (when the
+     * signal exists) one boolean-ish availability key.
+     *
+     * Extracted from userPrompt()'s inline literal so there is exactly one place in the
+     * application that decides what a candidate looks like to OpenAI, and one assertion
+     * target for the privacy test. **No id, no name, no email, no shift times, and never
+     * `agent_schedules.notes`** — free text a human wrote about a colleague. The ref map
+     * is how a reply is resolved back to a person, server-side, by identity.
+     *
+     * JSON, so the shape of what leaves this application is readable in one glance and
+     * assertable in one string.
+     *
+     * @param  array<string, User>  $engineers
+     * @param  array<string, bool|null>|null  $availability  Null omits the key entirely.
+     * @return list<array<string, mixed>>
+     */
+    public function candidatePayload(array $engineers, ?array $availability): array
+    {
+        $rows = [];
+
+        foreach ($engineers as $ref => $member) {
+            $row = [
+                'ref' => $ref,
+                'tier' => $member->support_tier,
+                'open_tickets' => (int) ($member->tickets_count ?? 0),
+            ];
+
+            if ($availability !== null) {
+                $row['available'] = $availability[$ref] ?? null;
+            }
+
+            $rows[] = $row;
+        }
+
+        return $rows;
     }
 
     /**
@@ -737,6 +798,7 @@ class AnalyzeTicketService
         array $response,
         array $categories,
         array $engineers,
+        ?Department $department,
         array $recommendations,
         array $contextTickets,
         array $usageLogIds,
@@ -794,7 +856,7 @@ class AnalyzeTicketService
         $category = $this->validateCategory($decoded['category_ref'] ?? null, $categories, $ticket, $rejected);
         $priority = $this->validatePriority($decoded['priority'] ?? null, $rejected);
         $checks = $this->validateChecks($decoded['checks'] ?? null, $rejected);
-        $engineer = $this->validateEngineer($decoded['engineer_ref'] ?? null, $engineers, $ticket, $rejected);
+        $engineer = $this->validateEngineer($decoded['engineer_ref'] ?? null, $engineers, $ticket, $department, $rejected);
         $engineerReason = $engineer === null ? null : $this->validateEngineerReason($decoded['engineer_reason'] ?? null);
         $polishedSubject = $this->validatePolishedText(
             $decoded['polished_subject'] ?? null,
@@ -1045,10 +1107,14 @@ class AnalyzeTicketService
      * department membership, availability) before being returned, so a ref that somehow
      * resolved to the wrong row still cannot be suggested.
      *
+     * The department compared against is the VERIFIED one from departmentOwnedBy(), not
+     * the raw `tickets.department_id` — closing the engineer half of follow-up 13, on the
+     * signature the reviewer asked for it when next touched.
+     *
      * @param  array<string, User>  $engineers
      * @param  list<string>  $rejected
      */
-    private function validateEngineer(mixed $ref, array $engineers, Ticket $ticket, array &$rejected): ?User
+    private function validateEngineer(mixed $ref, array $engineers, Ticket $ticket, ?Department $department, array &$rejected): ?User
     {
         if ($ref === null || $ref === '') {
             return null;
@@ -1062,10 +1128,10 @@ class AnalyzeTicketService
 
         $member = $engineers[$ref];
 
-        $stillEligible = $ticket->department_id !== null
+        $stillEligible = $department !== null
             && (bool) $member->is_available
             && $member->tenants()->where('tenant_id', $ticket->tenant_id)->exists()
-            && $member->departments()->where('departments.id', $ticket->department_id)->exists();
+            && $member->departments()->where('departments.id', $department->getKey())->exists();
 
         if (! $stillEligible) {
             $rejected[] = AiSuggestionVerdict::TYPE_ENGINEER;

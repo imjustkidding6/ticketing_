@@ -41,7 +41,13 @@ use Illuminate\Support\Str;
  * asked to be careful — it is never shown the uncovered options, and the reply is
  * re-checked against the same set server-side.
  *
- * **Nothing auto-applies.** The reply pre-fills the priority select; the engineer submits.
+ * **Nothing auto-applies.** The reply pre-fills the priority and (when the guards would
+ * admit it) the assignee select; the engineer submits.
+ *
+ * **The engineer suggestion is department-scoped and fails closed.** No department
+ * selected means no engineer suggestion — never a widening to the workspace roster. The
+ * candidate assembly is AnalyzeTicketService's own, called with an explicit Tenant, so
+ * there is one tenant-pinned staff-roster query in the application and not two.
  */
 class DraftSuggestionService
 {
@@ -61,12 +67,23 @@ class DraftSuggestionService
         .'"priority_reason": one short sentence (max ~140 chars) saying why, in plain words an engineer would use. Null when "priority" is null.'."\n"
         .'Judge urgency from what the notes actually say — scope of impact, whether work is blocked, and any stated deadline. Do not inflate it.';
 
+    /**
+     * The engineer half of the schema. Refs only: the model never sees a name, an email
+     * or an id, so it cannot return one, and `engineer_ref` is resolved back to a person
+     * server-side by identity against the map THIS call issued.
+     */
+    public const ENGINEER_INSTRUCTION = 'ALSO return these keys (they extend that list too):'."\n"
+        .'"engineer_ref": the reference of the engineer best placed to take this ticket, chosen ONLY from the ENGINEER OPTIONS below, or null if none is clearly better.'."\n"
+        .'"engineer_reason": one short sentence (max ~140 chars) saying why that engineer. Null when "engineer_ref" is null.'."\n"
+        .'Weigh current open ticket counts and, where given, whether the engineer is available (on shift) right now. NEVER invent a reference.';
+
     public function __construct(
         private readonly OpenAiService $openAi,
         private readonly PromptInjectionService $injection,
         private readonly ModerationService $moderation,
         private readonly AiUsageTrackerService $usage,
         private readonly TicketService $tickets,
+        private readonly AnalyzeTicketService $analyze,
     ) {}
 
     /**
@@ -87,6 +104,7 @@ class DraftSuggestionService
         string $subject,
         string $description,
         ?int $clientId = null,
+        ?int $departmentId = null,
         string $context = self::CONTEXT_CREATE,
     ): DraftSuggestion {
         $subject = trim($subject);
@@ -114,6 +132,17 @@ class DraftSuggestionService
         $admissible = $wantsPriority ? $this->admissiblePriorities($tenant, $clientId) : [];
         $gap = $wantsPriority ? $this->priorityGap($tenant, $clientId, $admissible) : null;
 
+        // Department scoping FAILS CLOSED. The id arrives from the browser, so it is
+        // verified against this workspace by the one resolver (`departmentOwnedBy()`) —
+        // the FormRequest's `tenantExists('departments')` is the first defence and this is
+        // the second. A foreign or absent id is `null`, which yields no candidates and no
+        // engineer suggestion rather than a roster from somewhere else.
+        $department = $wantsPriority ? $this->analyze->departmentOwnedBy($tenant, $departmentId) : null;
+        // No `current_tier`: a ticket that does not exist has no tier, so tier never
+        // narrows a draft's candidate list.
+        $engineers = $department === null ? [] : $this->analyze->candidatesFor($tenant, $department);
+        $availability = $engineers === [] ? null : $this->analyze->availabilityFor($tenant, $engineers);
+
         $startedAt = microtime(true);
 
         /** @var array<string, mixed> $response */
@@ -125,7 +154,7 @@ class DraftSuggestionService
             'feature' => 'copilot',
         ], fn () => $this->openAi->chat(
             [
-                ['role' => 'system', 'content' => $this->systemPrompt($tenant, $admissible, $wantsPriority)],
+                ['role' => 'system', 'content' => $this->systemPrompt($tenant, $admissible, $wantsPriority, $engineers, $availability)],
                 ['role' => 'user', 'content' => "ROUGH NOTES\nSubject: ".$subject."\n\nDescription:\n".$description],
             ],
             [],
@@ -152,6 +181,13 @@ class DraftSuggestionService
             ? $this->validatePriority($decoded['priority'] ?? null, $admissible, $rejected)
             : null;
 
+        $engineer = $this->validateEngineerRef($decoded['engineer_ref'] ?? null, $engineers, $rejected);
+        // Prefill authority is the ASSIGNMENT GUARD, not the availability annotation: the
+        // guard is what throws at submit, so the guard decides what may be pre-filled.
+        // An inadmissible engineer is still suggested — in words — because the point of
+        // the suggestion is the answer, and only the dead-end click is worth removing.
+        $blocked = $engineer === null ? null : $this->prefillBlocker($tenant, $clientId, $priority, $engineer);
+
         $model = (string) ($response['model'] ?? config('services.openai.model', 'gpt-5'));
         $usageTokens = $response['usage'] ?? [];
 
@@ -162,6 +198,11 @@ class DraftSuggestionService
             priority: $priority,
             priorityReason: $priority === null ? null : $this->validateReason($decoded['priority_reason'] ?? null),
             priorityGap: $gap,
+            engineerId: $engineer === null ? null : (int) $engineer->getKey(),
+            engineerName: $engineer === null ? null : (string) $engineer->name,
+            engineerReason: $engineer === null ? null : $this->validateReason($decoded['engineer_reason'] ?? null),
+            engineerPrefill: $engineer !== null && $blocked === null,
+            engineerBlockedReason: $blocked,
             rejectedFields: $rejected,
             model: $model,
             promptTokens: (int) ($usageTokens['prompt_tokens'] ?? 0),
@@ -244,6 +285,10 @@ class DraftSuggestionService
             AiSuggestionVerdict::TYPE_PRIORITY => (string) $ticket->priority,
             AiSuggestionVerdict::TYPE_SUBJECT => (string) $ticket->subject,
             AiSuggestionVerdict::TYPE_DESCRIPTION => (string) $ticket->description,
+            // The assignee's NAME, matching the shape suggestedValueFor() reads. Read
+            // through the ticket's own relation, so it is the tenant-pinned id that
+            // `tenantMemberRules()` already validated at submit.
+            AiSuggestionVerdict::TYPE_ENGINEER => (string) ($ticket->assignedTo?->name ?? ''),
         ];
 
         foreach ($landed as $type => $applied) {
@@ -268,9 +313,16 @@ class DraftSuggestionService
      */
     public function admissiblePriorities(Tenant $tenant, ?int $clientId): array
     {
+        // With no client chosen yet the question is not "what does the null tier cover"
+        // — which is catch-all policies only, i.e. nothing on a per-tier workspace — but
+        // "what survives WHICHEVER client the engineer goes on to pick". The intersection
+        // over the tiers this workspace writes policies for is the answer that still
+        // holds at submit; see TicketService::draftWouldAdmitPriorityForAnyClient().
         return array_values(array_filter(
             AnalyzeTicketService::PRIORITIES,
-            fn (string $priority) => $this->tickets->draftWouldAdmitPriority($tenant, $clientId, $priority),
+            fn (string $priority) => $clientId === null
+                ? $this->tickets->draftWouldAdmitPriorityForAnyClient($tenant, $priority)
+                : $this->tickets->draftWouldAdmitPriority($tenant, $clientId, $priority),
         ));
     }
 
@@ -292,14 +344,19 @@ class DraftSuggestionService
         }
 
         if ($clientId === null) {
-            // With no client the guard is evaluated against client_tier = null, i.e.
-            // catch-all policies only — which on a per-tier workspace covers nothing.
+            // The narrowing is always explained, never merely applied: a suggestion of
+            // `low` with no reason reads as a weak AI rather than as a missing policy.
+            // And an EMPTY set here is a configuration fact, not a shy model, so it says
+            // which configuration is missing instead of implying the AI had nothing.
             return [
                 'missing' => $missing,
                 'basis' => 'no-client',
                 'message' => $admissible === []
-                    ? __('Pick the client first — priority suggestions follow its SLA tier.')
-                    : __('Pick the client first — without it only workspace-wide SLA policies apply.'),
+                    ? __('No SLA policy covers any priority for every client tier in this workspace — add or seed policies under Settings → SLA.')
+                    : __('Only :covered can be suggested before a client is chosen — :missing are not covered for every client tier. Settings → SLA.', [
+                        'covered' => $this->listWords($admissible),
+                        'missing' => $this->listWords($missing),
+                    ]),
             ];
         }
 
@@ -337,9 +394,16 @@ class DraftSuggestionService
 
     /**
      * @param  list<string>  $admissible
+     * @param  array<string, User>  $engineers
+     * @param  array<string, bool|null>|null  $availability
      */
-    private function systemPrompt(Tenant $tenant, array $admissible, bool $wantsPriority): string
-    {
+    private function systemPrompt(
+        Tenant $tenant,
+        array $admissible,
+        bool $wantsPriority,
+        array $engineers = [],
+        ?array $availability = null,
+    ): string {
         $prompt = AiAssistantService::draftSystemPrompt($tenant);
 
         if (! $wantsPriority) {
@@ -353,6 +417,19 @@ class DraftSuggestionService
         // sentence explains why. Failing closed, as every candidate list in this feature does.
         $prompt .= "\n\nPRIORITY OPTIONS (choose one or null)\n"
             .($admissible === [] ? '(none available — return null)' : implode(', ', $admissible));
+
+        // No department selected means no engineer OPTIONS and no engineer instruction at
+        // all — the model is not invited to answer a question it has no references for.
+        if ($engineers !== []) {
+            $prompt .= "\n\n".self::ENGINEER_INSTRUCTION;
+            $prompt .= "\n\nENGINEER OPTIONS (choose one reference or null)\n"
+                // The ONE outbound candidate builder, shared with the Analyze path: a
+                // ref, a tier, a count and (when the signal exists) availability.
+                .implode("\n", array_map(
+                    fn (array $row) => (string) json_encode($row),
+                    $this->analyze->candidatePayload($engineers, $availability),
+                ));
+        }
 
         return $prompt;
     }
@@ -377,6 +454,58 @@ class DraftSuggestionService
         }
 
         return strtolower($priority);
+    }
+
+    /**
+     * Resolve the model's `engineer_ref` back to a person — by IDENTITY against the map
+     * this call issued, and by nothing else.
+     *
+     * There is no `exists:` and no id from the model anywhere in this path: a ref the
+     * model invented is not a lookup, it is a rejection. No re-query either, deliberately
+     * — unlike the panel path, which validates against an analysis persisted minutes or
+     * hours ago, this map was built microseconds ago in this same request by
+     * `candidatesFor()` with every predicate (tenant membership, department membership,
+     * `is_available`) already applied. Re-running them here would be the second copy of
+     * the candidate rules that this feature has already paid for once.
+     *
+     * @param  array<string, User>  $engineers
+     * @param  list<string>  $rejected
+     */
+    private function validateEngineerRef(mixed $ref, array $engineers, array &$rejected): ?User
+    {
+        if ($ref === null || $ref === '') {
+            return null;
+        }
+
+        if (! is_string($ref) || ! array_key_exists($ref, $engineers)) {
+            $rejected[] = AiSuggestionVerdict::TYPE_ENGINEER;
+
+            return null;
+        }
+
+        return $engineers[$ref];
+    }
+
+    /**
+     * Why this engineer may not be PRE-FILLED, or null when they may be.
+     *
+     * The dry run over createTicket()'s own three guards, so the two surfaces cannot
+     * disagree: `guardAgentTier()` refuses a tier_1 agent a critical ticket, and
+     * `guardAgentAvailability()` refuses anyone off-schedule right now (its predicate is
+     * `User::isOnScheduleAt()`, which is also what the create form's select already
+     * renders as `disabled`). A blocked engineer is advisory, not absent.
+     *
+     * The probe priority matters: those two guards are reached only when a priority is
+     * present, and the create form's select defaults to `medium` (`create.blade.php:108`)
+     * — so `medium` is what the engineer will actually submit when no priority was
+     * suggested, and probing with it is probing the real submission rather than a
+     * hypothetical one.
+     */
+    private function prefillBlocker(Tenant $tenant, ?int $clientId, ?string $priority, User $engineer): ?string
+    {
+        $errors = $this->tickets->draftAdmissionErrors($tenant, $clientId, $priority ?? 'medium', $engineer);
+
+        return $errors === [] ? null : $errors[0];
     }
 
     /**
@@ -435,6 +564,12 @@ class DraftSuggestionService
                     'priority' => $suggestion->priority,
                     'polished_subject' => $suggestion->subject,
                     'polished_description' => $suggestion->description,
+                    // The NAME, because that is what suggestedValueFor('engineer')
+                    // reads and what the landed assignee is hashed against.
+                    'engineer' => $suggestion->engineerId === null ? null : [
+                        'id' => $suggestion->engineerId,
+                        'name' => $suggestion->engineerName,
+                    ],
                 ],
                 // Which of them the partial actually wrote into the form. A suggestion the
                 // engineer was never shown must not be able to record an acceptance.
@@ -442,6 +577,11 @@ class DraftSuggestionService
                     AiSuggestionVerdict::TYPE_PRIORITY => $suggestion->priority !== null,
                     AiSuggestionVerdict::TYPE_SUBJECT => $suggestion->subject !== '',
                     AiSuggestionVerdict::TYPE_DESCRIPTION => $suggestion->description !== '',
+                    // The first flag with a reachable false branch: an advisory engineer
+                    // was named in words but never written into the select, so the
+                    // engineer choosing them anyway is their own decision, not an
+                    // acceptance of ours.
+                    AiSuggestionVerdict::TYPE_ENGINEER => $suggestion->engineerPrefill,
                 ],
                 'rejected_fields' => $suggestion->rejectedFields,
                 'model' => $suggestion->model,
@@ -461,6 +601,11 @@ class DraftSuggestionService
             priority: $suggestion->priority,
             priorityReason: $suggestion->priorityReason,
             priorityGap: $suggestion->priorityGap,
+            engineerId: $suggestion->engineerId,
+            engineerName: $suggestion->engineerName,
+            engineerReason: $suggestion->engineerReason,
+            engineerPrefill: $suggestion->engineerPrefill,
+            engineerBlockedReason: $suggestion->engineerBlockedReason,
             rejectedFields: $suggestion->rejectedFields,
             draftToken: $token,
             model: $suggestion->model,

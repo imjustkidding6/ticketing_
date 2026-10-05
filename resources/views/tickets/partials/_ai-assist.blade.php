@@ -4,7 +4,10 @@
 
      On the create form it additionally pre-fills #priority with a suggestion the
      workspace's SLA policies can actually honour, and explains in words any priority it
-     could not offer. Nothing auto-applies — the engineer still submits the form, and
+     could not offer; and, when a department is selected, names the engineer best placed
+     to take the ticket — pre-filling #assigned_to only when the assignment guards would
+     admit them, and otherwise saying so in words rather than offering a dead-end click.
+     Nothing auto-applies — the engineer still submits the form, and
      TicketService::createTicket() still runs every guard it runs today.
 
      Params: $withTasks (default true), $context ('create' | 'edit', default 'create'). --}}
@@ -42,6 +45,8 @@
             </div>
             <p x-show="priorityNote" x-cloak class="mt-2 text-xs font-medium text-indigo-800" x-text="priorityNote"></p>
             <p x-show="priorityGap" x-cloak class="mt-1 text-xs text-amber-700" x-text="priorityGap"></p>
+            <p x-show="engineerNote" x-cloak class="mt-1 text-xs font-medium text-indigo-800" x-text="engineerNote"></p>
+            <p x-show="engineerBlocked" x-cloak class="mt-1 text-xs text-amber-700" x-text="engineerBlocked"></p>
             @if($aiContext === 'create')
                 {{-- An opaque cache key, so the Accept / Edit / Reject capture is computed
                      from what the server suggested rather than from anything the browser
@@ -61,6 +66,8 @@
             note: '',
             priorityNote: '',
             priorityGap: '',
+            engineerNote: '',
+            engineerBlocked: '',
             draftToken: '',
             error: false,
             backup: null,
@@ -74,6 +81,13 @@
                 document.getElementById('client_id')?.addEventListener('change', () => {
                     this.priorityNote = '';
                     this.priorityGap = '';
+                });
+                // Likewise the department: it is what decided who the candidates were, so
+                // a suggestion made for the previous one is no longer a statement about
+                // this ticket. The value stays; the claim that AI suggested it does not.
+                document.getElementById('department_id')?.addEventListener('change', () => {
+                    this.engineerNote = '';
+                    this.engineerBlocked = '';
                 });
             },
             currentTasks() {
@@ -94,11 +108,14 @@
                 this.error = false;
                 const priorityEl = document.getElementById('priority');
                 const clientEl = document.getElementById('client_id');
+                const departmentEl = document.getElementById('department_id');
+                const assigneeEl = document.getElementById('assigned_to');
                 this.backup = {
                     subject: subjectEl?.value || '',
                     description: descEl?.value || '',
                     tasks: this.currentTasks(),
                     priority: priorityEl?.value || '',
+                    assignedTo: assigneeEl?.value || '',
                 };
                 try {
                     const res = await fetch(this.url, {
@@ -110,6 +127,9 @@
                             // The client decides which SLA policies cover the draft, so the
                             // suggestion is computed against the one that is selected right now.
                             client_id: clientEl?.value || null,
+                            // No department means no engineer suggestion: the candidate
+                            // set is never widened to the whole workspace.
+                            department_id: departmentEl?.value || null,
                             context: this.context,
                         }),
                     });
@@ -132,6 +152,23 @@
                             + (data.priority_reason ? ' — ' + data.priority_reason : '');
                     }
                     this.priorityGap = data.priority_gap?.message || '';
+                    // Absent on the edit form, and absent whenever no department was
+                    // selected. `prefill` false is advisory: the engineer is named, the
+                    // select is left alone, because a guard would refuse the assignment.
+                    this.engineerNote = '';
+                    this.engineerBlocked = '';
+                    if (data.engineer && data.engineer.name) {
+                        const reason = data.engineer.reason ? ' — ' + data.engineer.reason : '';
+                        if (assigneeEl && data.engineer.prefill) {
+                            assigneeEl.value = String(data.engineer.id);
+                            assigneeEl.dispatchEvent(new Event('change'));
+                            assigneeEl.dispatchEvent(new Event('input'));
+                            this.engineerNote = @js(__('Assigned to')) + ' ' + data.engineer.name + reason;
+                        } else {
+                            this.engineerNote = @js(__('Nexus suggests')) + ' ' + data.engineer.name + reason;
+                            this.engineerBlocked = data.engineer.blocked_reason || '';
+                        }
+                    }
                     this.draftToken = data.draft_token || '';
                     this.canRevert = true;
                     this.note = @js(__('Cleaned up by AI ✨'));
@@ -156,11 +193,21 @@
                     priorityEl.value = this.backup.priority;
                     priorityEl.dispatchEvent(new Event('change'));
                 }
+                // The assignee is restored even when the backup was empty: `Unassigned`
+                // is a real previous state, unlike the priority select, which always has
+                // a value.
+                const assigneeEl = document.getElementById('assigned_to');
+                if (assigneeEl) {
+                    assigneeEl.value = this.backup.assignedTo;
+                    assigneeEl.dispatchEvent(new Event('change'));
+                }
                 // The token goes with the suggestion: a reverted draft has nothing landed
                 // to derive a verdict from, so it records nothing rather than a false reject.
                 this.draftToken = '';
                 this.priorityNote = '';
                 this.priorityGap = '';
+                this.engineerNote = '';
+                this.engineerBlocked = '';
                 this.canRevert = false;
                 this.error = false;
                 this.note = @js(__('Reverted.'));

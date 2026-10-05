@@ -520,6 +520,27 @@ class EngineerAvailabilityTest extends TestCase
         $this->assertSame('true', $this->sentAvailability('C1'));
     }
 
+    public function test_a_day_shift_is_off_shift_in_the_evening_of_the_same_weekday(): void
+    {
+        // Monday 20:00 — the RIGHT weekday, outside the hours. This is the only case that
+        // distinguishes the two branches of isOnShift()'s `$start > $end` selector: the
+        // overnight form reads 20:00 >= 09:00 as on shift, so forcing it unconditionally
+        // leaves every other availability test green and reds only this one.
+        Carbon::setTestNow('2026-10-05 20:00:00');
+
+        $tenant = $this->createTenant();
+        $this->switches($tenant);
+        $ticket = $this->ticketFor($tenant);
+        $member = $this->candidate($tenant, $ticket, 'Ana Reyes');
+
+        // The helper's default: Monday 09:00-17:00, a plain day shift.
+        $this->schedule($tenant, $member);
+
+        $this->runJob($tenant, $ticket);
+
+        $this->assertSame('false', $this->sentAvailability('C1'), 'A 09:00-17:00 Monday shift must read off shift at Monday 20:00.');
+    }
+
     public function test_the_schedules_for_every_candidate_are_read_in_one_query(): void
     {
         Carbon::setTestNow('2026-10-05 10:00:00');

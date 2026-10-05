@@ -300,35 +300,39 @@ class DraftSuggestionTest extends TestCase
         $this->assertStringContainsString('TIER 1', $jointly[0]);
     }
 
-    public function test_with_no_client_selected_the_admissible_set_is_computed_against_a_null_client_tier(): void
+    public function test_with_no_client_selected_the_admissible_set_is_the_intersection_across_tiers(): void
     {
-        // Per-tier policies only, no catch-all: with no client the guard matches policies
-        // whose client_tier IS NULL, i.e. nothing. The honest answer is no suggestion plus
-        // a sentence saying why.
+        // AMENDED in P6c-2. This used to assert that a per-tier workspace got NO priority
+        // suggestion before a client was chosen — `guardSlaPolicy()` with a null tier
+        // matches catch-all policies only. That was faithful to the guard and wrong as a
+        // product: on the common per-tier-only workspace the button looked broken. The
+        // question asked now is "what survives whichever client is picked" — probed over
+        // every tier a client can actually hold (`clients.tier` is NOT NULL with a
+        // default), so all three must be covered for all four priorities to survive.
         $tenant = $this->createTenant(catchAllPolicy: false);
         $this->actAs($tenant);
 
-        foreach (['low', 'medium', 'high', 'critical'] as $priority) {
-            SlaPolicy::factory()->create([
-                'tenant_id' => $tenant->id,
-                'client_tier' => 'premium',
-                'priority' => $priority,
-                'is_active' => true,
-            ]);
+        foreach (['basic', 'premium', 'enterprise'] as $tier) {
+            foreach (['low', 'medium', 'high', 'critical'] as $priority) {
+                SlaPolicy::factory()->create([
+                    'tenant_id' => $tenant->id,
+                    'client_tier' => $tier,
+                    'priority' => $priority,
+                    'is_active' => true,
+                ]);
+            }
         }
 
         $response = $this->polish();
 
         $response->assertOk()
-            ->assertJsonPath('priority', null)
-            ->assertJsonPath('priority_gap.basis', 'no-client');
-        $this->assertStringContainsString('Pick the client first', (string) $response->json('priority_gap.message'));
-        // Decoded, because the body JSON-escapes the em dash.
-        $prompt = json_decode($this->chatBody(), true)['messages'][0]['content'];
-        $this->assertStringContainsString('(none available — return null)', $prompt);
+            ->assertJsonPath('priority', 'high')
+            ->assertJsonPath('priority_gap', null);
 
-        // The text polish still happened: no department and no client costs the engineer
-        // the priority, not the button.
+        $prompt = json_decode($this->chatBody(), true)['messages'][0]['content'];
+        $this->assertStringContainsString("PRIORITY OPTIONS (choose one or null)\nlow, medium, high, critical", $prompt);
+
+        // The text polish is unaffected either way.
         $this->assertSame('Printer offline after Windows update', $response->json('subject'));
     }
 
