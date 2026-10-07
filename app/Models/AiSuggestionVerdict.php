@@ -50,6 +50,15 @@ class AiSuggestionVerdict extends Model
     public const TYPE_DESCRIPTION = 'description';
 
     /**
+     * A2-1: the client-friendly resolution draft, capped at 2,000 characters to match
+     * `closing_remarks`' own `max:2000` so a copy the panel offered can never 422.
+     */
+    public const TYPE_CLIENT_RESOLUTION = 'client_resolution';
+
+    /** A2-1: the standardised internal technical note (Cause / Resolution / Verification / Follow-up). */
+    public const TYPE_INTERNAL_NOTE = 'internal_note';
+
+    /**
      * varchar columns, so these constants are the only enumeration (the
      * `Ticket::STATUSES` rule).
      *
@@ -69,6 +78,8 @@ class AiSuggestionVerdict extends Model
         self::TYPE_CONTEXT,
         self::TYPE_SUBJECT,
         self::TYPE_DESCRIPTION,
+        self::TYPE_CLIENT_RESOLUTION,
+        self::TYPE_INTERNAL_NOTE,
     ];
 
     public const VERDICT_ACCEPTED = 'accepted';
