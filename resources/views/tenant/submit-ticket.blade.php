@@ -75,6 +75,7 @@
                                         <option value="{{ $department->id }}">{{ $department->name }}</option>
                                     @endforeach
                                 </select>
+                                <p class="mt-1 text-xs text-gray-500">{{ __('Choose the department you need help from — not the department you work in.') }}</p>
                             @endif
                             @error('department_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
