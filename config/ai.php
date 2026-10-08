@@ -32,6 +32,13 @@ return [
          */
         'subject' => 1,
         'description' => 4,
+        /*
+         * A2-1. Writing up a resolution twice — once for the customer, once for the
+         * record — is the documentation time §04 of the proposal costs. The internal
+         * note is the cheaper of the two because its shape is fixed.
+         */
+        'client_resolution' => 6,
+        'internal_note' => 4,
     ],
 
     /*
@@ -57,6 +64,50 @@ return [
 
         /* Hard cap on the draft text sent to OpenAI. */
         'input_chars' => 8000,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | GENERATE RESOLUTION (A2-1)
+    |--------------------------------------------------------------------------
+    |
+    | One chat call carrying both prose drafts. No embedding call: a resolution is
+    | written from what THIS engineer did, and retrieved text from another ticket
+    | is exactly the invented-fact risk this output can least afford.
+    |
+    */
+
+    'resolution' => [
+        /*
+         * One output ceiling for both drafts. On a reasoning model chat() floors
+         * max_completion_tokens at OPENAI_MAX_OUTPUT_TOKENS and hidden reasoning
+         * tokens count against it, so truncation is a real failure mode — handled
+         * as `failed` with NO partial render, never half a draft.
+         */
+        'max_tokens' => 1500,
+
+        /* Request cap on the engineer's notes; a 422 with a field error, not a truncation. */
+        'notes_chars' => 4000,
+
+        /*
+         * Below this the endpoint refuses before any HTTP and writes NO analysis row:
+         * a three-word note produces invented facts, which is the one failure mode a
+         * resolution record must not have. A refusal to even try is not a run.
+         */
+        'notes_min_chars' => 40,
+
+        /* Hard cap on the whole assembled prompt input (notes + ticket text + work done). */
+        'input_chars' => 8000,
+
+        /*
+         * 2,000 IS `closing_remarks`' own `max:2000` (TicketController::changeStatus).
+         * The limits agree by construction, so a copy the panel offered can never 422
+         * at the form that receives it.
+         */
+        'client_chars' => 2000,
+
+        /* Under the comment box's max:5000 and under applied_value's max:8000. */
+        'internal_chars' => 2500,
     ],
 
     'analyze' => [

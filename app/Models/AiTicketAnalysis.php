@@ -59,6 +59,20 @@ class AiTicketAnalysis extends Model
     public const TRIGGER_DRAFT = 'draft';
 
     /**
+     * An engineer pressed Generate resolution on a ticket they had just worked (A2-1).
+     *
+     * Its own population, and `auto_for_ticket_id` is deliberately left NULL on it: an
+     * engineer legitimately re-runs after doing more work, so MANY resolution rows per
+     * ticket are expected. The unique index on that column is the one-automatic-analysis
+     * guarantee and this trigger must not borrow it.
+     *
+     * Like `manual` and `auto`, and unlike `draft`, its verdicts are written when the
+     * engineer presses a copy control — i.e. they count applications ATTEMPTED. See
+     * follow-up 23 before averaging the four populations.
+     */
+    public const TRIGGER_RESOLUTION = 'resolution';
+
+    /**
      * varchar in the database, so this constant is the only enumeration — the
      * `Ticket::STATUSES` rule. Adding a refusal reason needs no migration.
      *
@@ -84,6 +98,7 @@ class AiTicketAnalysis extends Model
         self::TRIGGER_MANUAL,
         self::TRIGGER_AUTO,
         self::TRIGGER_DRAFT,
+        self::TRIGGER_RESOLUTION,
     ];
 
     /** @var list<string> */
@@ -191,6 +206,11 @@ class AiTicketAnalysis extends Model
             // apply to it with no new mechanism.
             AiSuggestionVerdict::TYPE_SUBJECT => $suggestions['polished_subject'] ?? null,
             AiSuggestionVerdict::TYPE_DESCRIPTION => $suggestions['polished_description'] ?? null,
+            // A2-1. Prose rather than a field value, but the same mechanism: the hash
+            // comparison decides accepted vs edited, and the suggested text is read from
+            // the stored row so the browser cannot tell the server what the AI wrote.
+            AiSuggestionVerdict::TYPE_CLIENT_RESOLUTION => $suggestions['client_resolution'] ?? null,
+            AiSuggestionVerdict::TYPE_INTERNAL_NOTE => $suggestions['internal_note'] ?? null,
             AiSuggestionVerdict::TYPE_CONTEXT => isset($this->context_ticket_ids) && is_array($this->context_ticket_ids)
                 ? implode(',', $this->context_ticket_ids)
                 : null,
@@ -216,6 +236,15 @@ class AiTicketAnalysis extends Model
     public function scopeDraft(Builder $query): Builder
     {
         return $query->where('trigger', self::TRIGGER_DRAFT);
+    }
+
+    /**
+     * @param  Builder<$this>  $query
+     * @return Builder<$this>
+     */
+    public function scopeResolution(Builder $query): Builder
+    {
+        return $query->where('trigger', self::TRIGGER_RESOLUTION);
     }
 
     /**

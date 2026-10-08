@@ -6,6 +6,7 @@ use App\Http\Controllers\AiAgentConfigController;
 use App\Http\Controllers\AiAgentController;
 use App\Http\Controllers\AiAgentSkillController;
 use App\Http\Controllers\AiAssistantController;
+use App\Http\Controllers\AiResolutionController;
 use App\Http\Controllers\AiTicketAnalysisController;
 use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\CannedResponseController;
@@ -195,6 +196,13 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     // the verdict post is a local write and spends nothing.
     Route::post('tickets/{ticket}/ai/analyze', [AiTicketAnalysisController::class, 'analyze'])
         ->name('tickets.ai.analyze')
+        ->middleware(['feature:ai_chatbot,ai_agents', 'throttle:agent-ai']);
+    // GENERATE RESOLUTION (A2-1). Same two Enterprise features as Analyze and the same
+    // agent-ai limiter. No daily cap: a cap protects unattended spend, and this is an
+    // engineer pressing a button. The verdict route below is REUSED unchanged — the two
+    // new suggestion types need no second endpoint.
+    Route::post('tickets/{ticket}/ai/resolution', [AiResolutionController::class, 'draft'])
+        ->name('tickets.ai.resolution')
         ->middleware(['feature:ai_chatbot,ai_agents', 'throttle:agent-ai']);
     Route::post('tickets-ai/analyses/{analysis}/verdict', [AiTicketAnalysisController::class, 'verdict'])
         ->name('tickets.ai.analysis-verdict')

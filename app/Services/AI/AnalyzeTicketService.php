@@ -240,8 +240,12 @@ class AnalyzeTicketService
      * here; an agent's private note is the one thing on a ticket nobody agreed to send
      * to a third party. No client name, no client email, no author name and no id is
      * included — the privacy boundary is asserted by test, on the outbound body.
+     *
+     * Public since A2-1 — visibility only, no body change. `ResolutionWriterService`
+     * sends the same ticket context beside the engineer's notes, and a second copy of
+     * this builder is how the `is_public` and `tenant_id` predicates drift apart.
      */
-    private function sanitisedTicketText(Ticket $ticket): string
+    public function sanitisedTicketText(Ticket $ticket): string
     {
         $parts = [
             'Subject: '.(string) $ticket->subject,
@@ -276,9 +280,12 @@ class AnalyzeTicketService
      * No AiAgent leaves this method: the two pseudo-attributes P5 writes onto those
      * models are not columns, and the model has LogsActivity.
      *
+     * Public since A2-1 — visibility only, no body change. The resolution writer ranks
+     * the same agents against the engineer's NOTES rather than the ticket description.
+     *
      * @return list<AgentRecommendation>
      */
-    private function recommendationsFor(?Department $department, string $text): array
+    public function recommendationsFor(?Department $department, string $text): array
     {
         if ($department === null) {
             return [];

@@ -259,11 +259,32 @@
                             && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiAgents)
                             && (bool) \App\Models\AppSetting::get('ai_enabled', false)
                             && (bool) \App\Models\AppSetting::get('ai_agents_enabled', false)
-                            && (auth()->user()?->roleInTenant(auth()->user()->currentTenant()) === 'owner'
-                                || auth()->user()?->can('use ai assistant')))
+                            {{-- `use ai assistant` is checked here in its own right. The panel's own
+                                 guard checks `create ticket comments`, and every seeded role either
+                                 holds both or neither — so without this line a custom role granted
+                                 comments and denied the AI grant would still see the panel, and no
+                                 test in the suite could tell. --}}
+                            && (($ticket->tenant !== null && (Auth::user()?->isOwnerOf($ticket->tenant) ?? false))
+                                || (Auth::user()?->can('use ai assistant') ?? false)))
                             <div class="mt-4 border-t border-gray-200 pt-4">
                                 @include('tickets.partials._ai-analyze', ['ticket' => $ticket, 'latestAnalysis' => $latestAnalysis ?? null])
                             </div>
+
+                            {{--
+                                GENERATE RESOLUTION (A2-1). The same plan + both switches +
+                                `use ai assistant` guard as Analyze, PLUS `create ticket
+                                comments`: this panel's output is text destined for a ticket
+                                and in one case for a customer, so a viewer — view-only by
+                                design — must not be handed a reply drafter. That is the
+                                endpoint's own gate, mirrored here so no control renders
+                                whose endpoint would 403.
+                            --}}
+                            @if((auth()->user()?->isOwnerOf($ticket->tenant) ?? false)
+                                || auth()->user()?->can('create ticket comments'))
+                                <div class="mt-4 border-t border-gray-200 pt-4">
+                                    @include('tickets.partials._ai-resolution', ['ticket' => $ticket])
+                                </div>
+                            @endif
                         @endif
 
                         {{-- Add Comment Form --}}
