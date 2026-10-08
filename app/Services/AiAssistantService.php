@@ -41,12 +41,45 @@ class AiAssistantService
      * what they ask for. The prompt the portal sends is byte-identical to what it sent
      * before the extraction, and a test pins that.
      */
+    /**
+     * The ONE rule that makes a generated checklist reach a fix.
+     *
+     * The prompts asked for "resolution steps … to investigate and fix this issue" and
+     * then gave a single DIAGNOSTIC example, so the model returned all-diagnosis lists
+     * ("Investigate the logs / Check connectivity / Verify permissions / Reproduce on a
+     * test account") and an engineer following them to the end still had a broken system.
+     * The example was doing the work the instruction thought it was doing.
+     *
+     * Composed into every task-generating prompt rather than retyped into each, so the
+     * three cannot drift back apart.
+     */
+    public const TASK_RESOLUTION_RULE = 'The steps must carry the ticket THROUGH TO RESOLUTION and not stop at diagnosis: '
+        .'at least one step must be the corrective action itself rather than another investigation, and where the '
+        .'text supports it one step must verify the fix held.';
+
+    /**
+     * How a fix step is phrased so it does not fabricate the diagnosis.
+     *
+     * This is what keeps TASK_RESOLUTION_RULE from fighting "Do NOT invent facts, names,
+     * numbers, or causes": a step is allowed to be the fix without naming a cause the
+     * notes never established, because it names the ACTION and defers the cause.
+     */
+    public const TASK_FIX_PHRASING = 'A step that fixes something must be phrased as the action to take ONCE THE CAUSE IS KNOWN, '
+        .'never as a remedy for a cause the text does not establish — that is how a checklist reaches a fix without '
+        .'inventing a diagnosis.';
+
+    /** One diagnostic, one corrective, one verifying — the balance the rule asks for. */
+    public const TASK_EXAMPLES = '"Reproduce the error on a test account", "Apply the corrective change once the cause is confirmed", '
+        .'"Confirm with the reporter that the issue no longer occurs"';
+
     public const DRAFT_INSTRUCTION = 'An agent has typed rough notes for a NEW ticket. Rewrite them into a clean, professional, well-structured ticket. '
         .'Do NOT invent facts, names, numbers, or causes that are not stated or clearly implied by the notes. '
         ."Return STRICT JSON with exactly these keys:\n"
         .'"subject": a concise, specific one-line title (max ~80 chars, no trailing period).'."\n"
         .'"description": a clear, well-formatted description. When the notes support it, organize it under short bold-style labelled sections such as "Issue", "Steps to Reproduce", "Expected", "Actual", and "Environment". Keep it factual, fix grammar and spelling, and remove filler. Do not pad it out.'."\n"
-        .'"tasks": an array of 2 to 6 short, actionable resolution steps an agent should follow to investigate and fix this issue. Each task is a plain imperative phrase (e.g. "Reproduce the error on a test account"), no numbering, no trailing period.'."\n"
+        .'"tasks": an array of 2 to 6 short, actionable resolution steps an agent should follow to investigate and fix this issue. '
+        .self::TASK_RESOLUTION_RULE.' '.self::TASK_FIX_PHRASING
+        .' Each task is a plain imperative phrase (e.g. '.self::TASK_EXAMPLES.'), no numbering, no trailing period.'."\n"
         .'If the notes are too vague for a field, keep the original wording rather than fabricating. Respond with JSON only.';
 
     private const MAX_TOOL_ITERATIONS = 8;
@@ -235,8 +268,10 @@ class AiAssistantService
     {
         $system = 'You are a support-ticket editor for '.$ticket->tenant->displayName().'. '
             .'Rewrite the agent\'s rough note into ONE clean, actionable resolution task — a short imperative phrase '
-            .'(e.g. "Reproduce the error on a test account"). Fix grammar and spelling and remove filler. '
+            .'(e.g. '.self::TASK_EXAMPLES.'). Fix grammar and spelling and remove filler. '
             .'Do NOT invent steps, names, or details not stated or clearly implied by the note or ticket. '
+            .'If the note describes a corrective action rather than an investigation, KEEP it corrective — do not '
+            .'soften a fix into one more check. '.self::TASK_FIX_PHRASING.' '
             .'Do NOT add numbering, quotes, or a trailing period. Return only the single task line.';
         $user = "TICKET\nSubject: {$ticket->subject}\nDescription: {$ticket->description}\n\n"
             ."ROUGH TASK NOTE:\n".trim($rough);
@@ -265,8 +300,10 @@ class AiAssistantService
             .'Reword unclear steps, fix grammar, merge duplicates, drop steps that are redundant or irrelevant to the ticket, '
             .'and ADD any clearly missing steps the ticket calls for. Do NOT re-add anything listed under ALREADY DONE. '
             .'Do NOT invent facts, names, or causes not stated or clearly implied by the ticket. '
+            .self::TASK_RESOLUTION_RULE.' '.self::TASK_FIX_PHRASING.' '
             .'Return STRICT JSON: {"tasks": [ ... ]} where each item is one short, actionable imperative phrase '
-            .'(no numbering, no trailing period). Keep it focused: usually 2 to 8 steps. Respond with JSON only.';
+            .'(e.g. '.self::TASK_EXAMPLES.'), no numbering, no trailing period. Keep it focused: usually 2 to 8 steps. '
+            .'Respond with JSON only.';
 
         $format = fn (array $list) => $list === []
             ? '(none)'

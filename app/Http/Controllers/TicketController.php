@@ -8,6 +8,7 @@ use App\Http\Controllers\Concerns\PreventsDuplicateSubmissions;
 use App\Http\Controllers\Concerns\ScopesTicketsToDepartments;
 use App\Http\Requests\StoreTicketRequest;
 use App\Http\Requests\UpdateTicketRequest;
+use App\Jobs\AnalyzeInternalTicketJob;
 use App\Models\CannedResponse;
 use App\Models\Client;
 use App\Models\Department;
@@ -26,6 +27,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -218,6 +220,28 @@ class TicketController extends Controller
         }
 
         $this->rememberSubmission('ticket', $fingerprint, $ticket->id);
+
+        // The real analysis, so the engineer who opens this ticket finds the panel already
+        // populated instead of pressing Analyze. The ONE dispatch site, deliberately
+        // greppable: an observer or a TicketCreated event would fire for the REST API, the
+        // Jude connector, seeders, factories and every import row with nothing able to
+        // tell them apart.
+        //
+        // Not wrapped: dispatch() on a database queue is an insert, and if it throws the
+        // creation should fail loudly rather than silently lose the analysis. The job's own
+        // gates decide whether anything is spent — this line knows nothing about AI.
+        if ($request->user() !== null) {
+            AnalyzeInternalTicketJob::dispatch((int) $ticket->tenant_id, (int) $ticket->id, (int) $request->user()->getKey());
+
+            // So "was it dispatched?" is answerable from the log rather than from a code
+            // read. Without a worker on the `ai` queue the row sits in `jobs` and the panel
+            // stays empty, which is the one way a correct build reads as broken.
+            Log::info('Internal ticket analysis queued.', [
+                'tenant_id' => (int) $ticket->tenant_id,
+                'ticket_id' => (int) $ticket->id,
+                'queue' => 'ai',
+            ]);
+        }
 
         return redirect()->route('tickets.show', $ticket)
             ->with('success', 'Ticket created successfully.');

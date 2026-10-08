@@ -76,10 +76,25 @@
                 asked for it: an automatic run happened on submission, before anyone had
                 read the ticket.
             --}}
+            @if($analyzeHydrated === null)
+                {{--
+                    The honest empty state. The intake analysis runs on a QUEUE, so with no
+                    worker on the `ai` queue this panel stays empty and nothing errors —
+                    silence that reads as "the AI did nothing" when the truth is "nobody is
+                    listening". It names the next action and the thing to check. The whole
+                    panel is already gated on the plan, both switches and `use ai assistant`
+                    by its include site, so this line cannot appear where it is noise.
+                --}}
+                <p class="mt-1 text-[11px] text-indigo-600/70" x-show="!result" x-cloak>
+                    {{ __('No analysis yet. Automatic analysis on creation runs on a queue worker — if this stays empty, press Analyze, and check that a worker is running on the :queue queue.', ['queue' => 'ai']) }}
+                </p>
+            @endif
             @if($analyzeHydrated !== null)
                 <p class="mt-1 inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-indigo-700 ring-1 ring-indigo-200" x-show="!reanalyzed" x-cloak>
                     @if($latestAnalysis->trigger === \App\Models\AiTicketAnalysis::TRIGGER_AUTO)
                         {{ __('Analyzed automatically on submission') }} &middot; @localdt($latestAnalysis->created_at)
+                    @elseif($latestAnalysis->trigger === \App\Models\AiTicketAnalysis::TRIGGER_INTAKE)
+                        {{ __('Analyzed automatically on creation') }} &middot; @localdt($latestAnalysis->created_at)
                     @else
                         {{ __('Analyzed by :name', ['name' => $latestAnalysis->requestedBy?->name ?? __('a colleague')]) }} &middot; @localdt($latestAnalysis->created_at)
                     @endif

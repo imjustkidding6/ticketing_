@@ -367,7 +367,14 @@ class DraftSuggestionTest extends TestCase
             ."Return STRICT JSON with exactly these keys:\n"
             .'"subject": a concise, specific one-line title (max ~80 chars, no trailing period).'."\n"
             .'"description": a clear, well-formatted description. When the notes support it, organize it under short bold-style labelled sections such as "Issue", "Steps to Reproduce", "Expected", "Actual", and "Environment". Keep it factual, fix grammar and spelling, and remove filler. Do not pad it out.'."\n"
-            .'"tasks": an array of 2 to 6 short, actionable resolution steps an agent should follow to investigate and fix this issue. Each task is a plain imperative phrase (e.g. "Reproduce the error on a test account"), no numbering, no trailing period.'."\n"
+            .'"tasks": an array of 2 to 6 short, actionable resolution steps an agent should follow to investigate and fix this issue. '
+            .'The steps must carry the ticket THROUGH TO RESOLUTION and not stop at diagnosis: at least one step must '
+            .'be the corrective action itself rather than another investigation, and where the text supports it one '
+            .'step must verify the fix held. A step that fixes something must be phrased as the action to take ONCE '
+            .'THE CAUSE IS KNOWN, never as a remedy for a cause the text does not establish — that is how a checklist '
+            .'reaches a fix without inventing a diagnosis. Each task is a plain imperative phrase (e.g. "Reproduce the '
+            .'error on a test account", "Apply the corrective change once the cause is confirmed", "Confirm with the '
+            .'reporter that the issue no longer occurs"), no numbering, no trailing period.'."\n"
             .'If the notes are too vague for a field, keep the original wording rather than fabricating. Respond with JSON only.';
 
         $sent = json_decode($this->chatBody(), true);

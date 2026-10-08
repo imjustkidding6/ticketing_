@@ -86,6 +86,59 @@ class AnalyzeTicketService
     public const MAX_CHECKS = 6;
 
     /**
+     * The ONE priority rubric. The thresholds, not the adjectives.
+     *
+     * Why a constant and not workspace data: `sla_policies` holds COMMITMENTS (hours), and
+     * no column anywhere holds CRITERIA. The hours are read live and interleaved by
+     * priorityRubric(); only the criteria are fixed here, so this constant is not a second
+     * source of truth about anything the database knows.
+     *
+     * Every entry is written as a set of NECESSARY conditions ("ONLY IF"), never as an
+     * invitation, so the rubric and the draft surface's "Do not inflate it." push the same
+     * way rather than arguing with each other.
+     *
+     * @var array<string, string> Keyed by priority; only ADMISSIBLE keys are ever emitted.
+     */
+    public const PRIORITY_CRITERIA = [
+        'critical' => 'ONLY IF a production service is down or unusable AND there is no workaround, AND the '
+            .'impact is an entire site, department or customer base rather than one person; OR a '
+            .'security breach, credential compromise or data loss is stated to be in progress; OR a '
+            .'stated external or contractual deadline falls inside the response window below.',
+        'high' => 'ONLY IF a team or a business-critical function is significantly impaired, OR one person '
+            .'is completely blocked from production work with no workaround, OR a stated deadline '
+            .'falls inside the resolution window below. A severe fault that HAS a workaround belongs '
+            .'here, not above.',
+        'medium' => 'The default for a real fault with a workaround, a non-production or test environment, a '
+            .'single person partially impeded, or a request with no stated deadline.',
+        'low' => 'A question, a cosmetic or documentation issue, a request for information, or anything the '
+            .'reporter describes as not urgent or as needed at some future date.',
+    ];
+
+    /**
+     * The one sentence that makes the critical/high boundary a decision rule rather than a
+     * list of adjectives. Emitted only when BOTH levels are on offer — describing a
+     * boundary one side of which cannot be suggested is the suggest-then-refuse defect in
+     * miniature.
+     */
+    public const PRIORITY_BOUNDARY = 'critical and high are separated by exactly two things: BREADTH of impact and the EXISTENCE OF '
+        .'A WORKAROUND. Many people or a whole service affected AND no workaround is critical; anything '
+        .'narrower, or anything with a workaround however painful, is at most high.';
+
+    /**
+     * How uncertainty resolves — DOWNWARD, always, and without naming a level the
+     * workspace does not offer.
+     *
+     * This is what reconciles the rubric with "Do not inflate it.": that instruction was
+     * advice about uncertainty with no procedure attached, and the model had to invent
+     * one. Here is the procedure.
+     */
+    public const PRIORITY_UNCERTAINTY = 'If the notes do not clearly establish a level\'s conditions, do not choose that level. Choose '
+        .'the HIGHEST LISTED level whose conditions the notes DO clearly establish; if none are '
+        .'established, return null. An environment the notes do not name is NOT production. A number '
+        .'of affected people the notes do not state is ONE person. Absence of evidence is not evidence '
+        .'of severity.';
+
+    /**
      * The polish instruction, extracted rather than copied from
      * AiAssistantService::structureTicketDraft() — the same wording, proven on the create
      * form, plus the two sentences this surface needs: the author is a CUSTOMER, and the
@@ -624,6 +677,99 @@ class AnalyzeTicketService
     }
 
     /**
+     * The ONE agent-instruction block. Both the analysis and the create-form draft compose
+     * these lines; a second copy is how the department's expertise comes to mean two
+     * different things on two surfaces.
+     *
+     * The header deliberately names the PRIORITY judgement. The department's agents are
+     * what tell a generic model how much impact this class of problem really has, and
+     * before P7 the block was attached to an analysis that never asked them about it.
+     *
+     * @param  list<AgentRecommendation>  $recommendations
+     * @return list<string> Empty when there are no recommendations — the caller appends nothing.
+     */
+    public static function agentInstructionLines(array $recommendations): array
+    {
+        if ($recommendations === []) {
+            return [];
+        }
+
+        // The department's own expertise, which is what makes this a *department* AI
+        // agent feature rather than a generic copilot.
+        $lines = ['The following specialist instructions come from the AI agents this '
+            .'department has configured. Apply them within your analysis, INCLUDING when you '
+            .'judge the priority — their expertise is what tells you how much impact this '
+            .'class of problem really has:'];
+
+        foreach ($recommendations as $recommendation) {
+            $skills = $recommendation->matchedSkills === []
+                ? ''
+                : ' (relevant skills: '.implode(', ', $recommendation->matchedSkills).')';
+
+            $lines[] = '- '.$recommendation->name
+                .($recommendation->roleType === null ? '' : ' ['.$recommendation->roleType.']')
+                .$skills.': '.(string) $recommendation->systemPrompt;
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The rubric block for exactly the levels a surface is offering.
+     *
+     * A bare four-word `PRIORITY OPTIONS` list was the entire rubric this product shipped
+     * for a year: the dimensions were named ("scope of impact, whether work is blocked,
+     * any stated deadline") and the thresholds never were, so an ambiguous ticket hedged
+     * down and the engineer had no way to argue with the answer. This is the thresholds.
+     *
+     * @param  list<string>  $admissible  The authoritative offered set. NOTHING outside it is
+     *                                    described — a level the workspace cannot honour must
+     *                                    not be explained to the model any more than it is
+     *                                    offered.
+     * @param  array<string, array{response: int, resolution: int}>  $targets
+     *                                                                         Per-priority commitments, or [] to omit the hours.
+     * @return string '' when there is no ladder to describe: a rubric is a ladder, and with
+     *                one rung there is no boundary to draw.
+     */
+    public static function priorityRubric(array $admissible, array $targets = []): string
+    {
+        $listed = array_values(array_filter(
+            array_keys(self::PRIORITY_CRITERIA),
+            fn (string $priority) => in_array($priority, $admissible, true),
+        ));
+
+        if (count($listed) < 2) {
+            return '';
+        }
+
+        $lines = [
+            'PRIORITY RUBRIC',
+            'Use these definitions. They are the thresholds; the specialist instructions above tell you '
+                .'which of these conditions this kind of problem actually meets.',
+        ];
+
+        // Highest-first, deliberately: the reader of a rubric needs the ceiling and its
+        // gates first. `PRIORITY OPTIONS` keeps its own PRIORITIES order, untouched.
+        foreach ($listed as $priority) {
+            $hours = $targets[$priority] ?? null;
+
+            $lines[] = '- '.$priority
+                .($hours === null
+                    ? ''
+                    : ' (this workspace commits to respond within '.$hours['response'].'h and resolve within '.$hours['resolution'].'h)')
+                .': '.self::PRIORITY_CRITERIA[$priority];
+        }
+
+        if (in_array('critical', $listed, true) && in_array('high', $listed, true)) {
+            $lines[] = self::PRIORITY_BOUNDARY;
+        }
+
+        $lines[] = self::PRIORITY_UNCERTAINTY;
+
+        return implode("\n", $lines);
+    }
+
+    /**
      * @param  list<AgentRecommendation>  $recommendations
      */
     private function systemPrompt(Ticket $ticket, array $recommendations, bool $withAvailability = false): string
@@ -638,22 +784,7 @@ class AnalyzeTicketService
             'Do not restate the ticket. Do not address the customer.',
         ];
 
-        if ($recommendations !== []) {
-            // The department's own expertise, which is what makes this a *department* AI
-            // agent feature rather than a generic copilot.
-            $lines[] = 'The following specialist instructions come from the AI agents this '
-                .'department has configured. Apply them within your analysis:';
-
-            foreach ($recommendations as $recommendation) {
-                $skills = $recommendation->matchedSkills === []
-                    ? ''
-                    : ' (relevant skills: '.implode(', ', $recommendation->matchedSkills).')';
-
-                $lines[] = '- '.$recommendation->name
-                    .($recommendation->roleType === null ? '' : ' ['.$recommendation->roleType.']')
-                    .$skills.': '.(string) $recommendation->systemPrompt;
-            }
-        }
+        $lines = array_merge($lines, self::agentInstructionLines($recommendations));
 
         $lines[] = 'Reply with a single JSON object and nothing else, with exactly these keys:'
             ."\n".'{"summary": "string, at most 1200 characters", '
@@ -711,6 +842,17 @@ class AnalyzeTicketService
                 array_keys($categories),
                 array_values($categories),
             )));
+
+        // The same builder the draft surface uses, over THIS surface's offered set — which
+        // is all four of PRIORITIES, unfiltered by SLA coverage (a pre-existing shape,
+        // re-guarded when the engineer presses Apply; follow-up 39). No hours: this
+        // surface's offered set is not narrowed per client tier, so quoting one tier's
+        // commitments would be a guess presented as one.
+        $rubric = self::priorityRubric(self::PRIORITIES);
+
+        if ($rubric !== '') {
+            $sections[] = $rubric;
+        }
 
         $sections[] = 'PRIORITY OPTIONS (choose one or null)'."\n".implode(', ', self::PRIORITIES);
 
@@ -818,8 +960,8 @@ class AnalyzeTicketService
             'ticket_id' => $ticket->getKey(),
             'requested_by' => $user?->getKey(),
             'trigger' => $trigger,
-            // Written only on the automatic path; NULL leaves manual runs unconstrained.
-            'auto_for_ticket_id' => $trigger === AiTicketAnalysis::TRIGGER_AUTO ? $ticket->getKey() : null,
+            // Written on EITHER automatic path; NULL leaves manual runs unconstrained.
+            'auto_for_ticket_id' => in_array($trigger, AiTicketAnalysis::AUTOMATIC_TRIGGERS, true) ? $ticket->getKey() : null,
             'department_id' => $ticket->department_id,
             'model' => (string) ($response['model'] ?? config('services.openai.model', 'gpt-5')),
             'prompt_tokens' => (int) ($usage['prompt_tokens'] ?? 0),
@@ -941,7 +1083,7 @@ class AnalyzeTicketService
             // for an unrelated reason (a deadlock, a lock-wait timeout, a bad FK), and the
             // verdict they then posted would be written under the AUTO parent — mixing the
             // two populations `trigger` exists to keep apart.
-            if (($attributes['trigger'] ?? null) !== AiTicketAnalysis::TRIGGER_AUTO) {
+            if (! in_array($attributes['trigger'] ?? null, AiTicketAnalysis::AUTOMATIC_TRIGGERS, true)) {
                 throw $e;
             }
 
@@ -1192,7 +1334,7 @@ class AnalyzeTicketService
             'ticket_id' => $ticket->getKey(),
             'requested_by' => $user?->getKey(),
             'trigger' => $trigger,
-            'auto_for_ticket_id' => $trigger === AiTicketAnalysis::TRIGGER_AUTO ? $ticket->getKey() : null,
+            'auto_for_ticket_id' => in_array($trigger, AiTicketAnalysis::AUTOMATIC_TRIGGERS, true) ? $ticket->getKey() : null,
             'department_id' => $ticket->department_id,
             'status' => $status,
             'error_message' => $status === AiTicketAnalysis::STATUS_REFUSED_INJECTION

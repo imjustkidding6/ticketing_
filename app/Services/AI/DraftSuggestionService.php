@@ -8,6 +8,7 @@ use App\Exceptions\OpenAiException;
 use App\Models\AiSuggestionVerdict;
 use App\Models\AiTicketAnalysis;
 use App\Models\Client;
+use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\User;
@@ -17,6 +18,7 @@ use App\Services\ModerationService;
 use App\Services\OpenAiService;
 use App\Services\PromptInjectionService;
 use App\Services\TicketService;
+use App\Support\Ai\AgentRecommendation;
 use App\Support\Ai\DraftSuggestion;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -95,6 +97,9 @@ class DraftSuggestionService
      * down" is a different answer from "we declined".
      *
      * @param  string  $context  self::CONTEXT_CREATE | self::CONTEXT_EDIT
+     * @param  bool  $withAgents  The CALLER's answer to the `ai_agents` plan gate and the
+     *                            `ai_agents_enabled` workspace opt-in. Both read the
+     *                            session, and this service must not pretend it can.
      *
      * @throws OpenAiException
      */
@@ -106,6 +111,7 @@ class DraftSuggestionService
         ?int $clientId = null,
         ?int $departmentId = null,
         string $context = self::CONTEXT_CREATE,
+        bool $withAgents = false,
     ): DraftSuggestion {
         $subject = trim($subject);
         $description = Str::limit(trim($description), (int) config('ai.draft.input_chars', 8000), '');
@@ -138,6 +144,16 @@ class DraftSuggestionService
         // the second. A foreign or absent id is `null`, which yields no candidates and no
         // engineer suggestion rather than a roster from somewhere else.
         $department = $wantsPriority ? $this->analyze->departmentOwnedBy($tenant, $departmentId) : null;
+
+        // The department's own expertise, selected by AnalyzeTicketService's rule and
+        // nobody else's — one selection rule and one prompt block in the application, so
+        // the create form and the analysis cannot come to mean two different things by the
+        // same department's agents. A null department yields an empty list, so no agent
+        // name and no agent system prompt enters the request at all: today's behaviour
+        // exactly, which is a weaker answer and never another workspace's answer.
+        $recommendations = $withAgents && $department !== null
+            ? $this->analyze->recommendationsFor($department, $screened)
+            : [];
         // No `current_tier`: a ticket that does not exist has no tier, so tier never
         // narrows a draft's candidate list.
         $engineers = $department === null ? [] : $this->analyze->candidatesFor($tenant, $department);
@@ -154,7 +170,7 @@ class DraftSuggestionService
             'feature' => 'copilot',
         ], fn () => $this->openAi->chat(
             [
-                ['role' => 'system', 'content' => $this->systemPrompt($tenant, $admissible, $wantsPriority, $engineers, $availability)],
+                ['role' => 'system', 'content' => $this->systemPrompt($tenant, $admissible, $wantsPriority, $engineers, $availability, $recommendations, $clientId)],
                 ['role' => 'user', 'content' => "ROUGH NOTES\nSubject: ".$subject."\n\nDescription:\n".$description],
             ],
             [],
@@ -371,6 +387,49 @@ class DraftSuggestionService
         ];
     }
 
+    /**
+     * What this workspace has committed to at each admissible level, for the chosen
+     * client's tier.
+     *
+     * The criteria in PRIORITY_CRITERIA are fixed; the HOURS are the workspace's own and
+     * are read live, which is what gives the model this workspace's sense of proportion —
+     * a level targeted at 8 hours is visibly a different thing from one targeted at 72.
+     *
+     * With no client chosen, `[]`: the admissible set is then the intersection over all
+     * three tiers and each tier commits to different hours, so printing one tier's
+     * figures would be a guess presented as a commitment. That branch is already the
+     * expensive one (twelve policy existence checks) and gains zero queries here.
+     *
+     * @param  list<string>  $admissible
+     * @return array<string, array{response: int, resolution: int}>
+     */
+    private function priorityTargets(Tenant $tenant, ?int $clientId, array $admissible): array
+    {
+        if ($clientId === null || $admissible === []) {
+            return [];
+        }
+
+        $tier = $this->clientTierLabel($tenant, $clientId);
+        $targets = [];
+
+        foreach ($admissible as $priority) {
+            $policy = SlaPolicy::policyFor((int) $tenant->getKey(), $tier, $priority);
+
+            if ($policy === null) {
+                // Fails closed: no row means no hours quoted for that level, rather than
+                // an invented commitment. In practice the level is not admissible either.
+                continue;
+            }
+
+            $targets[$priority] = [
+                'response' => (int) $policy->response_time_hours,
+                'resolution' => (int) $policy->resolution_time_hours,
+            ];
+        }
+
+        return $targets;
+    }
+
     private function clientTierLabel(Tenant $tenant, int $clientId): ?string
     {
         return Client::withoutGlobalScopes()
@@ -396,6 +455,7 @@ class DraftSuggestionService
      * @param  list<string>  $admissible
      * @param  array<string, User>  $engineers
      * @param  array<string, bool|null>|null  $availability
+     * @param  list<AgentRecommendation>  $recommendations
      */
     private function systemPrompt(
         Tenant $tenant,
@@ -403,6 +463,8 @@ class DraftSuggestionService
         bool $wantsPriority,
         array $engineers = [],
         ?array $availability = null,
+        array $recommendations = [],
+        ?int $clientId = null,
     ): string {
         $prompt = AiAssistantService::draftSystemPrompt($tenant);
 
@@ -410,7 +472,28 @@ class DraftSuggestionService
             return $prompt;
         }
 
+        // The specialist framing is established BEFORE the question that must be answered
+        // under it, and before the rubric that maps the specialists' facts onto a level.
+        foreach (AnalyzeTicketService::agentInstructionLines($recommendations) as $line) {
+            $prompt .= "\n\n".$line;
+        }
+
         $prompt .= "\n\n".self::PRIORITY_INSTRUCTION;
+
+        // The rubric sits AFTER "Do not inflate it." and before the options, so it reads
+        // as the specification of that instruction rather than as a counterweight to it:
+        // its criteria are necessary conditions and PRIORITY_UNCERTAINTY resolves every
+        // ambiguity downward. Only ADMISSIBLE levels are described — the same array that
+        // builds PRIORITY OPTIONS, passed rather than recomputed, so the two blocks
+        // cannot disagree by construction.
+        $rubric = AnalyzeTicketService::priorityRubric(
+            $admissible,
+            $this->priorityTargets($tenant, $clientId, $admissible),
+        );
+
+        if ($rubric !== '') {
+            $prompt .= "\n\n".$rubric;
+        }
 
         // An empty set means the workspace has no SLA policy this draft could satisfy, so
         // the only honest suggestion is none — the form keeps its own default and the gap

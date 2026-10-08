@@ -73,6 +73,16 @@ class AiTicketAnalysis extends Model
     public const TRIGGER_RESOLUTION = 'resolution';
 
     /**
+     * An engineer created a ticket internally and the queued intake analysis ran (P7).
+     *
+     * Its own population rather than a reuse of `auto`: a stranger's portal prose and a
+     * colleague's internal notes are different inputs and the pilot's accept-rate has to
+     * be readable per population (follow-up 23). `requested_by` is also non-null here and
+     * null on `auto`, which is a second reason not to conflate them.
+     */
+    public const TRIGGER_INTAKE = 'intake';
+
+    /**
      * varchar in the database, so this constant is the only enumeration — the
      * `Ticket::STATUSES` rule. Adding a refusal reason needs no migration.
      *
@@ -99,6 +109,21 @@ class AiTicketAnalysis extends Model
         self::TRIGGER_AUTO,
         self::TRIGGER_DRAFT,
         self::TRIGGER_RESOLUTION,
+        self::TRIGGER_INTAKE,
+    ];
+
+    /**
+     * The triggers that run without a human pressing anything — one per ticket, ever.
+     *
+     * Both of them write `auto_for_ticket_id`, so both sit under the
+     * `ai_analyses_auto_for_ticket_unique` index and inherit the
+     * one-automatic-analysis-per-ticket guarantee rather than growing a second mechanism.
+     *
+     * @var list<string>
+     */
+    public const AUTOMATIC_TRIGGERS = [
+        self::TRIGGER_AUTO,
+        self::TRIGGER_INTAKE,
     ];
 
     /** @var list<string> */
