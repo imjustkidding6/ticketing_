@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\PlanFeature;
 use App\Exceptions\OpenAiException;
+use App\Http\Controllers\Concerns\ScopesTicketsToDepartments;
 use App\Http\Requests\StructureTicketDraftRequest;
 use App\Models\AppSetting;
 use App\Models\BugReport;
@@ -30,11 +31,18 @@ use Illuminate\View\View;
  */
 class AiAssistantController extends Controller
 {
+    use ScopesTicketsToDepartments;
+
     public function __construct(private AiAssistantService $assistant) {}
 
     public function draftReply(Ticket $ticket): JsonResponse
     {
         $this->checkPermission('use ai assistant');
+        // Department scoping must hold on every ticket-bound action, not only the
+        // pages: without this a restricted agent refused /tickets/{id} could still POST
+        // here and read the ticket back in the response. Placed AFTER checkPermission so
+        // a missing permission stays observable instead of being masked by a 403 here.
+        $this->authorizeTicketAccess($ticket);
 
         try {
             $text = $this->assistant->draftAgentReply($ticket);
@@ -50,6 +58,11 @@ class AiAssistantController extends Controller
     public function summarize(Ticket $ticket): JsonResponse
     {
         $this->checkPermission('use ai assistant');
+        // Department scoping must hold on every ticket-bound action, not only the
+        // pages: without this a restricted agent refused /tickets/{id} could still POST
+        // here and read the ticket back in the response. Placed AFTER checkPermission so
+        // a missing permission stays observable instead of being masked by a 403 here.
+        $this->authorizeTicketAccess($ticket);
 
         try {
             $text = $this->assistant->summarizeTicket($ticket);
@@ -69,6 +82,11 @@ class AiAssistantController extends Controller
     public function polishTask(Request $request, Ticket $ticket): JsonResponse
     {
         $this->checkPermission('use ai assistant');
+        // Department scoping must hold on every ticket-bound action, not only the
+        // pages: without this a restricted agent refused /tickets/{id} could still POST
+        // here and read the ticket back in the response. Placed AFTER checkPermission so
+        // a missing permission stays observable instead of being masked by a 403 here.
+        $this->authorizeTicketAccess($ticket);
         abort_unless((bool) AppSetting::get('ai_enabled', false), 404);
 
         $validated = $request->validate([
@@ -94,6 +112,11 @@ class AiAssistantController extends Controller
     public function polishTaskList(Ticket $ticket): JsonResponse
     {
         $this->checkPermission('use ai assistant');
+        // Department scoping must hold on every ticket-bound action, not only the
+        // pages: without this a restricted agent refused /tickets/{id} could still POST
+        // here and read the ticket back in the response. Placed AFTER checkPermission so
+        // a missing permission stays observable instead of being masked by a 403 here.
+        $this->authorizeTicketAccess($ticket);
         abort_unless((bool) AppSetting::get('ai_enabled', false), 404);
 
         $open = $ticket->tasks()->whereIn('status', ['pending', 'in_progress'])
