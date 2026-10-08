@@ -190,15 +190,49 @@ class SlaPolicy extends Model
     }
 
     /**
-     * Whether any active SLA policy covers (client_tier, priority) for this tenant.
+     * The predicate pair both coverage questions use, in ONE place.
+     *
+     * `tenant_id` EXPLICITLY and `withoutGlobalScopes()`: this is reachable from the
+     * queued intake analysis and from a console command, where `TenantScope` applies no
+     * predicate at all. A null `priority` or `client_tier` on a policy row means
+     * CATCH-ALL and matches.
+     *
+     * @return Builder<SlaPolicy>
      */
-    public static function hasPolicyFor(int $tenantId, ?string $clientTier, string $priority): bool
+    private static function coveringQuery(int $tenantId, ?string $clientTier, string $priority): Builder
     {
         return static::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->where(fn ($q) => $q->where('priority', $priority)->orWhereNull('priority'))
-            ->where(fn ($q) => $q->where('client_tier', $clientTier)->orWhereNull('client_tier'))
-            ->exists();
+            ->where(fn ($q) => $q->where('client_tier', $clientTier)->orWhereNull('client_tier'));
+    }
+
+    /**
+     * Whether any active SLA policy covers (client_tier, priority) for this tenant.
+     */
+    public static function hasPolicyFor(int $tenantId, ?string $clientTier, string $priority): bool
+    {
+        return static::coveringQuery($tenantId, $clientTier, $priority)->exists();
+    }
+
+    /**
+     * The WINNING policy for (tier, priority) — the hours a ticket would actually get.
+     *
+     * The specificity ladder is `findForTicket()`'s, restated here only because that one
+     * is keyed on a persisted Ticket and the create-form draft has none. A third copy of
+     * the ladder in PHP (a `whereIn` plus a tie-break) is precisely the drift CLAUDE.md
+     * warns about, so this is a SQL ordering like its sibling and not a reimplementation.
+     */
+    public static function policyFor(int $tenantId, ?string $clientTier, string $priority): ?self
+    {
+        return static::coveringQuery($tenantId, $clientTier, $priority)
+            ->orderByRaw('
+                CASE WHEN priority IS NOT NULL AND client_tier IS NOT NULL THEN 1
+                     WHEN priority IS NOT NULL THEN 2
+                     WHEN client_tier IS NOT NULL THEN 3
+                     ELSE 4 END
+            ')
+            ->first();
     }
 }

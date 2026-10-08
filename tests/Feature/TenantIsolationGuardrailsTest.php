@@ -186,6 +186,16 @@ class TenantIsolationGuardrailsTest extends TestCase
             'contains' => 'BugReport::withoutGlobalScopes()',
             'why' => 'Bug reports are reconciled against GitHub issue numbers, which are platform-wide.',
         ],
+        [
+            // The operator names a ticket by id from a console with no session, so this
+            // read exists only to LEARN which workspace the ticket belongs to. Nothing is
+            // analysed, printed or spent off the back of it: the tenant id it yields is
+            // handed to AnalyzeInternalTicketJob::handle(), which re-resolves the ticket
+            // with its own `where('tenant_id', …)` predicate and refuses a mismatch.
+            'file' => 'app/Console/Commands/AnalyzeTicketCommand.php',
+            'contains' => '$ticket = Ticket::withoutGlobalScopes()',
+            'why' => 'ai:analyze-ticket reads the ticket only to learn its workspace; the job re-pins it.',
+        ],
     ];
 
     /**

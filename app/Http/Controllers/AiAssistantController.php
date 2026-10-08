@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PlanFeature;
 use App\Exceptions\OpenAiException;
 use App\Http\Requests\StructureTicketDraftRequest;
 use App\Models\AppSetting;
@@ -15,6 +16,7 @@ use App\Models\User;
 use App\Services\AI\DraftSuggestionService;
 use App\Services\AiAssistantService;
 use App\Services\PageContextResolver;
+use App\Services\PlanService;
 use App\Support\FileParser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -125,6 +127,16 @@ class AiAssistantController extends Controller
 
         $tenant = Tenant::findOrFail(session('current_tenant_id'));
 
+        // The agent enrichment's own two gates, HERE rather than on the route: adding
+        // `feature:ai_agents` + `ai_agents_enabled` to `tickets-ai/structure` would delete
+        // a working Polish button for any Enterprise workspace that has agents switched
+        // off. Gate off means no agent block and a prompt byte-identical to the one this
+        // surface sent before P7. Session-reading forms are correct here — this is a web
+        // request whose session IS the workspace in the URL; they are forbidden in the
+        // queued intake analysis for exactly that reason.
+        $withAgents = app(PlanService::class)->currentTenantHasFeature(PlanFeature::AiAgents)
+            && (bool) AppSetting::get('ai_agents_enabled', false);
+
         try {
             $suggestion = $drafts->suggest(
                 $tenant,
@@ -134,6 +146,7 @@ class AiAssistantController extends Controller
                 $request->validated('client_id') === null ? null : (int) $request->validated('client_id'),
                 $request->validated('department_id') === null ? null : (int) $request->validated('department_id'),
                 (string) ($request->validated('context') ?? DraftSuggestionService::CONTEXT_CREATE),
+                $withAgents,
             );
         } catch (OpenAiException $e) {
             report($e);
