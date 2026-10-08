@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Services\AI\ResolutionWriterService;
 use App\Services\AiAssistantService;
 use App\Services\PlanService;
+use App\Services\ServiceReportService;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -393,7 +394,7 @@ class ResolutionWriterTest extends TestCase
         $ticket->update(['assigned_to' => $user->id]);
 
         Role::findByName('agent', 'web')->revokePermissionTo('use ai assistant');
-        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $this->assertTrue($user->fresh()->can('create ticket comments'));
         $this->assertFalse($user->fresh()->can('use ai assistant'));
@@ -411,7 +412,7 @@ class ResolutionWriterTest extends TestCase
         $user->departments()->attach($department->id);
 
         Role::findByName('agent', 'web')->revokePermissionTo('use ai assistant');
-        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         // The view's OUTER guard half. Separated from the `create ticket comments` half so
         // neither can mask the other: this role keeps comments and loses only the AI grant.
@@ -429,7 +430,7 @@ class ResolutionWriterTest extends TestCase
         $user->departments()->attach($department->id);
 
         Role::findByName('agent', 'web')->revokePermissionTo('create ticket comments');
-        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         // The other half, isolated the same way: the AI grant is intact.
         $this->assertTrue($user->fresh()->can('use ai assistant'));
@@ -466,7 +467,7 @@ class ResolutionWriterTest extends TestCase
         // `update tickets` is what TicketController::changeStatus() checks, so without it the
         // remarks copy could not land and must not render.
         Role::findByName('agent', 'web')->revokePermissionTo('update tickets');
-        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $page = $this->get($this->tenantUrl("tickets/{$ticket->id}"))->assertOk();
         $page->assertDontSee('Copy to final remarks');
@@ -494,7 +495,7 @@ class ResolutionWriterTest extends TestCase
         // Raw status write, as a FIXTURE only — the report needs a closed ticket and no
         // application path in this package may write `status` (that is the point of the test).
         $ticket->forceFill(['status' => 'closed', 'closed_at' => now()])->save();
-        $report = app(\App\Services\ServiceReportService::class)->generate($ticket->fresh());
+        $report = app(ServiceReportService::class)->generate($ticket->fresh());
 
         $this->assertStringNotContainsString('ZZCLIENTDRAFTZZ', json_encode($report->report_data));
         $this->assertSame('', $report->report_data['additional_comments']);
@@ -503,7 +504,7 @@ class ResolutionWriterTest extends TestCase
         // text really is on the ticket, the same two surfaces DO carry it. The absence
         // assertions therefore mean "nothing copied it", not "this surface shows nothing".
         $ticket->forceFill(['closing_remarks' => $offered])->save();
-        $second = app(\App\Services\ServiceReportService::class)->generate($ticket->fresh());
+        $second = app(ServiceReportService::class)->generate($ticket->fresh());
 
         $this->assertStringContainsString('ZZCLIENTDRAFTZZ', json_encode($second->report_data));
         $this->assertSame($offered, $second->report_data['additional_comments']);
