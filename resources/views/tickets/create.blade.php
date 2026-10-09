@@ -7,6 +7,15 @@
     $departmentHintWithAi = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot)
         && (bool) \App\Models\AppSetting::get('ai_enabled', false)
         && (bool) \App\Models\AppSetting::get('ai_agent_copilot_enabled', false);
+    // Which departments ask for the technical half. Resolved from the already tenant-scoped
+    // $departments collection the controller passed — no new query, and nothing read from
+    // the browser; the server re-resolves it from the Department row in StoreTicketRequest.
+    $technicalDepartmentIds = $departments->where('is_technical', true)->pluck('id')->map('intval')->values()->all();
+    // On a validation-failed redraw the chosen department decides what the
+    // information-needed list may report missing. A first render has none, so the technical
+    // half is simply not listed — which is correct: it has not been asked for yet.
+    $oldDepartmentIsTechnical = in_array((int) old('department_id'), $technicalDepartmentIds, true);
+    $technicalValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k)])->all();
     $departmentWarning = $departmentHintWithAi
         ? __('Without a department we can\'t suggest an engineer, and the AI has none of this department\'s expertise behind its priority suggestion.')
         : __('Without a department we can\'t suggest an engineer for this ticket.');
@@ -119,19 +128,44 @@
                             @error('description') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
 
-                        {{-- Technical details (App\Support\TicketTechnicalFields).
-                             ABOVE Priority deliberately: these are what inform it. The three
-                             selects are required internally; the two text fields are prompted
-                             and optional, because an engineer on the phone types `n/a` into a
-                             required free-text box and junk that looks like data is worse
-                             than empty. --}}
+                        {{-- Impact and urgency (App\Support\TicketTechnicalFields, the
+                             'all' group). ABOVE Priority deliberately: these are what inform
+                             it. Asked in EVERY department — an HR payroll fault hitting
+                             everyone is more urgent than one hitting one person, and "can
+                             they work around it meanwhile" applies to a locked HR portal as
+                             much as to a crashed server. These two are also exactly what
+                             PRIORITY_BOUNDARY judges critical on. --}}
                         <div>
-                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Technical details') }}</h3>
+                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Impact and urgency') }}</h3>
                             <p class="mt-0.5 text-xs text-gray-500">{{ __('These decide how urgent the ticket is judged to be.') }}</p>
                             <div class="mt-3">
                                 @include('tickets.partials._technical-details', [
-                                    'values' => collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k)])->all(),
+                                    'values' => $technicalValues,
                                     'required' => true,
+                                    'group' => \App\Support\TicketTechnicalFields::APPLIES_ALL,
+                                    'emptyLabel' => __('Select…'),
+                                ])
+                            </div>
+                        </div>
+
+                        {{-- Technical details (the 'technical' group), shown only for a
+                             department marked technical. "Provision a laptop for a new
+                             starter" has no environment and no reproduction steps, and
+                             requiring them teaches the agent to pick a value to clear the
+                             form — junk that looks like data. The server decides too:
+                             StoreTicketRequest resolves `is_technical` from the tenant-scoped
+                             Department row, so this `x-show` is convenience, not the rule. --}}
+                        <div x-data="{ departmentId: @js((string) old('department_id', '')), technicalDepartments: @js($technicalDepartmentIds) }"
+                             x-init="document.getElementById('department_id')?.addEventListener('change', (e) => { departmentId = e.target.value })"
+                             x-show="technicalDepartments.includes(Number(departmentId))"
+                             x-cloak>
+                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Technical details') }}</h3>
+                            <p class="mt-0.5 text-xs text-gray-500">{{ __('Asked because this department handles technical work.') }}</p>
+                            <div class="mt-3">
+                                @include('tickets.partials._technical-details', [
+                                    'values' => $technicalValues,
+                                    'required' => false,
+                                    'group' => \App\Support\TicketTechnicalFields::APPLIES_TECHNICAL,
                                     'emptyLabel' => __('Select…'),
                                 ])
                             </div>
@@ -217,7 +251,7 @@
                          past the top of the form still meets the Department warning. --}}
                     <div class="mt-6">
                         @include('tickets.partials._information-needed', [
-                            'missing' => \App\Support\TicketTechnicalFields::missing(old()),
+                            'missing' => \App\Support\TicketTechnicalFields::missing(old(), $oldDepartmentIsTechnical),
                             'departmentWarning' => old('department_id') ? null : $departmentWarning,
                         ])
                     </div>

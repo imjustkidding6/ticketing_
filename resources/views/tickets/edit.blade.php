@@ -54,21 +54,45 @@
                             </div>
                         </div>
 
-                        {{-- Technical details. The same fieldset as the create form, and
-                             nothing is required here: every rule on UpdateTicketRequest is
-                             nullable, which is also what stops _ai-analyze's Apply (whose
-                             hidden snapshot carries none of these keys) from 422-ing or from
-                             wiping a stored value. --}}
+                        {{-- Impact and urgency, then the technical half only where the
+                             ticket's own department asks for it. Nothing is required here:
+                             every rule on UpdateTicketRequest is nullable, which is also what
+                             stops _ai-analyze's Apply (whose hidden snapshot carries none of
+                             these keys) from 422-ing or from wiping a stored value.
+
+                             A stored technical value on a department later unticked still
+                             renders, deliberately: hiding data that exists is worse than
+                             showing a field the department no longer asks for. --}}
+                        @php
+                            $editTechnical = \App\Models\Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id)
+                                || filled($ticket->environment) || filled($ticket->steps_to_reproduce) || filled($ticket->error_text);
+                            $editValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k, $ticket->{$k})])->all();
+                        @endphp
                         <div>
-                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Technical details') }}</h3>
+                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Impact and urgency') }}</h3>
                             <div class="mt-3">
                                 @include('tickets.partials._technical-details', [
-                                    'values' => collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k, $ticket->{$k})])->all(),
+                                    'values' => $editValues,
                                     'required' => false,
+                                    'group' => \App\Support\TicketTechnicalFields::APPLIES_ALL,
                                     'emptyLabel' => __('Not recorded'),
                                 ])
                             </div>
                         </div>
+
+                        @if($editTechnical)
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Technical details') }}</h3>
+                            <div class="mt-3">
+                                @include('tickets.partials._technical-details', [
+                                    'values' => $editValues,
+                                    'required' => false,
+                                    'group' => \App\Support\TicketTechnicalFields::APPLIES_TECHNICAL,
+                                    'emptyLabel' => __('Not recorded'),
+                                ])
+                            </div>
+                        </div>
+                        @endif
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>

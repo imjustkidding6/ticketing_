@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ScopesRulesToTenant;
+use App\Models\Department;
 use App\Support\TicketTechnicalFields;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -46,9 +47,22 @@ class StoreTicketRequest extends FormRequest
             'ai_draft_token' => ['nullable', 'string', 'size:32', 'alpha_num'],
             'attachments.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,doc,docx,xlsx,csv,txt,zip'],
             // The declared technical detail set, with `required` where the declaration says
-            // so — nothing is hand-written here, so the three required selects and the two
-            // optional text fields cannot drift from the forms or the ticket page.
-        ] + TicketTechnicalFields::rules(internal: true);
+            // so — nothing is hand-written here, so the required selects and the optional
+            // text fields cannot drift from the forms or the ticket page.
+            //
+            // Applicability is resolved from the DEPARTMENT ROW, not from the browser:
+            // `tenantExists('departments')` above is the first defence and
+            // `Department::isTechnicalFor()`'s own explicit `tenant_id` predicate is the
+            // second, so another workspace's department resolves to false (fewer required
+            // fields) rather than to its answer. A ticket with no department is not
+            // technical, which asks for less rather than fabricating a requirement.
+        ] + TicketTechnicalFields::rules(
+            internal: true,
+            technical: Department::isTechnicalFor(
+                (int) $this->currentTenantId(),
+                $this->input('department_id') === null ? null : (int) $this->input('department_id'),
+            ),
+        );
     }
 
     /**

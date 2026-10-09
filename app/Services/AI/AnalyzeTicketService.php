@@ -240,7 +240,14 @@ class AnalyzeTicketService
             $response = $this->openAi->chat(
                 [
                     ['role' => 'system', 'content' => $this->systemPrompt($ticket, $recommendations, $availability !== null)],
-                    ['role' => 'user', 'content' => $this->userPrompt($sanitised, $categories, $engineers, $context, $availability, TicketTechnicalFields::factBlock($ticket))],
+                    ['role' => 'user', 'content' => $this->userPrompt($sanitised, $categories, $engineers, $context, $availability, TicketTechnicalFields::factBlock(
+                        $ticket,
+                        // Applicability from the department ROW, with its own tenant
+                        // predicate: this path runs in a worker where TenantScope adds
+                        // nothing, and a non-technical ticket must not emit an environment
+                        // line it was never asked for.
+                        Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id),
+                    ))],
                 ],
                 [],
                 [
@@ -311,7 +318,10 @@ class AnalyzeTicketService
         // what the input-character budget applies to, and what the embedding is built from.
         // Appending them anywhere else would send stranger-authored prose to OpenAI around
         // the guardrails instead of through them.
-        $parts = array_merge($parts, TicketTechnicalFields::freeTextParts($ticket));
+        $parts = array_merge($parts, TicketTechnicalFields::freeTextParts(
+            $ticket,
+            Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id),
+        ));
 
         $comments = $ticket->comments()
             // `ticket_id` already pins these rows to a ticket this service resolved against

@@ -19,8 +19,14 @@ use App\Models\Ticket;
  */
 final class TicketTechnicalFields
 {
+    /** Asked in every department. */
+    public const APPLIES_ALL = 'all';
+
+    /** Asked only where `departments.is_technical` is true. */
+    public const APPLIES_TECHNICAL = 'technical';
+
     /**
-     * @var array<string, array{label: string, shape: string, options: array<string, string>|null, required_internally: bool, rules: list<string>, cap: int, rubric_input: bool, why: string, facts: array<string, string>|null}>
+     * @var array<string, array{label: string, shape: string, options: array<string, string>|null, applies_to: string, required_internally: bool, rules: list<string>, cap: int, rubric_input: bool, why: string, facts: array<string, string>|null}>
      */
     public const FIELDS = [
         'impact_scope' => [
@@ -32,6 +38,10 @@ final class TicketTechnicalFields
                 'department' => 'A whole department or site',
                 'everyone' => 'Everyone / all customers',
             ],
+            // UNIVERSAL. An HR payroll fault hitting everyone is more urgent than one
+            // hitting one person, so breadth is not a technical question — and it is one of
+            // the two things PRIORITY_BOUNDARY judges critical on.
+            'applies_to' => self::APPLIES_ALL,
             'required_internally' => true,
             'rules' => ['string', 'in:one_person,team,department,everyone'],
             'cap' => 20,
@@ -56,6 +66,10 @@ final class TicketTechnicalFields
                 'partial' => 'A partial workaround',
                 'yes' => 'Yes, a workaround exists',
             ],
+            // UNIVERSAL. "Can they work around it meanwhile" applies to a locked HR portal
+            // exactly as it applies to a crashed server, and it is the other half of
+            // PRIORITY_BOUNDARY.
+            'applies_to' => self::APPLIES_ALL,
             'required_internally' => true,
             'rules' => ['string', 'in:none,partial,yes'],
             'cap' => 20,
@@ -76,6 +90,9 @@ final class TicketTechnicalFields
                 'test' => 'Test',
                 'development' => 'Development',
             ],
+            // TECHNICAL ONLY. "Provision a laptop for a new starter" has no environment,
+            // and requiring one teaches the agent to pick a value to clear the form.
+            'applies_to' => self::APPLIES_TECHNICAL,
             'required_internally' => true,
             'rules' => ['string', 'in:production,staging,test,development'],
             'cap' => 20,
@@ -92,6 +109,7 @@ final class TicketTechnicalFields
             'label' => 'Steps to reproduce',
             'shape' => 'textarea',
             'options' => null,
+            'applies_to' => self::APPLIES_TECHNICAL,
             // Deliberately optional even internally: an engineer on the phone files a
             // ticket in 20 seconds, and a hard-required free-text field earns `n/a` —
             // junk that looks like data. Not a rubric input either way.
@@ -106,6 +124,7 @@ final class TicketTechnicalFields
             'label' => 'Exact error message',
             'shape' => 'textarea',
             'options' => null,
+            'applies_to' => self::APPLIES_TECHNICAL,
             'required_internally' => false,
             'rules' => ['string', 'max:2000'],
             'cap' => 2000,
@@ -124,6 +143,23 @@ final class TicketTechnicalFields
     }
 
     /**
+     * The declared fields that apply to a ticket in a technical / non-technical department.
+     *
+     * THE one applicability decision in the application. The forms, the information-needed
+     * list, the validation and the rubric fact block all derive from this — a second list
+     * of "which fields are technical" is the drift the declared set exists to prevent.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function applicable(bool $technical): array
+    {
+        return array_filter(
+            self::FIELDS,
+            fn (array $field) => $technical || $field['applies_to'] === self::APPLIES_ALL,
+        );
+    }
+
+    /**
      * The validation rules for every declared field, in one place.
      *
      * `$internal` is the ONLY difference between the two surfaces, and it reads straight
@@ -136,14 +172,22 @@ final class TicketTechnicalFields
      * `nullable` also means an absent key is omitted from `validated()` and therefore never
      * written, so Apply cannot wipe a stored value.
      *
+     * @param  bool  $technical  Whether the ticket's department is marked technical. Read
+     *                           from the tenant-scoped Department row, never from browser
+     *                           input, and false when there is no department — which asks
+     *                           for less rather than fabricating a requirement.
      * @return array<string, list<string>>
      */
-    public static function rules(bool $internal): array
+    public static function rules(bool $internal, bool $technical = true): array
     {
         $rules = [];
+        $applicable = self::applicable($technical);
 
         foreach (self::FIELDS as $key => $field) {
-            $required = $internal && $field['required_internally'];
+            // A field that does not apply is still VALIDATED (a stray `environment=prod` on
+            // an HR ticket is still refused) but is never required. Dropping the rule
+            // instead would let an unvalidated string reach the column and the prompt.
+            $required = $internal && $field['required_internally'] && isset($applicable[$key]);
             $rules[$key] = array_merge([$required ? 'required' : 'nullable'], $field['rules']);
         }
 
@@ -170,13 +214,15 @@ final class TicketTechnicalFields
      * model opinion in it — a field is missing iff its value is null or ''.
      *
      * @param  Ticket|array<string, mixed>  $source
+     *                                               A field that does not apply to this ticket's department is never reported missing —
+     *                                               an HR ticket must not be told it is missing an environment.
      * @return list<array{key: string, label: string, why: string, rubric_input: bool}>
      */
-    public static function missing(Ticket|array $source): array
+    public static function missing(Ticket|array $source, bool $technical = true): array
     {
         $rows = [];
 
-        foreach (self::FIELDS as $key => $field) {
+        foreach (self::applicable($technical) as $key => $field) {
             if (self::value($source, $key) !== null) {
                 continue;
             }
@@ -206,14 +252,16 @@ final class TicketTechnicalFields
      * stated fact about the state of knowledge, which a model will reason about separately.
      *
      * @param  Ticket|array<string, mixed>  $source
+     *                                               A field that does not apply to the ticket's department emits nothing either, for the
+     *                                               same reason: it was never asked, so it was never stated.
      * @return string '' when no declared fact was captured — the caller appends nothing,
      *                so the prompt stays byte-identical to the pre-P8 one.
      */
-    public static function factBlock(Ticket|array $source): string
+    public static function factBlock(Ticket|array $source, bool $technical = true): string
     {
         $lines = [];
 
-        foreach (self::FIELDS as $key => $field) {
+        foreach (self::applicable($technical) as $key => $field) {
             if ($field['shape'] !== 'select') {
                 continue;
             }
@@ -247,11 +295,11 @@ final class TicketTechnicalFields
      * @param  Ticket|array<string, mixed>  $source
      * @return list<string>
      */
-    public static function freeTextParts(Ticket|array $source): array
+    public static function freeTextParts(Ticket|array $source, bool $technical = true): array
     {
         $parts = [];
 
-        foreach (self::FIELDS as $key => $field) {
+        foreach (self::applicable($technical) as $key => $field) {
             if ($field['shape'] === 'select') {
                 continue;
             }

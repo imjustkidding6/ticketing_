@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Models\TicketCategory;
 use App\Models\User;
 use App\Services\TenantRoleService;
+use Database\Seeders\DepartmentSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -160,5 +161,63 @@ class DepartmentManagementTest extends TestCase
             ->assertRedirect();
 
         $this->assertDatabaseMissing('departments', ['id' => $dept->id]);
+    }
+
+    /**
+     * The toggle that decides whether tickets in this department are asked for the technical
+     * half of the declared detail set (App\Support\TicketTechnicalFields). It rides on
+     * `update departments`, already enforced by the controller.
+     */
+    public function test_a_department_can_be_marked_as_handling_technical_work(): void
+    {
+        $tenant = $this->createEnterpriseTenant();
+        $this->setupTenantContext($tenant);
+
+        $dept = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Human Resources']);
+
+        // Default off: the safe reading of an unanswered question is "not technical", which
+        // asks for fewer fields rather than fabricating a requirement.
+        $this->assertFalse($dept->refresh()->is_technical);
+
+        $this->get($this->tenantUrl("/departments/{$dept->id}/edit"))
+            ->assertOk()
+            ->assertSee('Handles technical work');
+
+        $this->put($this->tenantUrl("/departments/{$dept->id}"), [
+            'name' => 'Technical Software',
+            'code' => $dept->code,
+            'color' => $dept->color ?? '#3b82f6',
+            'is_active' => true,
+            'is_technical' => true,
+        ])->assertRedirect();
+
+        $this->assertTrue($dept->refresh()->is_technical);
+
+        // And off again — the checkbox posts its own hidden 0, so unticking persists.
+        $this->put($this->tenantUrl("/departments/{$dept->id}"), [
+            'name' => 'Technical Software',
+            'code' => $dept->code,
+            'color' => $dept->color ?? '#3b82f6',
+            'is_active' => true,
+            'is_technical' => false,
+        ])->assertRedirect();
+
+        $this->assertFalse($dept->refresh()->is_technical);
+    }
+
+    public function test_the_seeded_technical_defaults_are_marked_technical(): void
+    {
+        $tenant = $this->createEnterpriseTenant();
+
+        DepartmentSeeder::seedForTenant($tenant);
+
+        $byCode = Department::withoutGlobalScopes()->where('tenant_id', $tenant->id)->pluck('is_technical', 'code');
+
+        $this->assertTrue((bool) $byCode['SOFTWARE']);
+        $this->assertTrue((bool) $byCode['HARDWARE']);
+        // Everything else stays off: HR, Sales, Finance and the rest ask only who is
+        // affected and whether there is a workaround.
+        $this->assertFalse((bool) $byCode['SALES']);
+        $this->assertFalse((bool) $byCode['CS']);
     }
 }

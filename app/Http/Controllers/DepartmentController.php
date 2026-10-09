@@ -48,6 +48,10 @@ class DepartmentController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'color' => ['required', 'string', 'max:7'],
             'is_active' => ['boolean'],
+            // Decides whether tickets in this department are asked for the technical half
+            // of the declared detail set (App\Support\TicketTechnicalFields). Rides on
+            // `create departments` / `update departments`, already enforced above.
+            'is_technical' => ['boolean'],
         ]);
 
         Department::create($validated);
@@ -85,6 +89,10 @@ class DepartmentController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'color' => ['required', 'string', 'max:7'],
             'is_active' => ['boolean'],
+            // Decides whether tickets in this department are asked for the technical half
+            // of the declared detail set (App\Support\TicketTechnicalFields). Rides on
+            // `create departments` / `update departments`, already enforced above.
+            'is_technical' => ['boolean'],
         ]);
 
         $department->update($validated);

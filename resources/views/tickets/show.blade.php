@@ -192,7 +192,12 @@
                          above: it is about ticket data and is useful with AI switched off. --}}
                     <div>
                         @include('tickets.partials._information-needed', [
-                            'missing' => \App\Support\TicketTechnicalFields::missing($ticket),
+                            {{-- Applicability from the ticket's own department: a Sales or HR
+                                 ticket must never be told it is missing an environment. --}}
+                            'missing' => \App\Support\TicketTechnicalFields::missing(
+                                $ticket,
+                                \App\Models\Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id),
+                            ),
                             {{-- Gated on `update tickets` (with the owner bypass) because that
                                  is what TicketController::edit() enforces: a link to a page
                                  that 403s is worse than no link. The header's own Edit button

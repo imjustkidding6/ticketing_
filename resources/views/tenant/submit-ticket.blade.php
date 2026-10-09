@@ -169,17 +169,40 @@
                      able to see it. $prefill/$locked gain no keys here. --}}
                 <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
                     <p class="text-sm font-semibold text-gray-800">{{ __('Help us prioritise this') }} <span class="font-normal text-gray-400">({{ __('optional') }})</span></p>
-                    <p class="mt-0.5 text-xs text-gray-500">{{ __('Answering these three questions lets us judge how urgent your issue is. If you\'re not sure, leave them blank — we\'ll ask.') }}</p>
+                    <p class="mt-0.5 text-xs text-gray-500">{{ __('Answering these questions lets us judge how urgent your issue is. If you\'re not sure, leave them blank — we\'ll ask.') }}</p>
+                    @php
+                        $publicTechnicalValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k)])->all();
+                        // Resolved from the already tenant-scoped $departments collection the
+                        // controller passed — no new query and nothing trusted from the URL.
+                        $publicTechnicalDepartmentIds = $departments->where('is_technical', true)->pluck('id')->map('intval')->values()->all();
+                    @endphp
                     <div class="mt-3">
                         @include('tickets.partials._technical-details', [
-                            'values' => collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k)])->all(),
+                            'values' => $publicTechnicalValues,
                             'required' => false,
+                            'group' => \App\Support\TicketTechnicalFields::APPLIES_ALL,
+                            'emptyLabel' => __('I\'m not sure'),
+                        ])
+                    </div>
+                    {{-- The technical half only where the chosen department handles technical
+                         work. A visitor filing an HR query is not asked for an environment.
+                         Optional throughout, so the server rule is `nullable` either way and
+                         this is presentation, not validation. --}}
+                    <div class="mt-4"
+                         x-data="{ departmentId: @js((string) old('department_id', $prefill['department_id'] ?? '')), technicalDepartments: @js($publicTechnicalDepartmentIds) }"
+                         x-init="document.getElementById('department_id')?.addEventListener('change', (e) => { departmentId = e.target.value })"
+                         x-show="technicalDepartments.includes(Number(departmentId))"
+                         x-cloak>
+                        @include('tickets.partials._technical-details', [
+                            'values' => $publicTechnicalValues,
+                            'required' => false,
+                            'group' => \App\Support\TicketTechnicalFields::APPLIES_TECHNICAL,
                             'emptyLabel' => __('I\'m not sure'),
                         ])
                     </div>
                     <div class="mt-3">
                         @include('tickets.partials._information-needed', [
-                            'missing' => \App\Support\TicketTechnicalFields::missing(old()),
+                            'missing' => \App\Support\TicketTechnicalFields::missing(old(), false),
                             'publicTone' => true,
                         ])
                     </div>

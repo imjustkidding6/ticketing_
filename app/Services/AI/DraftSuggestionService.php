@@ -8,6 +8,7 @@ use App\Exceptions\OpenAiException;
 use App\Models\AiSuggestionVerdict;
 use App\Models\AiTicketAnalysis;
 use App\Models\Client;
+use App\Models\Department;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\Ticket;
@@ -130,6 +131,11 @@ class DraftSuggestionService
         // PASTED CUSTOMER TEXT, so injection screening is not optional merely because a
         // colleague pressed the button. Both services are local (regex / keyword scans,
         // no HTTP) and both write their own attributable AiModerationLog row.
+        // Applicability from the department ROW (explicit tenant predicate inside), never
+        // from the browser: the id arrives from the create form, so a foreign one resolves
+        // to false — fewer fields asked for, never another workspace's answer.
+        $declaredTechnical = Department::isTechnicalFor((int) $tenant->getKey(), $departmentId);
+
         $declared = [
             'impact_scope' => $impactScope,
             'workaround' => $workaround,
@@ -142,7 +148,7 @@ class DraftSuggestionService
         // the description on this form is routinely pasted customer text, and so are these.
         $screened = trim(implode(
             "\n",
-            array_merge([$subject, $description], TicketTechnicalFields::freeTextParts($declared)),
+            array_merge([$subject, $description], TicketTechnicalFields::freeTextParts($declared, $declaredTechnical)),
         ));
 
         if ($this->injection->isInjection($screened, (int) $tenant->getKey(), $user?->getKey())) {
@@ -199,7 +205,7 @@ class DraftSuggestionService
                     // The SAME fact block the analysis surface sends, so there is one format
                     // in the application. '' when nothing was answered, and then this user
                     // message is byte-identical to the pre-P8 one.
-                    ."\n\n".TicketTechnicalFields::factBlock($declared),
+                    ."\n\n".TicketTechnicalFields::factBlock($declared, $declaredTechnical),
                 )],
             ],
             [],

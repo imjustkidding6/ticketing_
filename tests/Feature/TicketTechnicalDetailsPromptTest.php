@@ -85,7 +85,14 @@ class TicketTechnicalDetailsPromptTest extends TestCase
      */
     private function ticketFor(Tenant $tenant, array $overrides = []): Ticket
     {
-        $department = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Technical Software', 'code' => 'SOFTWARE']);
+        $department = Department::factory()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Technical Software',
+            'code' => 'SOFTWARE',
+            // The technical half of the declared set is asked for (and therefore stated as a
+            // fact) only where the department handles technical work.
+            'is_technical' => true,
+        ]);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
 
         return Ticket::factory()->create(array_merge([
@@ -262,5 +269,40 @@ class TicketTechnicalDetailsPromptTest extends TestCase
         // screening rather than around it.
         $this->assertSame(AiTicketAnalysis::STATUS_REFUSED_INJECTION, $result->status);
         Http::assertNothingSent();
+    }
+
+    public function test_a_non_technical_departments_ticket_states_no_environment_fact(): void
+    {
+        $tenant = $this->createTenant();
+        $hr = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Human Resources', 'code' => 'HR']);
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+
+        $ticket = Ticket::factory()->create([
+            'tenant_id' => $tenant->id,
+            'department_id' => $hr->id,
+            'category_id' => null,
+            'client_id' => $client->id,
+            'priority' => 'low',
+            'status' => 'open',
+            'subject' => 'Payroll portal will not accept my timesheet',
+            'description' => 'The submit button does nothing.',
+            'impact_scope' => 'team',
+            'workaround' => 'partial',
+            // Present on the row (the department could have been unticked later) and still
+            // not stated: it was never asked for, so it is not a reported fact.
+            'environment' => 'production',
+            'steps_to_reproduce' => 'NEVER-SENT-STEPS',
+        ]);
+
+        app(AnalyzeTicketService::class)->analyze($ticket, null, AiTicketAnalysis::TRIGGER_INTAKE);
+
+        $body = $this->chatBody();
+
+        $this->assertStringContainsString('impact_scope: team', $body);
+        $this->assertStringContainsString('workaround: partial', $body);
+        // The word "environment" appears in the polish instruction and the rubric prose; it
+        // is the FACT LINE that must be absent.
+        $this->assertStringNotContainsString('environment:', $body);
+        $this->assertStringNotContainsString('NEVER-SENT-STEPS', $body);
     }
 }

@@ -45,6 +45,15 @@
                             <input type="checkbox" name="is_active" id="is_active" value="1" {{ old('is_active', true) ? 'checked' : '' }} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                             <label for="is_active" class="text-sm font-medium text-gray-700">{{ __('Active') }}</label>
                         </div>
+
+                        <div class="flex items-start gap-2">
+                            <input type="hidden" name="is_technical" value="0">
+                            <input type="checkbox" name="is_technical" id="is_technical" value="1" {{ old('is_technical', false) ? 'checked' : '' }} class="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            <div>
+                                <label for="is_technical" class="text-sm font-medium text-gray-700">{{ __('Handles technical work') }}</label>
+                                <p class="text-xs text-gray-500">{{ __('Tickets in this department also ask for the environment, steps to reproduce and the exact error message. Leave it off for departments like HR, Sales or Finance — every department is still asked who is affected and whether there is a workaround.') }}</p>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mt-6 flex items-center justify-end gap-3">

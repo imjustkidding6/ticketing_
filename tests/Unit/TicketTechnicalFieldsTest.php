@@ -17,7 +17,7 @@ class TicketTechnicalFieldsTest extends TestCase
 {
     public function test_the_declared_set_is_the_only_source_of_required_fields(): void
     {
-        $internal = TicketTechnicalFields::rules(internal: true);
+        $internal = TicketTechnicalFields::rules(internal: true, technical: true);
 
         foreach (['impact_scope', 'workaround', 'environment'] as $key) {
             $this->assertContains('required', $internal[$key], "{$key} is required internally");
@@ -29,7 +29,7 @@ class TicketTechnicalFieldsTest extends TestCase
         }
 
         // The public form can never be stricter than the internal one, by construction.
-        foreach (TicketTechnicalFields::rules(internal: false) as $key => $rules) {
+        foreach (TicketTechnicalFields::rules(internal: false, technical: true) as $key => $rules) {
             $this->assertContains('nullable', $rules, "{$key} is nullable on the public/update surface");
             $this->assertNotContains('required', $rules);
         }
@@ -142,5 +142,57 @@ class TicketTechnicalFieldsTest extends TestCase
             'impact_scope' => 'everybody',
             'environment' => '',
         ]));
+    }
+
+    public function test_only_the_universal_pair_is_required_in_a_non_technical_department(): void
+    {
+        $rules = TicketTechnicalFields::rules(internal: true, technical: false);
+
+        // An HR payroll query or "provision a laptop for a new starter" has no environment,
+        // and requiring one teaches the agent to pick a value to clear the form.
+        $this->assertContains('required', $rules['impact_scope']);
+        $this->assertContains('required', $rules['workaround']);
+        $this->assertContains('nullable', $rules['environment']);
+
+        // Still VALIDATED though: a stray value is refused rather than waved through to the
+        // column and the prompt.
+        $this->assertContains('in:production,staging,test,development', $rules['environment']);
+    }
+
+    public function test_applicability_is_declared_once_and_splits_the_set_in_two(): void
+    {
+        $all = TicketTechnicalFields::applicable(technical: false);
+        $technical = TicketTechnicalFields::applicable(technical: true);
+
+        $this->assertSame(['impact_scope', 'workaround'], array_keys($all));
+        $this->assertSame(TicketTechnicalFields::keys(), array_keys($technical));
+
+        // Breadth and workaround are universal because they are what PRIORITY_BOUNDARY
+        // judges critical on — the rubric does not become department-specific.
+        foreach ($all as $field) {
+            $this->assertTrue($field['rubric_input']);
+        }
+    }
+
+    public function test_a_non_technical_ticket_is_never_told_it_is_missing_an_environment(): void
+    {
+        $rows = TicketTechnicalFields::missing([], technical: false);
+
+        $this->assertSame(['impact_scope', 'workaround'], array_column($rows, 'key'));
+    }
+
+    public function test_the_fact_block_omits_a_field_the_department_never_asked_for(): void
+    {
+        // A value can exist on the row (the department was unticked later, or the ticket was
+        // moved) and still must not be stated as a fact the reporter was asked for.
+        $block = TicketTechnicalFields::factBlock([
+            'impact_scope' => 'everyone',
+            'workaround' => 'none',
+            'environment' => 'production',
+        ], technical: false);
+
+        $this->assertStringContainsString('impact_scope: everyone', $block);
+        $this->assertStringContainsString('workaround: none', $block);
+        $this->assertStringNotContainsString('environment', $block);
     }
 }

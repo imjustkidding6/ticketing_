@@ -111,7 +111,8 @@ class TicketTechnicalDetailsDisplayTest extends TestCase
     {
         $tenant = $this->tenantOnPlan('business');
         $this->actor($tenant);
-        $ticket = $this->ticketFor($tenant);
+        $department = Department::factory()->create(['tenant_id' => $tenant->id, 'is_technical' => true]);
+        $ticket = $this->ticketFor($tenant, ['department_id' => $department->id]);
 
         $this->get($this->tenantUrl("/tickets/{$ticket->id}"))
             ->assertOk()
@@ -215,5 +216,20 @@ class TicketTechnicalDetailsDisplayTest extends TestCase
         // `matched_skills` and `score` are in the payload the panel hydrates (they were
         // before P8 too) but the rendered line maps over names and nothing else.
         $this->assertStringContainsString('result.agents.map((a) => a.name)', $content);
+    }
+
+    public function test_a_non_technical_ticket_is_never_told_it_is_missing_an_environment(): void
+    {
+        $tenant = $this->tenantOnPlan('business');
+        $this->actor($tenant);
+        $hr = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Human Resources']);
+        $ticket = $this->ticketFor($tenant, ['department_id' => $hr->id]);
+
+        $this->get($this->tenantUrl("/tickets/{$ticket->id}"))
+            ->assertOk()
+            ->assertSee('Who is affected')
+            ->assertSee('Is there a workaround')
+            ->assertDontSee('An environment nobody names is treated as NOT production, which rules critical out.')
+            ->assertDontSee('The exact wording is what matches this ticket to one already resolved.');
     }
 }

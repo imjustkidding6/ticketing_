@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\PlanService;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -75,12 +76,14 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $department = Department::factory()->create(['tenant_id' => $tenant->id, 'is_technical' => true]);
 
         $this->post($this->tenantUrl('/tickets'), [
             'subject' => 'Reporting down',
             'description' => 'Nobody can open reports',
             'priority' => 'high',
             'client_id' => $client->id,
+            'department_id' => $department->id,
         ])->assertSessionHasErrors(['impact_scope', 'workaround', 'environment']);
 
         $this->assertSame(0, Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count());
@@ -258,5 +261,115 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
         $this->assertSame('production', $ticket->environment);
         $this->assertSame('Open the app, click Reports.', $ticket->steps_to_reproduce);
         $this->assertSame('HTTP 500 from /reports', $ticket->error_text);
+    }
+
+    public function test_a_non_technical_department_is_not_asked_for_an_environment(): void
+    {
+        $tenant = $this->tenantOnPlan();
+        $this->actor($tenant);
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        // The default: HR, Sales, Finance. "Provision a laptop for a new starter" has no
+        // environment, and requiring one trains the agent to pick a value to clear the form.
+        $department = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Human Resources']);
+
+        $this->post($this->tenantUrl('/tickets'), [
+            'subject' => 'Payroll portal will not accept my timesheet',
+            'description' => 'The submit button does nothing.',
+            'priority' => 'medium',
+            'client_id' => $client->id,
+            'department_id' => $department->id,
+            // The universal pair is still required, and still answered: an HR fault hitting
+            // everyone is more urgent than one hitting one person.
+            'impact_scope' => 'team',
+            'workaround' => 'partial',
+        ])->assertSessionHasNoErrors();
+
+        $ticket = Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->sole();
+
+        $this->assertSame('team', $ticket->impact_scope);
+        $this->assertNull($ticket->environment);
+    }
+
+    public function test_the_universal_pair_is_required_even_with_no_department(): void
+    {
+        $tenant = $this->tenantOnPlan();
+        $this->actor($tenant);
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+
+        $this->post($this->tenantUrl('/tickets'), [
+            'subject' => 'Something is wrong',
+            'description' => 'Not sure which team owns this.',
+            'priority' => 'medium',
+            'client_id' => $client->id,
+        ])
+            ->assertSessionHasErrors(['impact_scope', 'workaround'])
+            // No department is not technical: asking for less beats fabricating a
+            // requirement nobody can answer.
+            ->assertSessionDoesntHaveErrors('environment');
+    }
+
+    public function test_a_stray_environment_on_a_non_technical_ticket_is_still_validated(): void
+    {
+        $tenant = $this->tenantOnPlan();
+        $this->actor($tenant);
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $department = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Sales']);
+
+        // Not applicable is not the same as unvalidated: an unvalidated string would reach
+        // the column and the prompt.
+        $this->post($this->tenantUrl('/tickets'), [
+            'subject' => 'Quote request',
+            'description' => 'Please send pricing.',
+            'priority' => 'low',
+            'client_id' => $client->id,
+            'department_id' => $department->id,
+            'impact_scope' => 'one_person',
+            'workaround' => 'yes',
+            'environment' => 'prod',
+        ])->assertSessionHasErrors('environment');
+
+        $this->assertSame(0, Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count());
+    }
+
+    /**
+     * FOLLOW-UP 28, discharged directly rather than through a request.
+     *
+     * `Department::isTechnicalFor()` is the one new query this package adds, and it carries
+     * an explicit `tenant_id` predicate because it is reached from a FormRequest AND from
+     * the queued intake analysis, where TenantScope applies no predicate at all. An
+     * end-to-end test on a session-bearing surface cannot prove that predicate: Department's
+     * own global scope would mask its absence. So the assertion is on the resolver, with a
+     * hostile raw-inserted decoy — a technical department in the WRONG workspace, carrying
+     * the same id the caller is about to ask about.
+     */
+    public function test_a_foreign_departments_technical_flag_cannot_decide_this_workspaces_fields(): void
+    {
+        $tenantA = $this->tenantOnPlan();
+        $tenantB = $this->tenantOnPlan();
+
+        // Raw-inserted so no scope, factory default or observer can tidy it away.
+        $foreignId = DB::table('departments')->insertGetId([
+            'tenant_id' => $tenantB->id,
+            'name' => 'Technical Software',
+            'code' => 'SOFTWARE',
+            'color' => '#3b82f6',
+            'is_active' => true,
+            'is_default' => true,
+            'is_technical' => true,
+            'sort_order' => 2,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // The decoy IS technical, in its own workspace.
+        $this->assertTrue(Department::isTechnicalFor($tenantB->id, $foreignId));
+
+        // Asked for from tenant A it resolves to FALSE — fewer fields demanded, never
+        // another workspace's answer. Without the predicate this returns true.
+        $this->assertFalse(Department::isTechnicalFor($tenantA->id, $foreignId));
+
+        // And an id that exists nowhere, and no id at all.
+        $this->assertFalse(Department::isTechnicalFor($tenantA->id, 999999));
+        $this->assertFalse(Department::isTechnicalFor($tenantA->id, null));
     }
 }
