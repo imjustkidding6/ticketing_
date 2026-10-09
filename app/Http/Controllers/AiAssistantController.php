@@ -170,6 +170,14 @@ class AiAssistantController extends Controller
                 $request->validated('department_id') === null ? null : (int) $request->validated('department_id'),
                 (string) ($request->validated('context') ?? DraftSuggestionService::CONTEXT_CREATE),
                 $withAgents,
+                // The reporter's own declared technical facts, read off the half-filled form.
+                // Validated nullable, so a mid-draft Polish carries whatever is answered so
+                // far and nothing is inferred for what is not.
+                $request->validated('impact_scope'),
+                $request->validated('workaround'),
+                $request->validated('environment'),
+                $request->validated('steps_to_reproduce'),
+                $request->validated('error_text'),
             );
         } catch (OpenAiException $e) {
             report($e);

@@ -294,6 +294,9 @@ class AiTicketAnalysis extends Model
             'polished_description' => $suggestions['polished_description'] ?? null,
             'category' => $suggestions['category'] ?? null,
             'priority' => $suggestions['priority'] ?? null,
+            // Display only (no Apply/Edit/Dismiss, not an AiSuggestionVerdict type): it
+            // explains a suggestion, it is not one.
+            'priority_reason' => $suggestions['priority_reason'] ?? null,
             'checks' => is_array($suggestions['checks'] ?? null) ? $suggestions['checks'] : [],
             'engineer' => $suggestions['engineer'] ?? null,
             // NO `engineer_candidates` key, deliberately — and this is the one place

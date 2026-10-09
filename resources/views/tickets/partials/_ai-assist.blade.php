@@ -131,6 +131,14 @@
                             // set is never widened to the whole workspace.
                             department_id: departmentEl?.value || null,
                             context: this.context,
+                            // The reporter's own declared technical facts, read by id the
+                            // same way as the fields above. Validated nullable server-side,
+                            // so a half-filled form polishes rather than 422-ing.
+                            impact_scope: document.getElementById('impact_scope')?.value || null,
+                            workaround: document.getElementById('workaround')?.value || null,
+                            environment: document.getElementById('environment')?.value || null,
+                            steps_to_reproduce: document.getElementById('steps_to_reproduce')?.value || null,
+                            error_text: document.getElementById('error_text')?.value || null,
                         }),
                     });
                     if (!res.ok) throw new Error('request failed');

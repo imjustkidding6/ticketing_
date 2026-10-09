@@ -54,6 +54,22 @@
                             </div>
                         </div>
 
+                        {{-- Technical details. The same fieldset as the create form, and
+                             nothing is required here: every rule on UpdateTicketRequest is
+                             nullable, which is also what stops _ai-analyze's Apply (whose
+                             hidden snapshot carries none of these keys) from 422-ing or from
+                             wiping a stored value. --}}
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Technical details') }}</h3>
+                            <div class="mt-3">
+                                @include('tickets.partials._technical-details', [
+                                    'values' => collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k, $ticket->{$k})])->all(),
+                                    'required' => false,
+                                    'emptyLabel' => __('Not recorded'),
+                                ])
+                            </div>
+                        </div>
+
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label for="status" class="block text-sm font-medium text-gray-700">{{ __('Status') }}</label>

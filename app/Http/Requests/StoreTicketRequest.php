@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ScopesRulesToTenant;
+use App\Support\TicketTechnicalFields;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -44,7 +45,10 @@ class StoreTicketRequest extends FormRequest
             // value simply finds nothing and the ticket is created exactly as it is today.
             'ai_draft_token' => ['nullable', 'string', 'size:32', 'alpha_num'],
             'attachments.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,doc,docx,xlsx,csv,txt,zip'],
-        ];
+            // The declared technical detail set, with `required` where the declaration says
+            // so — nothing is hand-written here, so the three required selects and the two
+            // optional text fields cannot drift from the forms or the ticket page.
+        ] + TicketTechnicalFields::rules(internal: true);
     }
 
     /**

@@ -93,6 +93,14 @@ class Ticket extends Model
         'merge_metadata',
         'solution_embedding',
         'solution_embedded_at',
+        // The declared technical detail set (App\Support\TicketTechnicalFields). Deliberately
+        // NOT in $activityLogIgnore: "who changed impact_scope from one_person to everyone,
+        // and when" is exactly the audit trail a disputed priority needs.
+        'environment',
+        'impact_scope',
+        'workaround',
+        'steps_to_reproduce',
+        'error_text',
     ];
 
     /**

@@ -167,7 +167,41 @@
                                 <dd class="mt-1 text-sm text-gray-900">@localdt($ticket->preferred_service_date, 'm/d/Y, g:i:s A')</dd>
                             </div>
                             @endif
+                            {{-- The declared technical details, in the ALWAYS-VISIBLE details
+                                 card and deliberately not in _ai-analyze: these are ordinary
+                                 ticket columns the reporter filled in, not AI output, and the
+                                 panel's include site is gated on two plan features, two
+                                 workspace switches and a permission — which would hide the
+                                 customer's own reported facts from every Business workspace.
+                                 A field with no value is not emitted; its absence is the
+                                 information-needed list's job, and a run of `-` rows is what
+                                 that list exists to replace. --}}
+                            @foreach(\App\Support\TicketTechnicalFields::FIELDS as $technicalKey => $technicalField)
+                                @if(filled($ticket->{$technicalKey}))
+                                <div>
+                                    <dt class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __($technicalField['label']) }}</dt>
+                                    <dd class="mt-1 max-h-48 overflow-y-auto whitespace-pre-line text-sm text-gray-900">{{ \App\Support\TicketTechnicalFields::optionLabel($technicalKey, $ticket->{$technicalKey}) }}</dd>
+                                </div>
+                                @endif
+                            @endforeach
                         </dl>
+                    </div>
+
+                    {{-- Information needed. The same derived list and the same wording as both
+                         intake forms, outside the AI gate for the same reason as the rows
+                         above: it is about ticket data and is useful with AI switched off. --}}
+                    <div>
+                        @include('tickets.partials._information-needed', [
+                            'missing' => \App\Support\TicketTechnicalFields::missing($ticket),
+                            {{-- Gated on `update tickets` (with the owner bypass) because that
+                                 is what TicketController::edit() enforces: a link to a page
+                                 that 403s is worse than no link. The header's own Edit button
+                                 is unconditional today, which is a separate pre-existing
+                                 thing and not one this package widens. --}}
+                            'editUrl' => (($ticket->tenant !== null && (Auth::user()?->isOwnerOf($ticket->tenant) ?? false)) || (Auth::user()?->can('update tickets') ?? false))
+                                ? route('tickets.edit', $ticket)
+                                : null,
+                        ])
                     </div>
 
                     {{-- Task Checklist --}}
