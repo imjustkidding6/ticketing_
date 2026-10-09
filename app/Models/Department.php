@@ -50,7 +50,8 @@ class Department extends Model
      * Does a ticket in this department get asked for the TECHNICAL half of the declared
      * detail set (App\Support\TicketTechnicalFields)?
      *
-     * `tenant_id` EXPLICITLY and `withoutGlobalScopes()`: this is reached from a FormRequest
+     * `tenant_id` is stated EXPLICITLY and the global TenantScope is bypassed: this is
+     * reached from a FormRequest
      * (where the session's TenantScope would in fact apply) AND from the queued intake
      * analysis and the draft service, where TenantScope applies no predicate at all. An
      * end-to-end test on a session-bearing surface cannot prove the predicate, so the

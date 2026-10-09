@@ -243,6 +243,9 @@ class DraftEngineerSuggestionTest extends TestCase
                 'subject' => 'Printer offline',
                 'description' => 'The office printer stopped responding.',
                 'priority' => $suggested,
+                // The universal half of the declared detail set is required internally.
+                'impact_scope' => 'one_person',
+                'workaround' => 'none',
             ])->assertSessionHasNoErrors();
 
             $this->assertDatabaseHas('tickets', [
@@ -363,6 +366,8 @@ class DraftEngineerSuggestionTest extends TestCase
             'subject' => 'Printer offline',
             'description' => 'The office printer stopped responding.',
             'priority' => 'medium',
+            'impact_scope' => 'one_person',
+            'workaround' => 'none',
         ]);
 
         $this->assertSame(0, Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count());
@@ -758,6 +763,8 @@ class DraftEngineerSuggestionTest extends TestCase
             'description' => 'The office printer stopped responding.',
             'priority' => (string) $response->json('priority'),
             'assigned_to' => (int) $response->json('engineer.id'),
+            'impact_scope' => 'one_person',
+            'workaround' => 'none',
         ])->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('tickets', [
@@ -793,6 +800,8 @@ class DraftEngineerSuggestionTest extends TestCase
             'priority' => 'medium',
             'assigned_to' => $member->getKey(),
             'ai_draft_token' => $token,
+            'impact_scope' => 'one_person',
+            'workaround' => 'none',
         ])->assertSessionHasNoErrors();
 
         $ticket = Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->sole();
@@ -834,6 +843,8 @@ class DraftEngineerSuggestionTest extends TestCase
             'priority' => 'medium',
             'assigned_to' => $member->getKey(),
             'ai_draft_token' => $token,
+            'impact_scope' => 'one_person',
+            'workaround' => 'none',
         ])->assertSessionHasNoErrors();
 
         $analysis = AiTicketAnalysis::withoutGlobalScopes()->where('tenant_id', $tenant->id)->sole();
