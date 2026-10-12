@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Services\TenantRoleService;
 use Cliqueha\AssistantConnector\Models\DesktopToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -268,8 +269,16 @@ class AssistantConnectorPermissionsTest extends TestCase
         $this->assertSame($tenant->id, app(PermissionRegistrar::class)->getPermissionsTeamId());
     }
 
+    /**
+     * These two are about the PERMISSION, so they switch the module on. The module
+     * is hidden in the product (config/features.php), which 404s the page in the
+     * controller — without the flag both would pass on a 404 and prove nothing
+     * about permissions at all.
+     */
     public function test_connect_jude_page_requires_manage_settings(): void
     {
+        Config::set('features.jude_connector', true);
+
         [, $user] = $this->setupContext('agent');
 
         $this->get('/connect-jude')->assertForbidden();
@@ -277,8 +286,24 @@ class AssistantConnectorPermissionsTest extends TestCase
 
     public function test_admin_can_reach_the_connect_jude_page(): void
     {
+        Config::set('features.jude_connector', true);
+
         [, $user] = $this->setupContext('admin');
 
         $this->get('/connect-jude')->assertOk();
+    }
+
+    /**
+     * And this one is about the hiding itself: with the module off the page is gone,
+     * not merely unlinked. It mints DesktopToken bearer credentials, so an admin
+     * who knows the URL must not still be able to reach it.
+     */
+    public function test_the_connect_jude_page_is_absent_while_the_module_is_hidden(): void
+    {
+        Config::set('features.jude_connector', false);
+
+        [, $user] = $this->setupContext('admin');
+
+        $this->get('/connect-jude')->assertNotFound();
     }
 }

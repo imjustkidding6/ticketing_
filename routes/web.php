@@ -86,6 +86,10 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // The routes stay REGISTERED while the module is hidden, so route() keeps
+    // resolving these names everywhere that references them and the help-centre
+    // route scan still passes. The refusal lives in the controller instead —
+    // see ConnectJudeController::authorizeJude().
     Route::get('/connect-jude', [ConnectJudeController::class, 'index'])->name('connect-jude');
     Route::post('/connect-jude', [ConnectJudeController::class, 'generate'])->name('connect-jude.generate');
     Route::delete('/connect-jude/{token}', [ConnectJudeController::class, 'revoke'])->name('connect-jude.revoke');

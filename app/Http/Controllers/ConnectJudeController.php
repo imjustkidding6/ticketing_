@@ -19,6 +19,15 @@ class ConnectJudeController extends Controller
      */
     private function authorizeJude(): void
     {
+        // The module is hidden in the product (config/features.php). Checked
+        // BEFORE the permission so a hidden page 404s for every role alike,
+        // including an owner — "hidden" must not degrade into "403 for some,
+        // 200 for others", which would still disclose that it is here. All
+        // three actions share this method, so the page cannot be reached by
+        // POSTing past a missing link. Already-issued tokens keep working:
+        // this closes the mint, it does not revoke currency.
+        abort_unless(config('features.jude_connector', false), 404);
+
         if ($tenantId = session('current_tenant_id')) {
             app(PermissionRegistrar::class)->setPermissionsTeamId($tenantId);
         }
