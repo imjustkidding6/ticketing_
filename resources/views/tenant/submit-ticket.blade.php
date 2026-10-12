@@ -13,28 +13,22 @@
     $anyLocked = collect($locked)->contains(true);
 @endphp
 <x-client-portal-layout :tenant="$tenant" :hide-nav="true">
-    {{-- Hero Section --}}
-    <div class="-mt-8 pb-12 pt-16" style="background-color: var(--portal-primary);">
-        <div class="mx-auto max-w-full px-4 sm:px-4 lg:px-6 text-center">
-            <h1 class="text-3xl font-bold text-white sm:text-4xl">{{ $tenant->displayName() }} {{ __('Support') }}</h1>
-            <p class="mt-3 text-lg text-white/70">{{ __('Submit a ticket and we\'ll get back to you as soon as possible.') }}</p>
-        </div>
+    {{-- ONE heading. The coloured slab said "<Name> Support" and "Submit a
+         ticket and we'll get back to you as soon as possible", and the card
+         beneath it then said "Submit a Ticket" and "Describe your issue and
+         we'll get back to you" — the same sentence twice, under the company
+         name for the third time counting the header band and the tab title.
+         Nothing here promises a response time: this workspace has not
+         committed to one, and the portal must not invent it. --}}
+    <div class="mx-auto max-w-3xl px-4 pt-4 sm:px-6 lg:px-8">
+        <h1 class="portal-display text-3xl text-gray-900 sm:text-4xl">{{ __('Submit a ticket') }}</h1>
+        <p class="portal-lede mt-4 text-base leading-relaxed text-gray-600">
+            {{ __('Tell us what\'s going on and we\'ll pick it up. You\'ll get a ticket number so you can follow it.') }}
+        </p>
     </div>
 
-    {{-- Main Content --}}
-    <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 -mt-6">
-        <div class="rounded-xl bg-white p-8 shadow-sm">
-            <div class="flex items-center gap-3 mb-6">
-                <div class="flex h-10 w-10 items-center justify-center rounded-lg" style="background-color: color-mix(in srgb, var(--portal-primary) 15%, white);">
-                    <svg class="h-6 w-6" style="color: var(--portal-primary);" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                </div>
-                <div>
-                    <h2 class="text-xl font-semibold text-gray-900">{{ __('Submit a Ticket') }}</h2>
-                    <p class="text-sm text-gray-500">{{ __('Describe your issue and we\'ll get back to you.') }}</p>
-                </div>
-            </div>
+    <div class="mx-auto mt-8 max-w-3xl px-4 sm:px-6 lg:px-8">
+        <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
 
             <form method="POST" action="{{ route('tenant.submit-ticket.store', ['slug' => $tenant->slug]) }}" class="space-y-5" enctype="multipart/form-data">
                 @csrf

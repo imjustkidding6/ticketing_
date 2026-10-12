@@ -23,13 +23,13 @@ test.describe('Tenant Isolation - Plan Gating', () => {
 
     test('business tenant portal pages are accessible', async ({ page }) => {
         await page.goto(`/${BUSINESS_SLUG}/`);
-        await expect(page.getByRole('heading', { name: 'Submit New Ticket' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Submit a ticket' })).toBeVisible();
 
         await page.goto(`/${BUSINESS_SLUG}/submit-ticket`);
-        await expect(page.getByRole('heading', { name: 'Submit a Ticket' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Submit a ticket' })).toBeVisible();
 
         await page.goto(`/${BUSINESS_SLUG}/track-ticket`);
-        await expect(page.getByRole('heading', { name: 'Find Your Ticket', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Track a ticket', exact: true })).toBeVisible();
 
         await page.goto(`/portal/${BUSINESS_SLUG}/`);
         expect(page.url()).toContain(BUSINESS_SLUG);

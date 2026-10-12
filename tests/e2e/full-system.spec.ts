@@ -179,8 +179,8 @@ test.describe('Starter Plan', () => {
 test.describe('Business Plan', () => {
     test('public portal landing page', async ({ page }) => {
         await page.goto(`/${BUSINESS.slug}/`);
-        await expect(page.getByRole('heading', { name: 'Submit New Ticket' })).toBeVisible();
-        await expect(page.getByRole('heading', { name: 'Track Existing Ticket' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Submit a ticket' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Track a ticket' })).toBeVisible();
         await page.screenshot({ path: 'tests/e2e/screenshots/business-landing.png', fullPage: true });
     });
 
@@ -198,7 +198,7 @@ test.describe('Business Plan', () => {
 
     test('track ticket page', async ({ page }) => {
         await page.goto(`/${BUSINESS.slug}/track-ticket`);
-        await expect(page.getByRole('heading', { name: 'Find Your Ticket', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Track a ticket', exact: true })).toBeVisible();
         await page.locator('#ticket_number').fill('FAKE-123');
         await page.locator('#email').fill('nobody@test.com');
         await page.getByRole('button', { name: 'Find Ticket' }).click();
@@ -429,13 +429,13 @@ test.describe('Enterprise Plan', () => {
     // ── Public Portal ──
     test('public portal full flow', async ({ page }) => {
         await page.goto(`/${ENTERPRISE.slug}/`);
-        await expect(page.getByRole('heading', { name: 'Submit New Ticket' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Submit a ticket' })).toBeVisible();
 
         await page.goto(`/${ENTERPRISE.slug}/submit-ticket`);
         await expect(page.locator('#incident_date')).toBeVisible();
 
         await page.goto(`/${ENTERPRISE.slug}/track-ticket`);
-        await expect(page.getByRole('heading', { name: 'Find Your Ticket', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Track a ticket', exact: true })).toBeVisible();
     });
 });
 

@@ -24,9 +24,9 @@ test.describe('Business Tenant - Public Portal', () => {
     test('landing page shows hero and action cards', async ({ page }) => {
         await page.goto(`/${BUSINESS_SLUG}/`);
 
-        await expect(page.locator('h1')).toContainText('How can we help you today?');
-        await expect(page.getByRole('heading', { name: 'Submit New Ticket' })).toBeVisible();
-        await expect(page.getByRole('heading', { name: 'Track Existing Ticket' })).toBeVisible();
+        await expect(page.locator('h1')).toContainText('How can we help?');
+        await expect(page.getByRole('heading', { name: 'Submit a ticket' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Track a ticket' })).toBeVisible();
 
         await page.screenshot({ path: 'tests/e2e/screenshots/landing-page.png', fullPage: true });
     });
@@ -34,10 +34,10 @@ test.describe('Business Tenant - Public Portal', () => {
     test('can navigate to submit ticket page', async ({ page }) => {
         await page.goto(`/${BUSINESS_SLUG}/`);
 
-        await page.getByRole('link', { name: 'Submit New Ticket' }).first().click();
+        await page.getByRole('link', { name: 'Submit a ticket' }).first().click();
 
         await expect(page).toHaveURL(new RegExp(`/${BUSINESS_SLUG}/submit-ticket`));
-        await expect(page.getByRole('heading', { name: 'Submit a Ticket' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Submit a ticket' })).toBeVisible();
 
         // Form fields
         await expect(page.locator('#name')).toBeVisible();
@@ -57,7 +57,7 @@ test.describe('Business Tenant - Public Portal', () => {
         await page.getByRole('link', { name: 'Track Ticket' }).first().click();
 
         await expect(page).toHaveURL(new RegExp(`/${BUSINESS_SLUG}/track-ticket`));
-        await expect(page.getByRole('heading', { name: 'Find Your Ticket', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Track a ticket', exact: true })).toBeVisible();
         await expect(page.locator('#ticket_number')).toBeVisible();
         await expect(page.locator('#email')).toBeVisible();
 

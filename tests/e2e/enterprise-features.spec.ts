@@ -199,8 +199,8 @@ test.describe('Enterprise: Public Portal with Client Replies', () => {
     test('landing page accessible for enterprise tenant', async ({ page }) => {
         await page.goto(`/${ENTERPRISE_SLUG}/`);
 
-        await expect(page.getByRole('heading', { name: 'Submit New Ticket' })).toBeVisible();
-        await expect(page.getByRole('heading', { name: 'Track Existing Ticket' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Submit a ticket' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Track a ticket' })).toBeVisible();
 
         await page.screenshot({ path: 'tests/e2e/screenshots/enterprise-landing.png', fullPage: true });
     });
@@ -222,7 +222,7 @@ test.describe('Enterprise: Public Portal with Client Replies', () => {
     test('track ticket page works', async ({ page }) => {
         await page.goto(`/${ENTERPRISE_SLUG}/track-ticket`);
 
-        await expect(page.getByRole('heading', { name: 'Find Your Ticket', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Track a ticket', exact: true })).toBeVisible();
         await expect(page.locator('#ticket_number')).toBeVisible();
         await expect(page.locator('#email')).toBeVisible();
 
@@ -241,7 +241,7 @@ test.describe('Enterprise: Public Portal with Client Replies', () => {
         await page.goto(`/${ENTERPRISE_SLUG}/track-ticket`);
 
         // The form should be visible
-        await expect(page.getByRole('heading', { name: 'Find Your Ticket', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Track a ticket', exact: true })).toBeVisible();
 
         await page.screenshot({ path: 'tests/e2e/screenshots/enterprise-track-page.png', fullPage: true });
     });

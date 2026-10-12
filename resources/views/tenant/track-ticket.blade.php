@@ -1,15 +1,16 @@
 <x-client-portal-layout :tenant="$tenant" :hide-nav="true">
-    <div class="mx-auto max-w-lg px-4 sm:px-6 lg:px-8">
-        <div class="rounded-xl bg-white p-8 shadow-sm">
-            <div class="text-center mb-6">
-                <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full mb-4" style="background-color: color-mix(in srgb, var(--portal-primary) 15%, white);">
-                    <svg class="h-8 w-8" style="color: var(--portal-primary);" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                    </svg>
-                </div>
-                <h2 class="text-2xl font-semibold text-gray-900">{{ __('Find Your Ticket') }}</h2>
-                <p class="mt-2 text-sm text-gray-500">{{ __('Enter your ticket number and email address to view the current status and updates.') }}</p>
-            </div>
+    {{-- Same treatment as the other two public pages: the heading leads on
+         paper, at the same display scale, and the decorative circled icon goes.
+         It carried no information the heading did not already give. --}}
+    <div class="mx-auto max-w-lg px-4 pt-4 sm:px-6 lg:px-8">
+        <h1 class="portal-display text-3xl text-gray-900">{{ __('Track a ticket') }}</h1>
+        <p class="mt-4 text-base leading-relaxed text-gray-600">
+            {{ __('Enter your ticket number and the email you sent it from.') }}
+        </p>
+    </div>
+
+    <div class="mx-auto mt-8 max-w-lg px-4 sm:px-6 lg:px-8">
+        <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
 
             <form method="GET" action="{{ route('tenant.track-ticket', ['slug' => $tenant->slug]) }}" class="space-y-5">
                 <div>
@@ -60,7 +61,7 @@
                     <svg class="mr-2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                     </svg>
-                    {{ __('Submit New Ticket') }}
+                    {{ __('Submit a ticket') }}
                 </a>
                 <a href="{{ route('tenant.landing', ['slug' => $tenant->slug]) }}" class="flex items-center justify-center w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
                     <svg class="mr-2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
