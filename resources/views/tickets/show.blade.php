@@ -30,6 +30,70 @@
                 </div>
             </div>
 
+            {{-- At-a-glance timeline. Deliberately one thin row: the details card
+                 below already carries the full field list, and this exists only to
+                 answer "when did this come in, when was it done, how long did it
+                 take" without scrolling.
+
+                 There is no `resolved` status in this product — closure IS
+                 resolution (see CLAUDE.md), so closed_at is the resolution time.
+                 Reopening clears closed_at, so a reopened ticket correctly falls
+                 back to the open-for figure rather than showing a stale date.
+
+                 The duration is getEffectiveResolutionTimeHours(), NOT
+                 created_at->diff(closed_at): it excludes banked hold time and is
+                 measured on the clock its SLA target is stated in. Every other
+                 report path in this app uses that method, and a card here showing
+                 a different number from the SLA report would be read as one of
+                 them being broken. When hold time was banked we say so, because
+                 "18h" next to a ticket that sat three days looks wrong without it. --}}
+            @php
+                $openedAt = $ticket->created_at;
+                $resolvedAt = $ticket->closed_at;
+                $resolutionHours = $ticket->getEffectiveResolutionTimeHours();
+                $heldMinutes = $ticket->getTotalHoldTimeMinutes();
+                $humanHours = function (?float $hours): string {
+                    if ($hours === null) {
+                        return '—';
+                    }
+                    if ($hours < 1) {
+                        return max(1, (int) round($hours * 60)).'m';
+                    }
+                    if ($hours < 24) {
+                        return rtrim(rtrim(number_format($hours, 1), '0'), '.').'h';
+                    }
+
+                    return intdiv((int) round($hours), 24).'d '.((int) round($hours) % 24).'h';
+                };
+            @endphp
+            <div class="mb-6 grid grid-cols-1 divide-y divide-gray-100 rounded-xl bg-white shadow-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                <div class="px-5 py-3">
+                    <dt class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Opened') }}</dt>
+                    <dd class="mt-1 text-sm font-medium text-gray-900">@localdt($openedAt, 'M j, Y g:i A')</dd>
+                </div>
+                <div class="px-5 py-3">
+                    <dt class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ __('Resolved') }}</dt>
+                    <dd class="mt-1 text-sm font-medium {{ $resolvedAt ? 'text-gray-900' : 'text-gray-400' }}">
+                        @if($resolvedAt)@localdt($resolvedAt, 'M j, Y g:i A')@else{{ __('Not yet') }}@endif
+                    </dd>
+                </div>
+                <div class="px-5 py-3">
+                    <dt class="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                        {{ $resolvedAt ? __('Time to resolve') : __('Open for') }}
+                    </dt>
+                    <dd class="mt-1 text-sm font-medium text-gray-900">
+                        @if($resolvedAt)
+                            {{ $humanHours($resolutionHours) }}
+                            @if($heldMinutes > 0)
+                                <span class="font-normal text-gray-400">{{ __('excl. :held on hold', ['held' => $humanHours($heldMinutes / 60)]) }}</span>
+                            @endif
+                        @else
+                            {{ $humanHours($openedAt->diffInMinutes(\App\Support\TenantTime::now()) / 60) }}
+                        @endif
+                    </dd>
+                </div>
+            </div>
+
             <div class="grid gap-6 lg:grid-cols-3">
                 {{-- Left Column (Main Content) --}}
                 <div class="lg:col-span-2 space-y-6">
