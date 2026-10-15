@@ -125,6 +125,10 @@ class DraftSuggestionCaptureTest extends TestCase
             'subject' => 'Printer offline after Windows update',
             'description' => "Issue\nThe office printer stopped responding after the update.",
             'priority' => 'high',
+            // The universal half of the declared detail set is required on the internal
+            // create form in every department.
+            'impact_scope' => 'one_person',
+            'workaround' => 'none',
         ], $overrides));
     }
 

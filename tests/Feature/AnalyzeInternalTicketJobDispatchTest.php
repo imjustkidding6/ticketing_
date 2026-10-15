@@ -94,6 +94,10 @@ class AnalyzeInternalTicketJobDispatchTest extends TestCase
             'category_id' => $category->id,
             'subject' => 'Printer offline after update',
             'description' => 'The office printer stopped responding after the Windows update.',
+            // The universal half of the declared detail set is required on the internal
+            // create form in every department.
+            'impact_scope' => 'one_person',
+            'workaround' => 'none',
             'priority' => 'medium',
             'status' => 'open',
         ];

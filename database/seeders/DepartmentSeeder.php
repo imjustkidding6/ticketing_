@@ -52,6 +52,7 @@ class DepartmentSeeder extends Seeder
         [
             'name' => 'Technical Software',
             'code' => 'SOFTWARE',
+            'is_technical' => true,
             'description' => 'Software-related technical issues.',
             'color' => '#3b82f6',
             'sort_order' => 2,
@@ -59,6 +60,7 @@ class DepartmentSeeder extends Seeder
         [
             'name' => 'Technical Hardware',
             'code' => 'HARDWARE',
+            'is_technical' => true,
             'description' => 'Hardware-related technical issues.',
             'color' => '#ef4444',
             'sort_order' => 3,
@@ -125,14 +127,20 @@ class DepartmentSeeder extends Seeder
                     'tenant_id' => $tenant->id,
                     'code' => $dept['code'],
                 ],
-                [
+                array_merge([
                     'name' => $dept['name'],
                     'description' => $dept['description'],
                     'color' => $dept['color'],
                     'is_active' => true,
                     'is_default' => true,
                     'sort_order' => $dept['sort_order'],
-                ]
+                ],
+                    // Only ever set TRUE, and only on the defaults that declare it: this is
+                    // also how existing workspaces are brought up to date (a `db:seed` run
+                    // matches on the default department CODE, which is a far stronger key
+                    // than a name), and writing `false` here would silently untick a flag an
+                    // admin had set on a default department.
+                    ($dept['is_technical'] ?? false) ? ['is_technical' => true] : [])
             );
         }
     }

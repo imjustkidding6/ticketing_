@@ -1,3 +1,25 @@
+@php
+    // Follow-up 40's one string, one __() key, two render sites (beside the select and in
+    // the information-needed list) — computed once so the two cannot disagree. The AI
+    // clause is gated on the SAME expression _ai-assist uses: a Business workspace with no
+    // AI must not be told about expertise it has not bought, but it does still lose the
+    // engineer suggestion, so it gets the shorter sentence.
+    $departmentHintWithAi = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot)
+        && (bool) \App\Models\AppSetting::get('ai_enabled', false)
+        && (bool) \App\Models\AppSetting::get('ai_agent_copilot_enabled', false);
+    // Which departments ask for the technical half. Resolved from the already tenant-scoped
+    // $departments collection the controller passed — no new query, and nothing read from
+    // the browser; the server re-resolves it from the Department row in StoreTicketRequest.
+    $technicalDepartmentIds = $departments->where('is_technical', true)->pluck('id')->map('intval')->values()->all();
+    // On a validation-failed redraw the chosen department decides what the
+    // information-needed list may report missing. A first render has none, so the technical
+    // half is simply not listed — which is correct: it has not been asked for yet.
+    $oldDepartmentIsTechnical = in_array((int) old('department_id'), $technicalDepartmentIds, true);
+    $technicalValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k)])->all();
+    $departmentWarning = $departmentHintWithAi
+        ? __('Without a department we can\'t suggest an engineer, and the AI has none of this department\'s expertise behind its priority suggestion.')
+        : __('Without a department we can\'t suggest an engineer for this ticket.');
+@endphp
 <x-app-layout>
     <x-slot name="header">
         <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('Create Ticket') }}</h2>
@@ -37,6 +59,13 @@
                                         @endforeach
                                     </select>
                                     @error('department_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                                    {{-- Follow-up 40. Advice while the cost is live and gone once it is
+                                         paid — a permanent warning is wallpaper, and `departmentId` is
+                                         already an Alpine model on this exact element. Amber and no
+                                         `required` attribute: a ticket with no department is a
+                                         legitimate thing to file, and this informs rather than
+                                         forbids. --}}
+                                    <p x-show="!departmentId" x-cloak class="mt-1 text-xs text-amber-700">{{ $departmentWarning }}</p>
                                 </div>
                                 <div>
                                     <label for="category_id" class="block text-sm font-medium text-gray-700">{{ __('Category') }}</label>
@@ -97,6 +126,49 @@
                             <label for="description" class="block text-sm font-medium text-gray-700">{{ __('Description') }} <span class="text-red-500">*</span></label>
                             <textarea name="description" id="description" rows="6" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">{{ old('description') }}</textarea>
                             @error('description') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                        </div>
+
+                        {{-- Impact and urgency (App\Support\TicketTechnicalFields, the
+                             'all' group). ABOVE Priority deliberately: these are what inform
+                             it. Asked in EVERY department — an HR payroll fault hitting
+                             everyone is more urgent than one hitting one person, and "can
+                             they work around it meanwhile" applies to a locked HR portal as
+                             much as to a crashed server. These two are also exactly what
+                             PRIORITY_BOUNDARY judges critical on. --}}
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Impact and urgency') }}</h3>
+                            <p class="mt-0.5 text-xs text-gray-500">{{ __('These decide how urgent the ticket is judged to be.') }}</p>
+                            <div class="mt-3">
+                                @include('tickets.partials._technical-details', [
+                                    'values' => $technicalValues,
+                                    'required' => true,
+                                    'group' => \App\Support\TicketTechnicalFields::APPLIES_ALL,
+                                    'emptyLabel' => __('Select…'),
+                                ])
+                            </div>
+                        </div>
+
+                        {{-- Technical details (the 'technical' group), shown only for a
+                             department marked technical. "Provision a laptop for a new
+                             starter" has no environment and no reproduction steps, and
+                             requiring them teaches the agent to pick a value to clear the
+                             form — junk that looks like data. The server decides too:
+                             StoreTicketRequest resolves `is_technical` from the tenant-scoped
+                             Department row, so this `x-show` is convenience, not the rule. --}}
+                        <div x-data="{ departmentId: @js((string) old('department_id', '')), technicalDepartments: @js($technicalDepartmentIds) }"
+                             x-init="document.getElementById('department_id')?.addEventListener('change', (e) => { departmentId = e.target.value })"
+                             x-show="technicalDepartments.includes(Number(departmentId))"
+                             x-cloak>
+                            <h3 class="text-sm font-semibold text-gray-900">{{ __('Technical details') }}</h3>
+                            <p class="mt-0.5 text-xs text-gray-500">{{ __('Asked because this department handles technical work.') }}</p>
+                            <div class="mt-3">
+                                @include('tickets.partials._technical-details', [
+                                    'values' => $technicalValues,
+                                    'required' => false,
+                                    'group' => \App\Support\TicketTechnicalFields::APPLIES_TECHNICAL,
+                                    'emptyLabel' => __('Select…'),
+                                ])
+                            </div>
                         </div>
 
                         {{-- Priority + Assign To --}}
@@ -172,6 +244,16 @@
                             @error('attachments.*') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
                         @endif
+                    </div>
+
+                    {{-- The same derived list the ticket page renders, here as "this is what
+                         we will ask for and why" — and the one place an engineer who scrolled
+                         past the top of the form still meets the Department warning. --}}
+                    <div class="mt-6">
+                        @include('tickets.partials._information-needed', [
+                            'missing' => \App\Support\TicketTechnicalFields::missing(old(), $oldDepartmentIsTechnical),
+                            'departmentWarning' => old('department_id') ? null : $departmentWarning,
+                        ])
                     </div>
 
                     <div class="mt-6 flex items-center justify-end gap-3">

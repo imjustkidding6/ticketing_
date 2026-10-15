@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Notifications\TicketCreatedNotification;
 use App\Services\PlanService;
 use App\Services\TicketService;
+use App\Support\TicketTechnicalFields;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -68,7 +69,7 @@ class ClientPortalController extends Controller
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
             'priority' => ['required', 'in:low,medium,high,critical'],
-        ] + $this->publicCatalogRules($tenant, $request), $this->publicCatalogMessages());
+        ] + TicketTechnicalFields::rules(internal: false) + $this->publicCatalogRules($tenant, $request), $this->publicCatalogMessages());
 
         $client = $this->findOrCreateGuestClient($tenant, $validated['email'], $validated['name']);
         $trackingToken = Str::random(64);
@@ -84,7 +85,7 @@ class ClientPortalController extends Controller
             'client_id' => $client->id,
             'created_by' => null,
             'tracking_token' => $trackingToken,
-        ]);
+        ] + $this->technicalDetails($validated));
 
         $this->notifyClientOfNewTicket($tenant, $client->email, $ticket);
 
@@ -105,7 +106,7 @@ class ClientPortalController extends Controller
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
             'priority' => ['required', 'in:low,medium,high,critical'],
-        ] + $this->publicCatalogRules($tenant, $request), $this->publicCatalogMessages());
+        ] + TicketTechnicalFields::rules(internal: false) + $this->publicCatalogRules($tenant, $request), $this->publicCatalogMessages());
 
         $ticket = $this->ticketService->createTicket([
             'tenant_id' => $tenant->id,
@@ -117,7 +118,7 @@ class ClientPortalController extends Controller
             'category_id' => $validated['category_id'] ?? null,
             'client_id' => $client->id,
             'created_by' => Auth::id(),
-        ]);
+        ] + $this->technicalDetails($validated));
 
         if ($this->planService->tenantHasFeature($tenant, PlanFeature::EmailNotifications)) {
             Auth::user()->notify(new TicketCreatedNotification($ticket));
@@ -529,7 +530,13 @@ class ClientPortalController extends Controller
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
             'incident_date' => ['nullable', 'date'],
-        ] + $this->publicCatalogRules($tenant, $request);
+            // The SAME declaration the internal form uses, in its nullable variant. This
+            // surface is unauthenticated and the URL is unsigned, so all five are
+            // attacker-controlled strings: the three selects are validated against the
+            // declared option set in PHP (`in:`, no table queried, so nothing to scope to a
+            // tenant and no row whose existence could be probed) and the two text fields
+            // are capped at the declaration's own caps, well short of TEXT's 65,535 bytes.
+        ] + TicketTechnicalFields::rules(internal: false) + $this->publicCatalogRules($tenant, $request);
 
         if ($allowAttachments) {
             $rules['attachments'] = ['nullable', 'array', 'max:3'];
@@ -567,7 +574,8 @@ class ClientPortalController extends Controller
             'created_by' => null,
             'tracking_token' => $trackingToken,
             'attachments' => $attachments ?: null,
-        ]);
+            // `nullable` leaves an unsubmitted key absent, exactly as category_id does.
+        ] + $this->technicalDetails($validated));
 
         if (! empty($validated['product_ids'])) {
             $ticket->products()->sync($validated['product_ids']);
@@ -792,6 +800,27 @@ class ClientPortalController extends Controller
      *
      * @return array<string, array<int, mixed>>
      */
+    /**
+     * The declared technical details out of a validated payload, as createTicket() keys.
+     *
+     * One helper for all three public entry points, for the reason publicCatalogRules()
+     * gives for itself: one rule set and one extraction for the whole public surface cannot
+     * drift. `?? null` because `nullable` leaves an unsubmitted key absent entirely.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, string|null>
+     */
+    private function technicalDetails(array $validated): array
+    {
+        $details = [];
+
+        foreach (TicketTechnicalFields::keys() as $key) {
+            $details[$key] = $validated[$key] ?? null;
+        }
+
+        return $details;
+    }
+
     private function publicCatalogRules(Tenant $tenant, Request $request): array
     {
         $departmentId = $request->input('department_id');

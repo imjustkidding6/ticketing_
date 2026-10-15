@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ScopesRulesToTenant;
 use App\Models\Ticket;
+use App\Support\TicketTechnicalFields;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -39,6 +40,13 @@ class UpdateTicketRequest extends FormRequest
             'product_ids.*' => [$this->tenantExists('products')],
             'assigned_to' => array_merge(['nullable'], $this->tenantMemberRules()),
             'incident_date' => ['nullable', 'date'],
-        ];
+            // ALL FIVE nullable on update, including the three required at creation, for
+            // three reasons: the "information needed" list has to have somewhere to send
+            // the engineer, which is this form; `_ai-analyze`'s Apply posts the whole
+            // update form as rendered and its hidden snapshot carries none of these keys,
+            // so `required` would turn every Apply into a 422; and a ticket created before
+            // the migration has all five NULL and must stay editable. `nullable` also means
+            // an absent key never reaches validated(), so Apply cannot wipe a stored value.
+        ] + TicketTechnicalFields::rules(internal: false);
     }
 }

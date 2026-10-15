@@ -29,6 +29,7 @@ class Department extends Model
         'color',
         'is_active',
         'is_default',
+        'is_technical',
         'sort_order',
     ];
 
@@ -40,8 +41,36 @@ class Department extends Model
         return [
             'is_active' => 'boolean',
             'is_default' => 'boolean',
+            'is_technical' => 'boolean',
             'sort_order' => 'integer',
         ];
+    }
+
+    /**
+     * Does a ticket in this department get asked for the TECHNICAL half of the declared
+     * detail set (App\Support\TicketTechnicalFields)?
+     *
+     * `tenant_id` is stated EXPLICITLY and the global TenantScope is bypassed: this is
+     * reached from a FormRequest
+     * (where the session's TenantScope would in fact apply) AND from the queued intake
+     * analysis and the draft service, where TenantScope applies no predicate at all. An
+     * end-to-end test on a session-bearing surface cannot prove the predicate, so the
+     * predicate is stated rather than inherited — and a foreign department id resolves to
+     * FALSE, which asks for fewer fields rather than another workspace's answer.
+     *
+     * Null or absent department → false. The safe reading of "no department chosen" is "do
+     * not demand an environment".
+     */
+    public static function isTechnicalFor(int $tenantId, ?int $departmentId): bool
+    {
+        if ($departmentId === null) {
+            return false;
+        }
+
+        return (bool) self::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->whereKey($departmentId)
+            ->value('is_technical');
     }
 
     /**

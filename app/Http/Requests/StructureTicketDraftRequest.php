@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ScopesRulesToTenant;
 use App\Services\AI\DraftSuggestionService;
+use App\Support\TicketTechnicalFields;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -41,6 +42,8 @@ class StructureTicketDraftRequest extends FormRequest
             // `departmentOwnedBy()` in the service is the second defence, not the first.
             'department_id' => ['nullable', $this->tenantExists('departments')],
             'context' => ['nullable', 'in:'.DraftSuggestionService::CONTEXT_CREATE.','.DraftSuggestionService::CONTEXT_EDIT],
-        ];
+            // Always the nullable variant: Polish is pressed mid-draft on a half-filled
+            // form, so a `required` rule here would 422 the button instead of polishing.
+        ] + TicketTechnicalFields::rules(internal: false);
     }
 }

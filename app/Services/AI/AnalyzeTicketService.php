@@ -26,6 +26,7 @@ use App\Services\PromptInjectionService;
 use App\Support\Ai\AgentRecommendation;
 use App\Support\Ai\TicketAnalysis;
 use App\Support\TenantTime;
+use App\Support\TicketTechnicalFields;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -239,7 +240,14 @@ class AnalyzeTicketService
             $response = $this->openAi->chat(
                 [
                     ['role' => 'system', 'content' => $this->systemPrompt($ticket, $recommendations, $availability !== null)],
-                    ['role' => 'user', 'content' => $this->userPrompt($sanitised, $categories, $engineers, $context, $availability)],
+                    ['role' => 'user', 'content' => $this->userPrompt($sanitised, $categories, $engineers, $context, $availability, TicketTechnicalFields::factBlock(
+                        $ticket,
+                        // Applicability from the department ROW, with its own tenant
+                        // predicate: this path runs in a worker where TenantScope adds
+                        // nothing, and a non-technical ticket must not emit an environment
+                        // line it was never asked for.
+                        Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id),
+                    ))],
                 ],
                 [],
                 [
@@ -304,6 +312,16 @@ class AnalyzeTicketService
             'Subject: '.(string) $ticket->subject,
             'Description: '.(string) $ticket->description,
         ];
+
+        // The declared free-text technical details, HERE rather than in a block of their
+        // own: this string is what PromptInjectionService and ModerationService are handed,
+        // what the input-character budget applies to, and what the embedding is built from.
+        // Appending them anywhere else would send stranger-authored prose to OpenAI around
+        // the guardrails instead of through them.
+        $parts = array_merge($parts, TicketTechnicalFields::freeTextParts(
+            $ticket,
+            Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id),
+        ));
 
         $comments = $ticket->comments()
             // `ticket_id` already pins these rows to a ticket this service resolved against
@@ -792,6 +810,7 @@ class AnalyzeTicketService
             .'"polished_description": "string, structured, or null", '
             .'"category_ref": "one of the supplied category references, or null", '
             .'"priority": "one of low|medium|high|critical, or null", '
+            .'"priority_reason": "string, at most 200 characters, or null", '
             .'"checks": ["an imperative troubleshooting step, 2 to '.self::MAX_CHECKS.' items"], '
             .'"engineer_ref": "one of the supplied engineer references, or null", '
             .'"engineer_reason": "string, at most 200 characters, or null"}';
@@ -805,6 +824,9 @@ class AnalyzeTicketService
         // The refs are deliberately opaque: the engineer candidates carry no name, no
         // email and no id, so "pick the best person" cannot be answered by recognising a
         // name and an invented ref resolves to nobody.
+        $lines[] = 'The priority reason must name which rubric condition the ticket meets — the '
+            .'breadth of impact and whether a workaround exists — not restate the ticket.';
+
         $lines[] = 'The engineer references identify nobody: judge them only on the tier and '
             .'the open-ticket load given. Prefer a lighter load at a sufficient tier. The '
             .'reason must not claim to know who the person is.';
@@ -825,6 +847,7 @@ class AnalyzeTicketService
      * @param  array<string, User>  $engineers
      * @param  array<int, array{ticket: Ticket, score: float}>  $context
      * @param  array<string, bool|null>|null  $availability  Null omits the key entirely.
+     * @param  string  $facts  TicketTechnicalFields::factBlock(), or '' to append nothing.
      */
     private function userPrompt(
         string $sanitised,
@@ -832,8 +855,18 @@ class AnalyzeTicketService
         array $engineers,
         array $context,
         ?array $availability = null,
+        string $facts = '',
     ): string {
         $sections = ["TICKET\n".$sanitised];
+
+        // The reporter's own stated facts, immediately after the ticket they are about and
+        // well above the rubric that maps them. In the USER message, never the system
+        // prompt: reported data in the instruction channel is exactly the confusion
+        // PromptInjectionService exists to prevent. Empty when nothing was captured, and
+        // then the prompt is byte-identical to the pre-P8 one.
+        if ($facts !== '') {
+            $sections[] = $facts;
+        }
 
         $sections[] = "CATEGORY OPTIONS (choose one reference or null)\n".($categories === []
             ? '(none available — return null)'
@@ -1006,7 +1039,10 @@ class AnalyzeTicketService
         $priority = $this->validatePriority($decoded['priority'] ?? null, $rejected);
         $checks = $this->validateChecks($decoded['checks'] ?? null, $rejected);
         $engineer = $this->validateEngineer($decoded['engineer_ref'] ?? null, $engineers, $ticket, $department, $rejected);
-        $engineerReason = $engineer === null ? null : $this->validateEngineerReason($decoded['engineer_reason'] ?? null);
+        $engineerReason = $engineer === null ? null : $this->validateReason($decoded['engineer_reason'] ?? null);
+        // Bound to `priority` exactly as the engineer's reason is bound to the engineer: a
+        // reason for a suggestion that was not made is a sentence about nothing.
+        $priorityReason = $priority === null ? null : $this->validateReason($decoded['priority_reason'] ?? null);
         $polishedSubject = $this->validatePolishedText(
             $decoded['polished_subject'] ?? null,
             (string) $ticket->subject,
@@ -1028,6 +1064,11 @@ class AnalyzeTicketService
             'polished_description' => $polishedDescription,
             'category' => $category === null ? null : ['id' => (int) $category->getKey(), 'name' => (string) $category->name],
             'priority' => $priority,
+            // Display only — there is nothing on the ticket to apply a sentence to, so it
+            // carries no Apply/Edit/Dismiss control and is NOT an AiSuggestionVerdict type.
+            // A verdict row for an inapplicable suggestion would be a false row in the
+            // table the pilot's accept-vs-edit metric comes from.
+            'priority_reason' => $priorityReason,
             'checks' => $checks === [] ? null : $checks,
             'engineer' => $engineer === null ? null : [
                 'id' => (int) $engineer->getKey(),
@@ -1291,7 +1332,11 @@ class AnalyzeTicketService
         return $member;
     }
 
-    private function validateEngineerReason(mixed $reason): ?string
+    /**
+     * The 200-character single-line clamp both reasons share. Named for the shape rather
+     * than for one caller since `priority_reason` joined `engineer_reason`.
+     */
+    private function validateReason(mixed $reason): ?string
     {
         if (! is_string($reason)) {
             return null;

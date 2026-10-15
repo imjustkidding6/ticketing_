@@ -149,6 +149,59 @@
                     @error('description') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                 </div>
 
+                {{-- Help us prioritise this (optional).
+                     ABOVE the optional Incident Date and above the AI card, not buried under
+                     the attachments: a field below the fold is optional in the sense of
+                     unseen. A titled section with a reason, because a bare run of controls
+                     labelled "optional" is skipped by everyone — and the honesty is what gets
+                     them answered. No `required` attribute and no asterisk anywhere in the
+                     block, which is already legible against the rest of this form.
+
+                     NOT prefillable and NOT lockable: a locked field renders as a hidden
+                     input, so a `workaround: yes` baked into a link printed onto a QR sticker
+                     would silently downgrade every ticket filed through it with no visitor
+                     able to see it. $prefill/$locked gain no keys here. --}}
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <p class="text-sm font-semibold text-gray-800">{{ __('Help us prioritise this') }} <span class="font-normal text-gray-400">({{ __('optional') }})</span></p>
+                    <p class="mt-0.5 text-xs text-gray-500">{{ __('Answering these questions lets us judge how urgent your issue is. If you\'re not sure, leave them blank — we\'ll ask.') }}</p>
+                    @php
+                        $publicTechnicalValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k)])->all();
+                        // Resolved from the already tenant-scoped $departments collection the
+                        // controller passed — no new query and nothing trusted from the URL.
+                        $publicTechnicalDepartmentIds = $departments->where('is_technical', true)->pluck('id')->map('intval')->values()->all();
+                    @endphp
+                    <div class="mt-3">
+                        @include('tickets.partials._technical-details', [
+                            'values' => $publicTechnicalValues,
+                            'required' => false,
+                            'group' => \App\Support\TicketTechnicalFields::APPLIES_ALL,
+                            'emptyLabel' => __('I\'m not sure'),
+                        ])
+                    </div>
+                    {{-- The technical half only where the chosen department handles technical
+                         work. A visitor filing an HR query is not asked for an environment.
+                         Optional throughout, so the server rule is `nullable` either way and
+                         this is presentation, not validation. --}}
+                    <div class="mt-4"
+                         x-data="{ departmentId: @js((string) old('department_id', $prefill['department_id'] ?? '')), technicalDepartments: @js($publicTechnicalDepartmentIds) }"
+                         x-init="document.getElementById('department_id')?.addEventListener('change', (e) => { departmentId = e.target.value })"
+                         x-show="technicalDepartments.includes(Number(departmentId))"
+                         x-cloak>
+                        @include('tickets.partials._technical-details', [
+                            'values' => $publicTechnicalValues,
+                            'required' => false,
+                            'group' => \App\Support\TicketTechnicalFields::APPLIES_TECHNICAL,
+                            'emptyLabel' => __('I\'m not sure'),
+                        ])
+                    </div>
+                    <div class="mt-3">
+                        @include('tickets.partials._information-needed', [
+                            'missing' => \App\Support\TicketTechnicalFields::missing(old(), false),
+                            'publicTone' => true,
+                        ])
+                    </div>
+                </div>
+
                 {{-- AI wording help (portal AI enabled) --}}
                 @if($aiPolishUrl)
                 <div x-data="portalAiPolish()" class="rounded-lg border p-3" style="border-color: color-mix(in srgb, var(--portal-primary) 30%, white); background-color: color-mix(in srgb, var(--portal-primary) 6%, white);">

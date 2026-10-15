@@ -113,6 +113,10 @@ class TicketControllerTest extends TestCase
             'priority' => 'medium',
             'department_id' => $dept->id,
             'category_id' => $category->id,
+            // The three technical selects are required on the internal create form.
+            'impact_scope' => 'one_person',
+            'workaround' => 'none',
+            'environment' => 'production',
         ])->assertRedirect();
 
         $this->assertDatabaseHas('tickets', [

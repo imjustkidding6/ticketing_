@@ -89,6 +89,14 @@
                     {{ __('No analysis yet. Automatic analysis on creation runs on a queue worker — if this stays empty, press Analyze, and check that a worker is running on the :queue queue.', ['queue' => 'ai']) }}
                 </p>
             @endif
+            {{-- Which agent judged it, read off the `agents` array the payload has carried
+                 since P7 and that nothing rendered. NAMES ONLY — no score, no matched
+                 skills, no role type, and `system_prompt` is not in the payload to leak. An
+                 empty array renders nothing, which is the honest state: no agent judged
+                 it. --}}
+            <p x-show="result?.agents?.length" x-cloak class="mt-1 text-[11px] text-indigo-700/80">
+                {{ __('Judged by:') }} <span x-text="result.agents.map((a) => a.name).filter(Boolean).join(', ')"></span>
+            </p>
             @if($analyzeHydrated !== null)
                 <p class="mt-1 inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-indigo-700 ring-1 ring-indigo-200" x-show="!reanalyzed" x-cloak>
                     @if($latestAnalysis->trigger === \App\Models\AiTicketAnalysis::TRIGGER_AUTO)
@@ -260,6 +268,13 @@
                     <div class="min-w-0">
                         <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{{ __('Priority') }}</span>
                         <p x-show="!editing.priority" class="mt-0.5 text-xs font-medium capitalize text-gray-800" x-text="result.priority"></p>
+                        {{-- The rubric condition the model says this ticket meets. DISPLAY
+                             ONLY: there is nothing on the ticket to apply a sentence to, so
+                             it carries no Apply/Edit/Dismiss and is not an
+                             AiSuggestionVerdict type — a verdict row for an inapplicable
+                             suggestion would be a false row in the pilot's accept-vs-edit
+                             metric. --}}
+                        <p x-show="!editing.priority && result.priority_reason" x-cloak class="mt-0.5 text-[11px] text-gray-500" x-text="result.priority_reason"></p>
                     </div>
                     <div class="flex items-center gap-1.5" x-show="!decided.priority">
                         <button type="button" @click="applySuggested('priority')" x-show="!editing.priority" class="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50">{{ __('Apply') }}</button>

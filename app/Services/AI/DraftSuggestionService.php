@@ -8,6 +8,7 @@ use App\Exceptions\OpenAiException;
 use App\Models\AiSuggestionVerdict;
 use App\Models\AiTicketAnalysis;
 use App\Models\Client;
+use App\Models\Department;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\Ticket;
@@ -20,6 +21,7 @@ use App\Services\PromptInjectionService;
 use App\Services\TicketService;
 use App\Support\Ai\AgentRecommendation;
 use App\Support\Ai\DraftSuggestion;
+use App\Support\TicketTechnicalFields;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -100,6 +102,10 @@ class DraftSuggestionService
      * @param  bool  $withAgents  The CALLER's answer to the `ai_agents` plan gate and the
      *                            `ai_agents_enabled` workspace opt-in. Both read the
      *                            session, and this service must not pretend it can.
+     * @param  string|null  $impactScope  The declared technical details, as answered on the
+     *                                    half-filled form. Additive and defaulted null, so
+     *                                    every existing caller keeps today's behaviour and
+     *                                    today's prompt.
      *
      * @throws OpenAiException
      */
@@ -112,6 +118,11 @@ class DraftSuggestionService
         ?int $departmentId = null,
         string $context = self::CONTEXT_CREATE,
         bool $withAgents = false,
+        ?string $impactScope = null,
+        ?string $workaround = null,
+        ?string $environment = null,
+        ?string $stepsToReproduce = null,
+        ?string $errorText = null,
     ): DraftSuggestion {
         $subject = trim($subject);
         $description = Str::limit(trim($description), (int) config('ai.draft.input_chars', 8000), '');
@@ -120,7 +131,25 @@ class DraftSuggestionService
         // PASTED CUSTOMER TEXT, so injection screening is not optional merely because a
         // colleague pressed the button. Both services are local (regex / keyword scans,
         // no HTTP) and both write their own attributable AiModerationLog row.
-        $screened = trim($subject."\n".$description);
+        // Applicability from the department ROW (explicit tenant predicate inside), never
+        // from the browser: the id arrives from the create form, so a foreign one resolves
+        // to false — fewer fields asked for, never another workspace's answer.
+        $declaredTechnical = Department::isTechnicalFor((int) $tenant->getKey(), $departmentId);
+
+        $declared = [
+            'impact_scope' => $impactScope,
+            'workaround' => $workaround,
+            'environment' => $environment,
+            'steps_to_reproduce' => $stepsToReproduce,
+            'error_text' => $errorText,
+        ];
+
+        // The two free-text details join the SCREENED string rather than riding around it:
+        // the description on this form is routinely pasted customer text, and so are these.
+        $screened = trim(implode(
+            "\n",
+            array_merge([$subject, $description], TicketTechnicalFields::freeTextParts($declared, $declaredTechnical)),
+        ));
 
         if ($this->injection->isInjection($screened, (int) $tenant->getKey(), $user?->getKey())) {
             return $this->refuse($subject, $description, 'That text looks like an attempt to instruct the AI rather than describe a ticket, so it was not sent.');
@@ -171,7 +200,13 @@ class DraftSuggestionService
         ], fn () => $this->openAi->chat(
             [
                 ['role' => 'system', 'content' => $this->systemPrompt($tenant, $admissible, $wantsPriority, $engineers, $availability, $recommendations, $clientId)],
-                ['role' => 'user', 'content' => "ROUGH NOTES\nSubject: ".$subject."\n\nDescription:\n".$description],
+                ['role' => 'user', 'content' => trim(
+                    "ROUGH NOTES\nSubject: ".$subject."\n\nDescription:\n".$description
+                    // The SAME fact block the analysis surface sends, so there is one format
+                    // in the application. '' when nothing was answered, and then this user
+                    // message is byte-identical to the pre-P8 one.
+                    ."\n\n".TicketTechnicalFields::factBlock($declared, $declaredTechnical),
+                )],
             ],
             [],
             [

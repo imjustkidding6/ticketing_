@@ -299,6 +299,7 @@ class QaScenarioProbeTest extends TestCase
         $this->post($this->tenantUrl('/tickets'), [
             'subject' => 'probe', 'description' => 'probe',
             'priority' => 'medium', 'client_id' => $victimClient->id,
+            'impact_scope' => 'one_person', 'workaround' => 'none', 'environment' => 'production',
         ])->assertSessionHasErrors('client_id');
 
         $this->assertSame(0, Ticket::withoutGlobalScopes()->where('tenant_id', $attacker->id)->count(),
@@ -308,6 +309,7 @@ class QaScenarioProbeTest extends TestCase
         $this->post($this->tenantUrl('/tickets'), [
             'subject' => 'probe', 'description' => 'probe',
             'priority' => 'medium', 'client_id' => $ownClient->id,
+            'impact_scope' => 'one_person', 'workaround' => 'none', 'environment' => 'production',
         ])->assertSessionHasNoErrors();
 
         $this->assertSame(1, Ticket::withoutGlobalScopes()->where('tenant_id', $attacker->id)->count());
@@ -326,6 +328,7 @@ class QaScenarioProbeTest extends TestCase
         $this->post($this->tenantUrl('/tickets'), [
             'subject' => 'probe', 'description' => 'probe', 'priority' => 'medium',
             'client_id' => $client->id, 'assigned_to' => $outsider->id,
+            'impact_scope' => 'one_person', 'workaround' => 'none', 'environment' => 'production',
         ])->assertSessionHasErrors('assigned_to');
 
         $this->assertSame(0, Ticket::withoutGlobalScopes()->where('tenant_id', $attacker->id)->count(),
@@ -345,6 +348,7 @@ class QaScenarioProbeTest extends TestCase
         $this->post($this->tenantUrl('/tickets'), [
             'subject' => 'probe', 'description' => 'probe',
             'priority' => 'critical', 'client_id' => $client->id,
+            'impact_scope' => 'one_person', 'workaround' => 'none', 'environment' => 'production',
         ])->assertSessionHasErrors();
 
         $this->assertSame(0, Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count(),
@@ -455,6 +459,7 @@ class QaScenarioProbeTest extends TestCase
         $payload = [
             'subject' => 'Cannot access company email', 'description' => 'same',
             'priority' => 'medium', 'client_id' => $client->id,
+            'impact_scope' => 'one_person', 'workaround' => 'none', 'environment' => 'production',
         ];
 
         $this->post($this->tenantUrl('/tickets'), $payload);
