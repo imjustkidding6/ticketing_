@@ -372,4 +372,117 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
         $this->assertFalse(Department::isTechnicalFor($tenantA->id, 999999));
         $this->assertFalse(Department::isTechnicalFor($tenantA->id, null));
     }
+
+    public function test_a_department_that_switched_the_impact_questions_off_does_not_require_them(): void
+    {
+        $tenant = $this->tenantOnPlan();
+        $this->actor($tenant);
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $leave = Department::factory()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'People',
+            'asks_impact' => false,
+        ]);
+        $support = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Support']);
+
+        // P9: the gate is the DEPARTMENT ROW, so a leave request clears the form with no
+        // scope and no workaround — which is the trade the department form spells out.
+        $this->post($this->tenantUrl('/tickets'), [
+            'subject' => 'Annual leave in March',
+            'description' => 'Requesting the last week of March off.',
+            'priority' => 'low',
+            'client_id' => $client->id,
+            'department_id' => $leave->id,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertNull(
+            Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->sole()->impact_scope,
+        );
+
+        // And the default still points the other way: the very next department, untouched,
+        // keeps requiring both. Without this half the test would pass with the gate wired
+        // to a constant false.
+        $this->post($this->tenantUrl('/tickets'), [
+            'subject' => 'Reporting down',
+            'description' => 'Nobody can open reports.',
+            'priority' => 'high',
+            'client_id' => $client->id,
+            'department_id' => $support->id,
+        ])->assertSessionHasErrors(['impact_scope', 'workaround']);
+    }
+
+    public function test_a_stray_impact_scope_on_a_department_that_does_not_ask_is_still_validated(): void
+    {
+        $tenant = $this->tenantOnPlan();
+        $this->actor($tenant);
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $leave = Department::factory()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'People',
+            'asks_impact' => false,
+        ]);
+
+        // The same mechanism that refuses a stray `environment=prod` on a Sales ticket: not
+        // applicable is not the same as unvalidated, or an unvalidated string reaches the
+        // column and the prompt.
+        $this->post($this->tenantUrl('/tickets'), [
+            'subject' => 'Annual leave',
+            'description' => 'Requesting time off.',
+            'priority' => 'low',
+            'client_id' => $client->id,
+            'department_id' => $leave->id,
+            'impact_scope' => 'the entire planet',
+        ])->assertSessionHasErrors('impact_scope');
+
+        $this->assertSame(0, Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count());
+    }
+
+    /**
+     * FOLLOW-UP 28 again, for P9's one new query, and discharged the same way.
+     *
+     * `Department::asksImpactFor()` states `tenant_id` explicitly because it is reached
+     * from a FormRequest AND from the session-less intake analysis and draft service. An
+     * end-to-end test on a session-bearing surface cannot prove that predicate — Department's
+     * own global scope masks its absence — so the assertion is on the resolver, with a
+     * hostile raw-inserted decoy in the WRONG workspace.
+     *
+     * MUTATION CHECKED by hand: deleting `->where('tenant_id', $tenantId)` from
+     * asksImpactFor() reds `assertTrue(... $tenantA, $foreignId)`'s sibling below (tenant A
+     * would read tenant B's `false` instead of the default), and this file's other
+     * request-driven tests stay green — which is the masking follow-up 28 describes.
+     */
+    public function test_a_foreign_departments_impact_flag_cannot_decide_this_workspaces_fields(): void
+    {
+        $tenantA = $this->tenantOnPlan();
+        $tenantB = $this->tenantOnPlan();
+
+        // Raw-inserted so no scope, factory default or observer can tidy it away. It has
+        // OPTED OUT in its own workspace, which is the state that could leak.
+        $foreignId = DB::table('departments')->insertGetId([
+            'tenant_id' => $tenantB->id,
+            'name' => 'People',
+            'code' => 'PEOPLE',
+            'color' => '#3b82f6',
+            'is_active' => true,
+            'is_default' => false,
+            'is_technical' => false,
+            'asks_impact' => false,
+            'sort_order' => 2,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // The decoy really does have the group off, in its own workspace.
+        $this->assertFalse(Department::asksImpactFor($tenantB->id, $foreignId));
+
+        // Asked for from tenant A it resolves to the DEFAULT — the group stays ASKED, never
+        // another workspace's answer. Without the predicate this returns false and tenant
+        // A silently loses the rubric's two decisive inputs.
+        $this->assertTrue(Department::asksImpactFor($tenantA->id, $foreignId));
+
+        // An id that exists nowhere, and no id at all: both fail closed to ASKED, the
+        // opposite direction from isTechnicalFor() and deliberately so.
+        $this->assertTrue(Department::asksImpactFor($tenantA->id, 999999));
+        $this->assertTrue(Department::asksImpactFor($tenantA->id, null));
+    }
 }

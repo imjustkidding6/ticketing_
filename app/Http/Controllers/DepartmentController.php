@@ -52,6 +52,11 @@ class DepartmentController extends Controller
             // of the declared detail set (App\Support\TicketTechnicalFields). Rides on
             // `create departments` / `update departments`, already enforced above.
             'is_technical' => ['boolean'],
+            // And the impact half (who is affected, is there a workaround). Defaults TRUE
+            // in the schema, so an absent key on an older client leaves the stored value
+            // alone on update and keeps the group asked on create — the form posts a
+            // hidden `0` companion, which is what makes unticking it reach here at all.
+            'asks_impact' => ['boolean'],
         ]);
 
         Department::create($validated);
@@ -93,6 +98,11 @@ class DepartmentController extends Controller
             // of the declared detail set (App\Support\TicketTechnicalFields). Rides on
             // `create departments` / `update departments`, already enforced above.
             'is_technical' => ['boolean'],
+            // And the impact half (who is affected, is there a workaround). Defaults TRUE
+            // in the schema, so an absent key on an older client leaves the stored value
+            // alone on update and keeps the group asked on create — the form posts a
+            // hidden `0` companion, which is what makes unticking it reach here at all.
+            'asks_impact' => ['boolean'],
         ]);
 
         $department->update($validated);

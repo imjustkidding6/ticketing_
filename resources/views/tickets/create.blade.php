@@ -11,10 +11,18 @@
     // $departments collection the controller passed — no new query, and nothing read from
     // the browser; the server re-resolves it from the Department row in StoreTicketRequest.
     $technicalDepartmentIds = $departments->where('is_technical', true)->pluck('id')->map('intval')->values()->all();
+    // Which departments ask the impact pair. Default TRUE, so this is the list of
+    // departments that have NOT opted out, and no department chosen means ASKED — the same
+    // fallback StoreTicketRequest and Department::asksImpactFor() use, so the form and the
+    // server never disagree about whether the two selects are required.
+    $impactDepartmentIds = $departments->where('asks_impact', true)->pluck('id')->map('intval')->values()->all();
     // On a validation-failed redraw the chosen department decides what the
     // information-needed list may report missing. A first render has none, so the technical
     // half is simply not listed — which is correct: it has not been asked for yet.
     $oldDepartmentIsTechnical = in_array((int) old('department_id'), $technicalDepartmentIds, true);
+    $oldDepartmentAsksImpact = old('department_id')
+        ? in_array((int) old('department_id'), $impactDepartmentIds, true)
+        : true;
     $technicalValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k)])->all();
     $departmentWarning = $departmentHintWithAi
         ? __('Without a department we can\'t suggest an engineer, and the AI has none of this department\'s expertise behind its priority suggestion.')
@@ -129,20 +137,28 @@
                         </div>
 
                         {{-- Impact and urgency (App\Support\TicketTechnicalFields, the
-                             'all' group). ABOVE Priority deliberately: these are what inform
-                             it. Asked in EVERY department — an HR payroll fault hitting
-                             everyone is more urgent than one hitting one person, and "can
-                             they work around it meanwhile" applies to a locked HR portal as
-                             much as to a crashed server. These two are also exactly what
-                             PRIORITY_BOUNDARY judges critical on. --}}
-                        <div>
+                             impact group). ABOVE Priority deliberately: these are what
+                             inform it. Asked in every department that has not switched the
+                             group off on its own form — these two are exactly what
+                             PRIORITY_BOUNDARY judges critical on, so a department that
+                             switches them off gives up reaching critical. Heading included:
+                             a group switched off takes its heading with it rather than
+                             leaving an empty section. The server decides too —
+                             StoreTicketRequest re-resolves `asks_impact` from the
+                             tenant-scoped Department row — so this x-show is convenience,
+                             and `required` is BOUND to the same expression because a hidden
+                             required select would block the submit outright. --}}
+                        <div x-data="{ departmentId: @js((string) old('department_id', '')), impactDepartments: @js($impactDepartmentIds) }"
+                             x-init="document.getElementById('department_id')?.addEventListener('change', (e) => { departmentId = e.target.value })"
+                             x-show="departmentId === '' || impactDepartments.includes(Number(departmentId))">
                             <h3 class="text-sm font-semibold text-gray-900">{{ __('Impact and urgency') }}</h3>
                             <p class="mt-0.5 text-xs text-gray-500">{{ __('These decide how urgent the ticket is judged to be.') }}</p>
                             <div class="mt-3">
                                 @include('tickets.partials._technical-details', [
                                     'values' => $technicalValues,
                                     'required' => true,
-                                    'group' => \App\Support\TicketTechnicalFields::APPLIES_ALL,
+                                    'requiredWhen' => "departmentId === '' || impactDepartments.includes(Number(departmentId))",
+                                    'group' => \App\Support\TicketTechnicalFields::APPLIES_IMPACT,
                                     'emptyLabel' => __('Select…'),
                                 ])
                             </div>
@@ -165,6 +181,7 @@
                                 @include('tickets.partials._technical-details', [
                                     'values' => $technicalValues,
                                     'required' => false,
+                                    'requiredWhen' => null,
                                     'group' => \App\Support\TicketTechnicalFields::APPLIES_TECHNICAL,
                                     'emptyLabel' => __('Select…'),
                                 ])
@@ -251,7 +268,7 @@
                          past the top of the form still meets the Department warning. --}}
                     <div class="mt-6">
                         @include('tickets.partials._information-needed', [
-                            'missing' => \App\Support\TicketTechnicalFields::missing(old(), $oldDepartmentIsTechnical),
+                            'missing' => \App\Support\TicketTechnicalFields::missing(old(), $oldDepartmentIsTechnical, $oldDepartmentAsksImpact),
                             'departmentWarning' => old('department_id') ? null : $departmentWarning,
                         ])
                     </div>

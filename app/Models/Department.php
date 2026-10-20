@@ -30,6 +30,7 @@ class Department extends Model
         'is_active',
         'is_default',
         'is_technical',
+        'asks_impact',
         'sort_order',
     ];
 
@@ -42,6 +43,7 @@ class Department extends Model
             'is_active' => 'boolean',
             'is_default' => 'boolean',
             'is_technical' => 'boolean',
+            'asks_impact' => 'boolean',
             'sort_order' => 'integer',
         ];
     }
@@ -71,6 +73,40 @@ class Department extends Model
             ->where('tenant_id', $tenantId)
             ->whereKey($departmentId)
             ->value('is_technical');
+    }
+
+    /**
+     * Does a ticket in this department get asked the IMPACT half of the declared detail
+     * set (App\Support\TicketTechnicalFields' impact group: who is affected, is there a
+     * workaround)?
+     *
+     * Same query shape and the same reason as isTechnicalFor() above: `tenant_id` stated
+     * EXPLICITLY with the global TenantScope bypassed, because this is reached from a
+     * FormRequest and from the session-less intake analysis and draft service, where
+     * TenantScope applies no predicate at all.
+     *
+     * THE FALLBACK POINTS THE OTHER WAY, deliberately — do not "fix" the inconsistency.
+     * A null, missing or foreign department resolves to TRUE: the group stays ASKED.
+     * isTechnicalFor() fails closed to false because an absent department must not invite
+     * technical questions nobody can answer; here the harm runs the other way, because
+     * these two fields are what the priority rubric separates `critical` from `high` on,
+     * and silently dropping them leaves the priority to the model's reading of the prose.
+     * Asking a question that turns out not to apply costs a click; not asking it costs the
+     * judgement. A foreign id therefore yields the DEFAULT, never another workspace's
+     * answer — which is the property the explicit predicate exists to guarantee.
+     */
+    public static function asksImpactFor(int $tenantId, ?int $departmentId): bool
+    {
+        if ($departmentId === null) {
+            return true;
+        }
+
+        $value = self::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->whereKey($departmentId)
+            ->value('asks_impact');
+
+        return $value === null ? true : (bool) $value;
     }
 
     /**
