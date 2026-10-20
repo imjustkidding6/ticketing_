@@ -161,20 +161,40 @@
                      input, so a `workaround: yes` baked into a link printed onto a QR sticker
                      would silently downgrade every ticket filed through it with no visitor
                      able to see it. $prefill/$locked gain no keys here. --}}
-                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                @php
+                    $publicTechnicalValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k)])->all();
+                    // Resolved from the already tenant-scoped $departments collection the
+                    // controller passed — no new query and nothing trusted from the URL.
+                    $publicTechnicalDepartmentIds = $departments->where('is_technical', true)->pluck('id')->map('intval')->values()->all();
+                    // Departments that have NOT opted out of the impact pair. No department
+                    // chosen means asked, matching Department::asksImpactFor()'s fallback.
+                    $publicImpactDepartmentIds = $departments->where('asks_impact', true)->pluck('id')->map('intval')->values()->all();
+                    $publicDepartmentId = (string) old('department_id', $prefill['department_id'] ?? '');
+                    $publicAsksImpact = $publicDepartmentId === ''
+                        ? true
+                        : in_array((int) $publicDepartmentId, $publicImpactDepartmentIds, true);
+                @endphp
+                {{-- The whole box is conditional on there being something in it: a
+                     department that asks neither group would otherwise leave a titled,
+                     empty "Help us prioritise this" panel on the public form. One x-data
+                     for both groups so the two halves and the panel cannot disagree. --}}
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4"
+                     x-data="{
+                        departmentId: @js($publicDepartmentId),
+                        impactDepartments: @js($publicImpactDepartmentIds),
+                        technicalDepartments: @js($publicTechnicalDepartmentIds),
+                        get asksImpact() { return this.departmentId === '' || this.impactDepartments.includes(Number(this.departmentId)) },
+                        get isTechnical() { return this.technicalDepartments.includes(Number(this.departmentId)) },
+                     }"
+                     x-init="document.getElementById('department_id')?.addEventListener('change', (e) => { departmentId = e.target.value })"
+                     x-show="asksImpact || isTechnical">
                     <p class="text-sm font-semibold text-gray-800">{{ __('Help us prioritise this') }} <span class="font-normal text-gray-400">({{ __('optional') }})</span></p>
                     <p class="mt-0.5 text-xs text-gray-500">{{ __('Answering these questions lets us judge how urgent your issue is. If you\'re not sure, leave them blank — we\'ll ask.') }}</p>
-                    @php
-                        $publicTechnicalValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k)])->all();
-                        // Resolved from the already tenant-scoped $departments collection the
-                        // controller passed — no new query and nothing trusted from the URL.
-                        $publicTechnicalDepartmentIds = $departments->where('is_technical', true)->pluck('id')->map('intval')->values()->all();
-                    @endphp
-                    <div class="mt-3">
+                    <div class="mt-3" x-show="asksImpact">
                         @include('tickets.partials._technical-details', [
                             'values' => $publicTechnicalValues,
                             'required' => false,
-                            'group' => \App\Support\TicketTechnicalFields::APPLIES_ALL,
+                            'group' => \App\Support\TicketTechnicalFields::APPLIES_IMPACT,
                             'emptyLabel' => __('I\'m not sure'),
                         ])
                     </div>
@@ -182,11 +202,7 @@
                          work. A visitor filing an HR query is not asked for an environment.
                          Optional throughout, so the server rule is `nullable` either way and
                          this is presentation, not validation. --}}
-                    <div class="mt-4"
-                         x-data="{ departmentId: @js((string) old('department_id', $prefill['department_id'] ?? '')), technicalDepartments: @js($publicTechnicalDepartmentIds) }"
-                         x-init="document.getElementById('department_id')?.addEventListener('change', (e) => { departmentId = e.target.value })"
-                         x-show="technicalDepartments.includes(Number(departmentId))"
-                         x-cloak>
+                    <div class="mt-4" x-show="isTechnical" x-cloak>
                         @include('tickets.partials._technical-details', [
                             'values' => $publicTechnicalValues,
                             'required' => false,
@@ -194,9 +210,17 @@
                             'emptyLabel' => __('I\'m not sure'),
                         ])
                     </div>
-                    <div class="mt-3">
+                    {{-- Every row this list can produce on this surface is an impact row
+                         (the technical half is not listed here), so it follows the same
+                         switch as the fields rather than naming a question the visitor can
+                         no longer see. --}}
+                    <div class="mt-3" x-show="asksImpact">
                         @include('tickets.partials._information-needed', [
-                            'missing' => \App\Support\TicketTechnicalFields::missing(old(), false),
+                            {{-- The impact half of this list follows the chosen department
+                                 on a redraw (and the prefill on a first render); the
+                                 technical half stays unlisted on this surface, as P8 left
+                                 it. --}}
+                            'missing' => \App\Support\TicketTechnicalFields::missing(old(), false, $publicAsksImpact),
                             'publicTone' => true,
                         ])
                     </div>

@@ -60,25 +60,32 @@
                              stops _ai-analyze's Apply (whose hidden snapshot carries none of
                              these keys) from 422-ing or from wiping a stored value.
 
-                             A stored technical value on a department later unticked still
-                             renders, deliberately: hiding data that exists is worse than
-                             showing a field the department no longer asks for. --}}
+                             A stored value on a department that later unticked the group
+                             still renders, deliberately: hiding data that exists is worse
+                             than showing a field the department no longer asks for. That is
+                             why both halves are an OR of the department flag and the stored
+                             values, and why a group with neither disappears entirely —
+                             heading included, so no empty section is left behind. --}}
                         @php
                             $editTechnical = \App\Models\Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id)
                                 || filled($ticket->environment) || filled($ticket->steps_to_reproduce) || filled($ticket->error_text);
+                            $editAsksImpact = \App\Models\Department::asksImpactFor((int) $ticket->tenant_id, $ticket->department_id)
+                                || filled($ticket->impact_scope) || filled($ticket->workaround);
                             $editValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k, $ticket->{$k})])->all();
                         @endphp
+                        @if($editAsksImpact)
                         <div>
                             <h3 class="text-sm font-semibold text-gray-900">{{ __('Impact and urgency') }}</h3>
                             <div class="mt-3">
                                 @include('tickets.partials._technical-details', [
                                     'values' => $editValues,
                                     'required' => false,
-                                    'group' => \App\Support\TicketTechnicalFields::APPLIES_ALL,
+                                    'group' => \App\Support\TicketTechnicalFields::APPLIES_IMPACT,
                                     'emptyLabel' => __('Not recorded'),
                                 ])
                             </div>
                         </div>
+                        @endif
 
                         @if($editTechnical)
                         <div>

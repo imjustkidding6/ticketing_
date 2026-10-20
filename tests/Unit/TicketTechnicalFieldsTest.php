@@ -167,8 +167,9 @@ class TicketTechnicalFieldsTest extends TestCase
         $this->assertSame(['impact_scope', 'workaround'], array_keys($all));
         $this->assertSame(TicketTechnicalFields::keys(), array_keys($technical));
 
-        // Breadth and workaround are universal because they are what PRIORITY_BOUNDARY
-        // judges critical on — the rubric does not become department-specific.
+        // Breadth and workaround are asked by default in every department because they are
+        // what PRIORITY_BOUNDARY judges critical on. A department can now opt out (P9),
+        // which is tested below; the rubric itself does not become department-specific.
         foreach ($all as $field) {
             $this->assertTrue($field['rubric_input']);
         }
@@ -194,5 +195,75 @@ class TicketTechnicalFieldsTest extends TestCase
         $this->assertStringContainsString('impact_scope: everyone', $block);
         $this->assertStringContainsString('workaround: none', $block);
         $this->assertStringNotContainsString('environment', $block);
+    }
+
+    public function test_the_impact_group_is_switched_off_as_one_declaration_not_a_second_list(): void
+    {
+        $both = TicketTechnicalFields::applicable(technical: true, asksImpact: false);
+        $neither = TicketTechnicalFields::applicable(technical: false, asksImpact: false);
+
+        // The two gates are independent: a technical department that does not want the
+        // impact questions keeps exactly the technical half.
+        $this->assertSame(['environment', 'steps_to_reproduce', 'error_text'], array_keys($both));
+
+        // And a department that asks neither applies NO declared field at all — which is
+        // what lets every surface drop its heading instead of rendering an empty section.
+        $this->assertSame([], array_keys($neither));
+    }
+
+    public function test_the_impact_pair_is_still_validated_where_it_does_not_apply(): void
+    {
+        $rules = TicketTechnicalFields::rules(internal: true, technical: false, asksImpact: false);
+
+        // ONE mechanism for both groups: `required` drops, the closed-set rule stands. A
+        // stray `impact_scope` is refused exactly as a stray `environment` on a Sales
+        // ticket is, rather than being waved through to the column and the prompt.
+        $this->assertContains('nullable', $rules['impact_scope']);
+        $this->assertContains('nullable', $rules['workaround']);
+        $this->assertContains('in:one_person,team,department,everyone', $rules['impact_scope']);
+        $this->assertContains('in:none,partial,yes', $rules['workaround']);
+
+        // Nothing is required anywhere when nothing applies.
+        foreach ($rules as $fieldRules) {
+            $this->assertNotContains('required', $fieldRules);
+        }
+    }
+
+    public function test_a_department_that_does_not_ask_the_impact_pair_is_never_told_it_is_missing_one(): void
+    {
+        // All THREE technical fields, not just the required one: P8's contract is that
+        // `missing()` lists every applicable field with no value, optional ones included
+        // (its own test asserts 5 rows for a wholly empty technical ticket). The list is a
+        // prompt for what would help, not a second rendering of the validation rules.
+        $this->assertSame(
+            ['environment', 'steps_to_reproduce', 'error_text'],
+            array_column(TicketTechnicalFields::missing([], technical: true, asksImpact: false), 'key'),
+        );
+
+        // Both groups off: no rows at all, so no "information needed" heading is rendered.
+        $this->assertSame([], TicketTechnicalFields::missing([], technical: false, asksImpact: false));
+    }
+
+    public function test_the_fact_block_emits_nothing_at_all_for_a_switched_off_impact_group(): void
+    {
+        // The P9 cost, pinned: the rubric's two decisive inputs are SILENT rather than
+        // stated as unknown, so PRIORITY_UNCERTAINTY resolves both downward.
+        $this->assertSame('', TicketTechnicalFields::factBlock([
+            'impact_scope' => 'everyone',
+            'workaround' => 'none',
+        ], technical: false, asksImpact: false));
+
+        // Not an empty section and not an `unknown` line — the block is absent entirely
+        // even though the technical half is answered.
+        $block = TicketTechnicalFields::factBlock([
+            'impact_scope' => 'everyone',
+            'workaround' => 'none',
+            'environment' => 'production',
+        ], technical: true, asksImpact: false);
+
+        $this->assertStringContainsString('environment: production', $block);
+        $this->assertStringNotContainsString('impact_scope', $block);
+        $this->assertStringNotContainsString('workaround', $block);
+        $this->assertStringNotContainsString('unknown', $block);
     }
 }

@@ -245,8 +245,11 @@ class AnalyzeTicketService
                         // Applicability from the department ROW, with its own tenant
                         // predicate: this path runs in a worker where TenantScope adds
                         // nothing, and a non-technical ticket must not emit an environment
-                        // line it was never asked for.
+                        // line it was never asked for. A department with the impact group
+                        // switched off emits no scope and no workaround line either, so
+                        // PRIORITY_UNCERTAINTY resolves both downward.
                         Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id),
+                        Department::asksImpactFor((int) $ticket->tenant_id, $ticket->department_id),
                     ))],
                 ],
                 [],

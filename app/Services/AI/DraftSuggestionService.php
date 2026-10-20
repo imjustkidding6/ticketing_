@@ -135,6 +135,9 @@ class DraftSuggestionService
         // from the browser: the id arrives from the create form, so a foreign one resolves
         // to false — fewer fields asked for, never another workspace's answer.
         $declaredTechnical = Department::isTechnicalFor((int) $tenant->getKey(), $departmentId);
+        // The impact pair's gate, resolved from the same row. Its fallback is TRUE, so a
+        // draft with no department still sends the scope and workaround the agent answered.
+        $declaredAsksImpact = Department::asksImpactFor((int) $tenant->getKey(), $departmentId);
 
         $declared = [
             'impact_scope' => $impactScope,
@@ -205,7 +208,7 @@ class DraftSuggestionService
                     // The SAME fact block the analysis surface sends, so there is one format
                     // in the application. '' when nothing was answered, and then this user
                     // message is byte-identical to the pre-P8 one.
-                    ."\n\n".TicketTechnicalFields::factBlock($declared, $declaredTechnical),
+                    ."\n\n".TicketTechnicalFields::factBlock($declared, $declaredTechnical, $declaredAsksImpact),
                 )],
             ],
             [],

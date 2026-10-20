@@ -56,13 +56,34 @@ class StoreTicketRequest extends FormRequest
             // second, so another workspace's department resolves to false (fewer required
             // fields) rather than to its answer. A ticket with no department is not
             // technical, which asks for less rather than fabricating a requirement.
+            //
+            // The impact pair is gated the same way and resolved from the same row, but
+            // its absent-department fallback is TRUE rather than false (see
+            // Department::asksImpactFor()): a ticket with no department is still asked who
+            // is affected, because those two answers are what the priority rubric
+            // separates critical from high on.
         ] + TicketTechnicalFields::rules(
             internal: true,
             technical: Department::isTechnicalFor(
                 (int) $this->currentTenantId(),
-                $this->input('department_id') === null ? null : (int) $this->input('department_id'),
+                $this->departmentId(),
+            ),
+            asksImpact: Department::asksImpactFor(
+                (int) $this->currentTenantId(),
+                $this->departmentId(),
             ),
         );
+    }
+
+    /**
+     * The submitted department id as an int, or null when none was chosen — read once so
+     * the two applicability resolvers cannot be given different ids.
+     */
+    private function departmentId(): ?int
+    {
+        $raw = $this->input('department_id');
+
+        return $raw === null || $raw === '' ? null : (int) $raw;
     }
 
     /**

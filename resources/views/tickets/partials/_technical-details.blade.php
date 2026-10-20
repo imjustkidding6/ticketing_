@@ -21,6 +21,7 @@
     $required = $required ?? false;
     $emptyLabel = $emptyLabel ?? __('Select…');
     $group = $group ?? null;
+    $requiredWhen = $requiredWhen ?? null;
     $idPrefix = $idPrefix ?? '';
     $fields = $group === null
         ? TicketTechnicalFields::FIELDS
@@ -38,10 +39,16 @@
                     <label for="{{ $idPrefix.$key }}" class="block text-sm font-medium text-gray-700">
                         {{ __($field['label']) }}
                         @if($isRequired)
-                            <span class="text-red-500">*</span>
+                            {{-- Bound, not static, when the enclosing block can be hidden:
+                                 a hidden `required` select makes the browser refuse the
+                                 whole submit with an unfocusable-control error, and the
+                                 server has already dropped the rule for a group the
+                                 department does not ask. --}}
+                            <span class="text-red-500" @if($requiredWhen) x-show="{{ $requiredWhen }}" @endif>*</span>
                         @endif
                     </label>
-                    <select name="{{ $key }}" id="{{ $idPrefix.$key }}" @if($isRequired) required @endif
+                    <select name="{{ $key }}" id="{{ $idPrefix.$key }}"
+                            @if($isRequired && $requiredWhen) x-bind:required="{{ $requiredWhen }}" @elseif($isRequired) required @endif
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         {{-- A real, named choice rather than a dash, and never an `unknown`
                              option VALUE: blank is unknown, it validates as `nullable`, and
