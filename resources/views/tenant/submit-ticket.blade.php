@@ -163,31 +163,37 @@
                      able to see it. $prefill/$locked gain no keys here. --}}
                 @php
                     $publicTechnicalValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k)])->all();
-                    // Resolved from the already tenant-scoped $departments collection the
+                    // Resolved from the already tenant-scoped $categories collection the
                     // controller passed — no new query and nothing trusted from the URL.
-                    $publicTechnicalDepartmentIds = $departments->where('is_technical', true)->pluck('id')->map('intval')->values()->all();
-                    // Departments that have NOT opted out of the impact pair. No department
-                    // chosen means asked, matching Department::asksImpactFor()'s fallback.
-                    $publicImpactDepartmentIds = $departments->where('asks_impact', true)->pluck('id')->map('intval')->values()->all();
-                    $publicDepartmentId = (string) old('department_id', $prefill['department_id'] ?? '');
-                    $publicAsksImpact = $publicDepartmentId === ''
-                        ? true
-                        : in_array((int) $publicDepartmentId, $publicImpactDepartmentIds, true);
+                    $publicTechnicalCategoryIds = $categories->where('is_technical', true)->pluck('id')->map('intval')->values()->all();
+                    // Categories that have NOT opted out of the impact pair. NO CATEGORY
+                    // CHOSEN ASKS NOTHING, matching TicketCategory::detailFlagsFor() — the
+                    // questions belong to a category, so a visitor who has not picked one
+                    // has not been put in a bucket that asks them.
+                    $publicImpactCategoryIds = $categories->where('asks_impact', true)->pluck('id')->map('intval')->values()->all();
+                    $publicCategoryId = (string) old('category_id', $prefill['category_id'] ?? '');
+                    $publicAsksImpact = in_array((int) $publicCategoryId, $publicImpactCategoryIds, true);
                 @endphp
                 {{-- The whole box is conditional on there being something in it: a
-                     department that asks neither group would otherwise leave a titled,
-                     empty "Help us prioritise this" panel on the public form. One x-data
-                     for both groups so the two halves and the panel cannot disagree. --}}
+                     category that asks neither group — and no category at all, which is
+                     most of this form's life — would otherwise leave a titled, empty
+                     "Help us prioritise this" panel on the public form. One x-data for
+                     both groups so the two halves and the panel cannot disagree. The
+                     category select is populated per department by the same fetch as
+                     before; only ids are needed here. --}}
                 <div class="rounded-lg border border-gray-200 bg-gray-50 p-4"
                      x-data="{
-                        departmentId: @js($publicDepartmentId),
-                        impactDepartments: @js($publicImpactDepartmentIds),
-                        technicalDepartments: @js($publicTechnicalDepartmentIds),
-                        get asksImpact() { return this.departmentId === '' || this.impactDepartments.includes(Number(this.departmentId)) },
-                        get isTechnical() { return this.technicalDepartments.includes(Number(this.departmentId)) },
+                        categoryId: @js($publicCategoryId),
+                        impactCategories: @js($publicImpactCategoryIds),
+                        technicalCategories: @js($publicTechnicalCategoryIds),
+                        get asksImpact() { return this.impactCategories.includes(Number(this.categoryId)) },
+                        get isTechnical() { return this.technicalCategories.includes(Number(this.categoryId)) },
                      }"
-                     x-init="document.getElementById('department_id')?.addEventListener('change', (e) => { departmentId = e.target.value })"
-                     x-show="asksImpact || isTechnical">
+                     x-init="document.getElementById('category_id')?.addEventListener('change', (e) => { categoryId = e.target.value });
+                             /* Changing department empties the category select programmatically, which fires no change event — reset the gate here or it keeps answering for a category that is no longer selected. */
+                             document.getElementById('department_id')?.addEventListener('change', () => { categoryId = '' })"
+                     x-show="asksImpact || isTechnical"
+                     x-cloak>
                     <p class="text-sm font-semibold text-gray-800">{{ __('Help us prioritise this') }} <span class="font-normal text-gray-400">({{ __('optional') }})</span></p>
                     <p class="mt-0.5 text-xs text-gray-500">{{ __('Answering these questions lets us judge how urgent your issue is. If you\'re not sure, leave them blank — we\'ll ask.') }}</p>
                     <div class="mt-3" x-show="asksImpact">
@@ -198,7 +204,7 @@
                             'emptyLabel' => __('I\'m not sure'),
                         ])
                     </div>
-                    {{-- The technical half only where the chosen department handles technical
+                    {{-- The technical half only where the chosen category covers technical
                          work. A visitor filing an HR query is not asked for an environment.
                          Optional throughout, so the server rule is `nullable` either way and
                          this is presentation, not validation. --}}
@@ -216,7 +222,7 @@
                          no longer see. --}}
                     <div class="mt-3" x-show="asksImpact">
                         @include('tickets.partials._information-needed', [
-                            {{-- The impact half of this list follows the chosen department
+                            {{-- The impact half of this list follows the chosen category
                                  on a redraw (and the prefill on a first render); the
                                  technical half stays unlisted on this surface, as P8 left
                                  it. --}}

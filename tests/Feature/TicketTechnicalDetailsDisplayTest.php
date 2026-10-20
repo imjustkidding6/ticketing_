@@ -12,6 +12,7 @@ use App\Models\Plan;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\Ticket;
+use App\Models\TicketCategory;
 use App\Models\User;
 use App\Services\PlanService;
 use App\Services\TenantRoleService;
@@ -111,8 +112,11 @@ class TicketTechnicalDetailsDisplayTest extends TestCase
     {
         $tenant = $this->tenantOnPlan('business');
         $this->actor($tenant);
-        $department = Department::factory()->create(['tenant_id' => $tenant->id, 'is_technical' => true]);
-        $ticket = $this->ticketFor($tenant, ['department_id' => $department->id]);
+        // P10: applicability comes from the ticket's CATEGORY, and the category must be in
+        // THIS workspace — detailFlagsFor() states `tenant_id` explicitly, so the factory's
+        // own nested category (which carries a tenant of its own) resolves to asking nothing.
+        $category = TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'is_technical' => true]);
+        $ticket = $this->ticketFor($tenant, ['category_id' => $category->id]);
 
         $this->get($this->tenantUrl("/tickets/{$ticket->id}"))
             ->assertOk()
@@ -128,7 +132,9 @@ class TicketTechnicalDetailsDisplayTest extends TestCase
     {
         $tenant = $this->tenantOnPlan('business');
         $this->actor($tenant);
+        $category = TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'is_technical' => true]);
         $ticket = $this->ticketFor($tenant, [
+            'category_id' => $category->id,
             'impact_scope' => 'everyone',
             'workaround' => 'none',
             'environment' => 'production',
@@ -222,8 +228,10 @@ class TicketTechnicalDetailsDisplayTest extends TestCase
     {
         $tenant = $this->tenantOnPlan('business');
         $this->actor($tenant);
-        $hr = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Human Resources']);
-        $ticket = $this->ticketFor($tenant, ['department_id' => $hr->id]);
+        // Impact on (the default), technical off: the impact half is listed and the
+        // technical half is not named at all.
+        $payroll = TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Payroll']);
+        $ticket = $this->ticketFor($tenant, ['category_id' => $payroll->id]);
 
         $this->get($this->tenantUrl("/tickets/{$ticket->id}"))
             ->assertOk()
@@ -231,5 +239,23 @@ class TicketTechnicalDetailsDisplayTest extends TestCase
             ->assertSee('Is there a workaround')
             ->assertDontSee('An environment nobody names is treated as NOT production, which rules critical out.')
             ->assertDontSee('The exact wording is what matches this ticket to one already resolved.');
+    }
+
+    /**
+     * P10's reversal, on the display surface: a ticket in no category was asked nothing, so
+     * the page must not name a single absent field — not even the impact pair, which P9
+     * would have listed. An empty list renders no heading rather than an empty section.
+     */
+    public function test_a_ticket_with_no_category_is_told_it_is_missing_nothing(): void
+    {
+        $tenant = $this->tenantOnPlan('business');
+        $this->actor($tenant);
+        $ticket = $this->ticketFor($tenant, ['category_id' => null]);
+
+        $this->get($this->tenantUrl("/tickets/{$ticket->id}"))
+            ->assertOk()
+            ->assertDontSee('Information still needed')
+            ->assertDontSee('Critical needs the scope: the rubric separates critical from high on breadth of impact.')
+            ->assertDontSee('An environment nobody names is treated as NOT production, which rules critical out.');
     }
 }

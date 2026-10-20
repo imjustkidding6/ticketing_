@@ -45,32 +45,6 @@
                             <input type="checkbox" name="is_active" id="is_active" value="1" {{ old('is_active', true) ? 'checked' : '' }} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                             <label for="is_active" class="text-sm font-medium text-gray-700">{{ __('Active') }}</label>
                         </div>
-
-                        <div class="flex items-start gap-2">
-                            <input type="hidden" name="is_technical" value="0">
-                            <input type="checkbox" name="is_technical" id="is_technical" value="1" {{ old('is_technical', false) ? 'checked' : '' }} class="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                            <div>
-                                <label for="is_technical" class="text-sm font-medium text-gray-700">{{ __('Handles technical work') }}</label>
-                                <p class="text-xs text-gray-500">{{ __('Tickets in this department also ask for the environment, steps to reproduce and the exact error message. Leave it off for departments like HR, Sales or Finance.') }}</p>
-                            </div>
-                        </div>
-
-                        <div class="flex items-start gap-2">
-                            <input type="hidden" name="asks_impact" value="0">
-                            <input type="checkbox" name="asks_impact" id="asks_impact" value="1" {{ old('asks_impact', true) ? 'checked' : '' }} class="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                            <div>
-                                <label for="asks_impact" class="text-sm font-medium text-gray-700">{{ __('Ask who is affected and whether there is a workaround') }}</label>
-                                {{-- The cost is stated, not implied. These two answers are
-                                     what separates a critical ticket from a high one, so a
-                                     department with the questions switched off cannot reach
-                                     critical and its priority is left to how the reporter
-                                     happened to word the ticket. Switch it off only where
-                                     the questions genuinely do not apply — a leave request
-                                     or an expenses query — not for departments that handle
-                                     outages. --}}
-                                <p class="text-xs text-gray-500">{{ __('These two answers are what separates a critical ticket from a high one. Switch them off and tickets in this department can no longer be judged critical — the priority falls back to how the ticket happens to be worded. Leave it on for anything that can affect more than one person.') }}</p>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="mt-6 flex items-center justify-end gap-3">

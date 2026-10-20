@@ -44,6 +44,42 @@
                             <input type="checkbox" name="is_active" id="is_active" value="1" {{ old('is_active', $category->is_active) ? 'checked' : '' }} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                             <label for="is_active" class="text-sm font-medium text-gray-700">{{ __('Active') }}</label>
                         </div>
+
+                        {{-- Consequence 4 of moving these gates down a level, stated on the
+                             form rather than discovered later: the two questions now belong
+                             to a category, so a ticket filed WITHOUT one is asked neither —
+                             and the priority rubric loses both of its decisive inputs for
+                             that ticket. The fix is a category, which is why it is said
+                             here. --}}
+                        <div class="rounded-md border border-amber-200 bg-amber-50 p-3">
+                            <p class="text-xs text-amber-800">{{ __('These two settings decide what the ticket form asks for. A ticket filed with no category at all is asked neither, so its priority is judged from the wording alone.') }}</p>
+                        </div>
+
+                        <div class="flex items-start gap-2">
+                            <input type="hidden" name="is_technical" value="0">
+                            <input type="checkbox" name="is_technical" id="is_technical" value="1" {{ old('is_technical', $category->is_technical) ? 'checked' : '' }} class="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            <div>
+                                <label for="is_technical" class="text-sm font-medium text-gray-700">{{ __('Covers technical work') }}</label>
+                                <p class="text-xs text-gray-500">{{ __('Tickets in this category also ask for the environment, steps to reproduce and the exact error message. Leave it off for categories like leave requests, invoices or quotes.') }}</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-start gap-2">
+                            <input type="hidden" name="asks_impact" value="0">
+                            <input type="checkbox" name="asks_impact" id="asks_impact" value="1" {{ old('asks_impact', $category->asks_impact) ? 'checked' : '' }} class="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            <div>
+                                <label for="asks_impact" class="text-sm font-medium text-gray-700">{{ __('Ask who is affected and whether there is a workaround') }}</label>
+                                {{-- The cost is stated, not implied. These two answers are
+                                     what separates a critical ticket from a high one, so a
+                                     category with the questions switched off cannot reach
+                                     critical and its priority is left to how the reporter
+                                     happened to word the ticket. Switch it off only where
+                                     the questions genuinely do not apply — a leave request
+                                     or an expenses query — not for anything that can take a
+                                     service down. --}}
+                                <p class="text-xs text-gray-500">{{ __('These two answers are what separates a critical ticket from a high one. Switch them off and tickets in this category can no longer be judged critical — the priority falls back to how the ticket happens to be worded. Leave it on for anything that can affect more than one person.') }}</p>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mt-6 flex items-center justify-end gap-3">

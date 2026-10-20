@@ -52,7 +52,6 @@ class DepartmentSeeder extends Seeder
         [
             'name' => 'Technical Software',
             'code' => 'SOFTWARE',
-            'is_technical' => true,
             'description' => 'Software-related technical issues.',
             'color' => '#3b82f6',
             'sort_order' => 2,
@@ -60,7 +59,6 @@ class DepartmentSeeder extends Seeder
         [
             'name' => 'Technical Hardware',
             'code' => 'HARDWARE',
-            'is_technical' => true,
             'description' => 'Hardware-related technical issues.',
             'color' => '#ef4444',
             'sort_order' => 3,
@@ -127,20 +125,20 @@ class DepartmentSeeder extends Seeder
                     'tenant_id' => $tenant->id,
                     'code' => $dept['code'],
                 ],
-                array_merge([
+                [
                     'name' => $dept['name'],
                     'description' => $dept['description'],
                     'color' => $dept['color'],
                     'is_active' => true,
                     'is_default' => true,
                     'sort_order' => $dept['sort_order'],
-                ],
-                    // Only ever set TRUE, and only on the defaults that declare it: this is
-                    // also how existing workspaces are brought up to date (a `db:seed` run
-                    // matches on the default department CODE, which is a far stronger key
-                    // than a name), and writing `false` here would silently untick a flag an
-                    // admin had set on a default department.
-                    ($dept['is_technical'] ?? false) ? ['is_technical' => true] : [])
+                ]
+                // NO DETAIL-FIELD FLAG. P8/P9's `is_technical` seeding is gone with the
+                // gate: which detail questions a ticket is asked is now a property of its
+                // CATEGORY (TicketCategory::detailFlagsFor()), and no seeder creates
+                // categories — a workspace starts with none and configures its own. The two
+                // flags this seeder used to set on SOFTWARE and HARDWARE are not carried
+                // anywhere; they are lost, and a migration cannot backfill them.
             );
         }
     }

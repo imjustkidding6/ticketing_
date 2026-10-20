@@ -219,6 +219,12 @@ class AnalyzeTicketService
         // availabilityFor(). Null here means the signal is not sent at all.
         $availability = $this->availabilityFor($ticket->tenant, $engineers);
 
+        // Which halves of the declared detail set this ticket was ever asked for, from the
+        // CATEGORY ROW and its own explicit tenant predicate: this path runs in a worker
+        // where TenantScope adds nothing. One read, before the closure, so both halves come
+        // off the same row.
+        $detailFlags = TicketCategory::detailFlagsFor((int) $ticket->tenant_id, $ticket->category_id);
+
         $startedAt = microtime(true);
 
         /** @var array{context: array<int, array{ticket: Ticket, score: float}>, response: array<string, mixed>} $calls */
@@ -230,7 +236,7 @@ class AnalyzeTicketService
             // The embedding call keeps its own `embed`, which post() derives from the
             // endpoint and applyContext() leaves alone.
             'feature' => 'copilot',
-        ], function () use ($ticket, $sanitised, $categories, $engineers, $recommendations, $availability) {
+        ], function () use ($ticket, $sanitised, $categories, $engineers, $recommendations, $availability, $detailFlags) {
             $context = $this->embeddings->searchSimilarResolvedTickets(
                 $ticket->tenant_id,
                 $sanitised,
@@ -242,14 +248,13 @@ class AnalyzeTicketService
                     ['role' => 'system', 'content' => $this->systemPrompt($ticket, $recommendations, $availability !== null)],
                     ['role' => 'user', 'content' => $this->userPrompt($sanitised, $categories, $engineers, $context, $availability, TicketTechnicalFields::factBlock(
                         $ticket,
-                        // Applicability from the department ROW, with its own tenant
-                        // predicate: this path runs in a worker where TenantScope adds
-                        // nothing, and a non-technical ticket must not emit an environment
-                        // line it was never asked for. A department with the impact group
-                        // switched off emits no scope and no workaround line either, so
-                        // PRIORITY_UNCERTAINTY resolves both downward.
-                        Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id),
-                        Department::asksImpactFor((int) $ticket->tenant_id, $ticket->department_id),
+                        // A non-technical ticket must not emit an environment line it was
+                        // never asked for. A category with the impact group switched off —
+                        // or a ticket with no category at all — emits no scope and no
+                        // workaround line either, so PRIORITY_UNCERTAINTY resolves both
+                        // downward.
+                        $detailFlags['technical'],
+                        $detailFlags['asks_impact'],
                     ))],
                 ],
                 [],
@@ -323,7 +328,7 @@ class AnalyzeTicketService
         // the guardrails instead of through them.
         $parts = array_merge($parts, TicketTechnicalFields::freeTextParts(
             $ticket,
-            Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id),
+            TicketCategory::detailFlagsFor((int) $ticket->tenant_id, $ticket->category_id)['technical'],
         ));
 
         $comments = $ticket->comments()
