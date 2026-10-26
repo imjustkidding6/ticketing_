@@ -130,6 +130,10 @@
                             // No department means no engineer suggestion: the candidate
                             // set is never widened to the whole workspace.
                             department_id: departmentEl?.value || null,
+                            // The category is what decides which of the five declared
+                            // details below apply, so the draft asks about the one that is
+                            // selected right now. None selected means none of them apply.
+                            category_id: document.getElementById('category_id')?.value || null,
                             context: this.context,
                             // The reporter's own declared technical facts, read by id the
                             // same way as the fields above. Validated nullable server-side,

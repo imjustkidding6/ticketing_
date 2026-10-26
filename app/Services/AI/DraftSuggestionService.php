@@ -8,10 +8,10 @@ use App\Exceptions\OpenAiException;
 use App\Models\AiSuggestionVerdict;
 use App\Models\AiTicketAnalysis;
 use App\Models\Client;
-use App\Models\Department;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\Ticket;
+use App\Models\TicketCategory;
 use App\Models\User;
 use App\Services\AiAssistantService;
 use App\Services\AiUsageTrackerService;
@@ -102,6 +102,10 @@ class DraftSuggestionService
      * @param  bool  $withAgents  The CALLER's answer to the `ai_agents` plan gate and the
      *                            `ai_agents_enabled` workspace opt-in. Both read the
      *                            session, and this service must not pretend it can.
+     * @param  int|null  $categoryId  The ticket's category, which is what decides WHICH of
+     *                                the declared details below apply (and therefore which
+     *                                of them reach the prompt as facts). Null — no category
+     *                                chosen — means none of them do.
      * @param  string|null  $impactScope  The declared technical details, as answered on the
      *                                    half-filled form. Additive and defaulted null, so
      *                                    every existing caller keeps today's behaviour and
@@ -123,6 +127,10 @@ class DraftSuggestionService
         ?string $environment = null,
         ?string $stepsToReproduce = null,
         ?string $errorText = null,
+        // LAST rather than beside $departmentId, which is where it belongs by meaning:
+        // every existing caller passes $context, $withAgents and the five declared fields
+        // POSITIONALLY, so inserting a parameter mid-list would silently shift them.
+        ?int $categoryId = null,
     ): DraftSuggestion {
         $subject = trim($subject);
         $description = Str::limit(trim($description), (int) config('ai.draft.input_chars', 8000), '');
@@ -131,13 +139,17 @@ class DraftSuggestionService
         // PASTED CUSTOMER TEXT, so injection screening is not optional merely because a
         // colleague pressed the button. Both services are local (regex / keyword scans,
         // no HTTP) and both write their own attributable AiModerationLog row.
-        // Applicability from the department ROW (explicit tenant predicate inside), never
+        // Applicability from the CATEGORY ROW (explicit tenant predicate inside), never
         // from the browser: the id arrives from the create form, so a foreign one resolves
-        // to false — fewer fields asked for, never another workspace's answer.
-        $declaredTechnical = Department::isTechnicalFor((int) $tenant->getKey(), $departmentId);
-        // The impact pair's gate, resolved from the same row. Its fallback is TRUE, so a
-        // draft with no department still sends the scope and workaround the agent answered.
-        $declaredAsksImpact = Department::asksImpactFor((int) $tenant->getKey(), $departmentId);
+        // to the no-category answer — fewer facts sent, never another workspace's
+        // configuration. Both halves off one row, one query.
+        //
+        // A draft with no category sends NO declared facts at all, which is the same
+        // silence the ticket itself would carry: these questions belong to a category, and
+        // the agent was never asked them on a form that had none selected.
+        $declaredFlags = TicketCategory::detailFlagsFor((int) $tenant->getKey(), $categoryId);
+        $declaredTechnical = $declaredFlags['technical'];
+        $declaredAsksImpact = $declaredFlags['asks_impact'];
 
         $declared = [
             'impact_scope' => $impactScope,

@@ -11,6 +11,7 @@ use App\Models\Plan;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\Ticket;
+use App\Models\TicketCategory;
 use App\Models\User;
 use App\Services\AI\AnalyzeTicketService;
 use App\Services\AI\DraftSuggestionService;
@@ -89,8 +90,14 @@ class TicketTechnicalDetailsPromptTest extends TestCase
             'tenant_id' => $tenant->id,
             'name' => 'Technical Software',
             'code' => 'SOFTWARE',
-            // The technical half of the declared set is asked for (and therefore stated as a
-            // fact) only where the department handles technical work.
+        ]);
+        // P10: the technical half of the declared set is asked for (and therefore stated as
+        // a fact) only where the ticket's CATEGORY covers technical work — and the category
+        // must be in this workspace, since detailFlagsFor() states `tenant_id` explicitly.
+        $category = TicketCategory::factory()->create([
+            'tenant_id' => $tenant->id,
+            'department_id' => $department->id,
+            'name' => 'Software fault',
             'is_technical' => true,
         ]);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
@@ -98,7 +105,7 @@ class TicketTechnicalDetailsPromptTest extends TestCase
         return Ticket::factory()->create(array_merge([
             'tenant_id' => $tenant->id,
             'department_id' => $department->id,
-            'category_id' => null,
+            'category_id' => $category->id,
             'client_id' => $client->id,
             'priority' => 'low',
             'status' => 'open',
@@ -247,6 +254,11 @@ class TicketTechnicalDetailsPromptTest extends TestCase
             'department',
             'none',
             'production',
+            null,
+            null,
+            // P10: the CATEGORY is the gate on this surface too, and it is the LAST
+            // parameter — a draft with no category sends no facts at all.
+            TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'is_technical' => true])->id,
         );
 
         $body = $this->chatBody();
@@ -271,16 +283,21 @@ class TicketTechnicalDetailsPromptTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_a_non_technical_departments_ticket_states_no_environment_fact(): void
+    public function test_a_non_technical_categorys_ticket_states_no_environment_fact(): void
     {
         $tenant = $this->createTenant();
         $hr = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Human Resources', 'code' => 'HR']);
+        $payroll = TicketCategory::factory()->create([
+            'tenant_id' => $tenant->id,
+            'department_id' => $hr->id,
+            'name' => 'Payroll',
+        ]);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
 
         $ticket = Ticket::factory()->create([
             'tenant_id' => $tenant->id,
             'department_id' => $hr->id,
-            'category_id' => null,
+            'category_id' => $payroll->id,
             'client_id' => $client->id,
             'priority' => 'low',
             'status' => 'open',
@@ -288,7 +305,7 @@ class TicketTechnicalDetailsPromptTest extends TestCase
             'description' => 'The submit button does nothing.',
             'impact_scope' => 'team',
             'workaround' => 'partial',
-            // Present on the row (the department could have been unticked later) and still
+            // Present on the row (the category could have been unticked later) and still
             // not stated: it was never asked for, so it is not a reported fact.
             'environment' => 'production',
             'steps_to_reproduce' => 'NEVER-SENT-STEPS',

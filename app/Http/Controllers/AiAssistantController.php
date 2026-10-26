@@ -178,6 +178,9 @@ class AiAssistantController extends Controller
                 $request->validated('environment'),
                 $request->validated('steps_to_reproduce'),
                 $request->validated('error_text'),
+                // Last in the signature rather than beside `department_id`: everything
+                // above it is passed positionally, so the gate rides on the end.
+                $request->validated('category_id') === null ? null : (int) $request->validated('category_id'),
             );
         } catch (OpenAiException $e) {
             report($e);

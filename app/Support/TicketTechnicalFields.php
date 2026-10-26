@@ -20,8 +20,8 @@ use App\Models\Ticket;
 final class TicketTechnicalFields
 {
     /**
-     * The impact-and-urgency pair, asked where `departments.asks_impact` is true — which
-     * is every department until one opts out.
+     * The impact-and-urgency pair, asked where `ticket_categories.asks_impact` is true —
+     * which is every category until one opts out, and no category at all.
      *
      * Named for the group it IS, not for its old reach: it was `APPLIES_ALL` while the
      * pair was universal, and a constant called "all" naming a gated group is the comment
@@ -29,7 +29,7 @@ final class TicketTechnicalFields
      */
     public const APPLIES_IMPACT = 'impact';
 
-    /** Asked only where `departments.is_technical` is true. */
+    /** Asked only where `ticket_categories.is_technical` is true. */
     public const APPLIES_TECHNICAL = 'technical';
 
     /**
@@ -45,11 +45,11 @@ final class TicketTechnicalFields
                 'department' => 'A whole department or site',
                 'everyone' => 'Everyone / all customers',
             ],
-            // The impact group, ON by default in every department: an HR payroll fault
+            // The impact group, ON by default in every category: an HR payroll fault
             // hitting everyone is more urgent than one hitting one person, so breadth is
             // not a technical question. It is also one of the two things PRIORITY_BOUNDARY
-            // judges critical on, which is why a department that switches the group off
-            // gives up reaching `critical` at all.
+            // judges critical on, which is why a category that switches the group off —
+            // and a ticket with no category at all — gives up reaching `critical`.
             'applies_to' => self::APPLIES_IMPACT,
             'required_internally' => true,
             'rules' => ['string', 'in:one_person,team,department,everyone'],
@@ -77,7 +77,7 @@ final class TicketTechnicalFields
             ],
             // The impact group's other half, and the other half of PRIORITY_BOUNDARY.
             // "Can they work around it meanwhile" applies to a locked HR portal exactly as
-            // it applies to a crashed server — but a leave-request department may still
+            // it applies to a crashed server — but a leave-request category may still
             // reasonably decide the question is noise, which is what the flag is for.
             'applies_to' => self::APPLIES_IMPACT,
             'required_internally' => true,
@@ -153,16 +153,17 @@ final class TicketTechnicalFields
     }
 
     /**
-     * The declared fields that apply to a ticket in this department.
+     * The declared fields that apply to a ticket in this category.
      *
      * THE one applicability decision in the application. The forms, the information-needed
      * list, the validation and the rubric fact block all derive from this — a second list
-     * of "which fields does this department ask" is the drift the declared set exists to
+     * of "which fields does this category ask" is the drift the declared set exists to
      * prevent. Each group is one flag read off `applies_to`; adding a third group is one
      * arm here and nothing else.
      *
-     * @param  bool  $technical  `departments.is_technical`, which defaults FALSE.
-     * @param  bool  $asksImpact  `departments.asks_impact`, which defaults TRUE.
+     * @param  bool  $technical  `ticket_categories.is_technical`, which defaults FALSE.
+     * @param  bool  $asksImpact  `ticket_categories.asks_impact`, which defaults TRUE —
+     *                            but FALSE for a ticket with no category at all.
      * @return array<string, array<string, mixed>>
      */
     public static function applicable(bool $technical, bool $asksImpact = true): array
@@ -189,14 +190,14 @@ final class TicketTechnicalFields
      * `nullable` also means an absent key is omitted from `validated()` and therefore never
      * written, so Apply cannot wipe a stored value.
      *
-     * @param  bool  $technical  Whether the ticket's department is marked technical. Read
-     *                           from the tenant-scoped Department row, never from browser
-     *                           input, and false when there is no department — which asks
-     *                           for less rather than fabricating a requirement.
-     * @param  bool  $asksImpact  Whether the ticket's department asks the impact pair.
-     *                            Read the same way, and TRUE when there is no department —
-     *                            the opposite fallback, for the reason stated on
-     *                            Department::asksImpactFor().
+     * @param  bool  $technical  Whether the ticket's category is marked technical. Read
+     *                           from the tenant-scoped TicketCategory row, never from
+     *                           browser input, and false when there is no category — which
+     *                           asks for less rather than fabricating a requirement.
+     * @param  bool  $asksImpact  Whether the ticket's category asks the impact pair. Read
+     *                            from the same row by the same call, and FALSE when there
+     *                            is no category — both halves point the same way now, for
+     *                            the reason stated on TicketCategory::detailFlagsFor().
      * @return array<string, list<string>>
      */
     public static function rules(bool $internal, bool $technical = true, bool $asksImpact = true): array
@@ -206,7 +207,7 @@ final class TicketTechnicalFields
 
         foreach (self::FIELDS as $key => $field) {
             // A field that does not apply is still VALIDATED — by ONE mechanism for both
-            // groups, so a stray `impact_scope` on a department with the impact group off
+            // groups, so a stray `impact_scope` on a category with the impact group off
             // is refused exactly as a stray `environment` on a Sales ticket is: the `in:`
             // rule stands, only `required` drops. Dropping the rule instead would let an
             // unvalidated string reach the column and the prompt.
@@ -237,10 +238,11 @@ final class TicketTechnicalFields
      * model opinion in it — a field is missing iff its value is null or ''.
      *
      * @param  Ticket|array<string, mixed>  $source
-     *                                               A field that does not apply to this ticket's department is never reported missing —
-     *                                               an HR ticket must not be told it is missing an environment, and a department that
-     *                                               does not ask the impact pair must not be told it is missing one. A group switched
-     *                                               off entirely yields no rows, and the callers render no heading for an empty list.
+     *                                               A field that does not apply to this ticket's category is never reported missing —
+     *                                               a leave-request ticket must not be told it is missing an environment, and a category
+     *                                               that does not ask the impact pair must not be told it is missing one. A ticket with
+     *                                               no category yields no rows at all, and the callers render no heading for an empty
+     *                                               list.
      * @return list<array{key: string, label: string, why: string, rubric_input: bool}>
      */
     public static function missing(Ticket|array $source, bool $technical = true, bool $asksImpact = true): array
@@ -277,11 +279,11 @@ final class TicketTechnicalFields
      * stated fact about the state of knowledge, which a model will reason about separately.
      *
      * @param  Ticket|array<string, mixed>  $source
-     *                                               A field that does not apply to the ticket's department emits nothing either, for the
-     *                                               same reason: it was never asked, so it was never stated. A department with the
-     *                                               impact group off therefore sends no scope and no workaround line — not an empty
-     *                                               section, and not an `unknown` — and the rubric's uncertainty rule resolves both
-     *                                               downward, which is the cost the department form spells out.
+     *                                               A field that does not apply to the ticket's category emits nothing either, for the
+     *                                               same reason: it was never asked, so it was never stated. A category with the impact
+     *                                               group off — or no category at all — therefore sends no scope and no workaround line
+     *                                               — not an empty section, and not an `unknown` — and the rubric's uncertainty rule
+     *                                               resolves both downward, which is the cost the category form spells out.
      * @return string '' when no declared fact was captured — the caller appends nothing,
      *                so the prompt stays byte-identical to the pre-P8 one.
      */

@@ -7,22 +7,22 @@
     $departmentHintWithAi = app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot)
         && (bool) \App\Models\AppSetting::get('ai_enabled', false)
         && (bool) \App\Models\AppSetting::get('ai_agent_copilot_enabled', false);
-    // Which departments ask for the technical half. Resolved from the already tenant-scoped
-    // $departments collection the controller passed — no new query, and nothing read from
-    // the browser; the server re-resolves it from the Department row in StoreTicketRequest.
-    $technicalDepartmentIds = $departments->where('is_technical', true)->pluck('id')->map('intval')->values()->all();
-    // Which departments ask the impact pair. Default TRUE, so this is the list of
-    // departments that have NOT opted out, and no department chosen means ASKED — the same
-    // fallback StoreTicketRequest and Department::asksImpactFor() use, so the form and the
-    // server never disagree about whether the two selects are required.
-    $impactDepartmentIds = $departments->where('asks_impact', true)->pluck('id')->map('intval')->values()->all();
-    // On a validation-failed redraw the chosen department decides what the
-    // information-needed list may report missing. A first render has none, so the technical
-    // half is simply not listed — which is correct: it has not been asked for yet.
-    $oldDepartmentIsTechnical = in_array((int) old('department_id'), $technicalDepartmentIds, true);
-    $oldDepartmentAsksImpact = old('department_id')
-        ? in_array((int) old('department_id'), $impactDepartmentIds, true)
-        : true;
+    // Which CATEGORIES ask for each half. Resolved from the already tenant-scoped
+    // $categories collection the controller passed — no new query, and nothing read from
+    // the browser; the server re-resolves it from the TicketCategory row in
+    // StoreTicketRequest. The category select itself is populated per department by
+    // cascadingSelects(), but ids are stable, so membership of these two lists is all the
+    // gates need.
+    $technicalCategoryIds = $categories->where('is_technical', true)->pluck('id')->map('intval')->values()->all();
+    // Default TRUE, so this is the list of categories that have NOT opted out. NO CATEGORY
+    // CHOSEN ASKS NOTHING — the same answer TicketCategory::detailFlagsFor() gives, so the
+    // form and the server never disagree about whether the two selects are required.
+    $impactCategoryIds = $categories->where('asks_impact', true)->pluck('id')->map('intval')->values()->all();
+    // On a validation-failed redraw the chosen category decides what the information-needed
+    // list may report missing. A first render has none, so nothing is listed — which is
+    // correct: nothing has been asked for yet.
+    $oldCategoryIsTechnical = in_array((int) old('category_id'), $technicalCategoryIds, true);
+    $oldCategoryAsksImpact = in_array((int) old('category_id'), $impactCategoryIds, true);
     $technicalValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k)])->all();
     $departmentWarning = $departmentHintWithAi
         ? __('Without a department we can\'t suggest an engineer, and the AI has none of this department\'s expertise behind its priority suggestion.')
@@ -138,26 +138,33 @@
 
                         {{-- Impact and urgency (App\Support\TicketTechnicalFields, the
                              impact group). ABOVE Priority deliberately: these are what
-                             inform it. Asked in every department that has not switched the
+                             inform it. Asked in every category that has not switched the
                              group off on its own form — these two are exactly what
-                             PRIORITY_BOUNDARY judges critical on, so a department that
+                             PRIORITY_BOUNDARY judges critical on, so a category that
                              switches them off gives up reaching critical. Heading included:
                              a group switched off takes its heading with it rather than
-                             leaving an empty section. The server decides too —
-                             StoreTicketRequest re-resolves `asks_impact` from the
-                             tenant-scoped Department row — so this x-show is convenience,
-                             and `required` is BOUND to the same expression because a hidden
+                             leaving an empty section.
+
+                             NO CATEGORY ASKS NOTHING, so this block is hidden until one is
+                             chosen — the questions belong to a category, and this form has
+                             not yet put the ticket in one. The server agrees:
+                             StoreTicketRequest re-resolves both flags from the tenant-scoped
+                             TicketCategory row, so this x-show is convenience, and
+                             `required` is BOUND to the same expression because a hidden
                              required select would block the submit outright. --}}
-                        <div x-data="{ departmentId: @js((string) old('department_id', '')), impactDepartments: @js($impactDepartmentIds) }"
-                             x-init="document.getElementById('department_id')?.addEventListener('change', (e) => { departmentId = e.target.value })"
-                             x-show="departmentId === '' || impactDepartments.includes(Number(departmentId))">
+                        <div x-data="{ categoryId: @js((string) old('category_id', '')), impactCategories: @js($impactCategoryIds) }"
+                             x-init="document.getElementById('category_id')?.addEventListener('change', (e) => { categoryId = e.target.value });
+                                   /* Changing department empties the category select programmatically, which fires no change event — reset the gate here or it keeps answering for a category that is no longer selected. */
+                                   document.getElementById('department_id')?.addEventListener('change', () => { categoryId = '' })"
+                             x-show="impactCategories.includes(Number(categoryId))"
+                             x-cloak>
                             <h3 class="text-sm font-semibold text-gray-900">{{ __('Impact and urgency') }}</h3>
                             <p class="mt-0.5 text-xs text-gray-500">{{ __('These decide how urgent the ticket is judged to be.') }}</p>
                             <div class="mt-3">
                                 @include('tickets.partials._technical-details', [
                                     'values' => $technicalValues,
                                     'required' => true,
-                                    'requiredWhen' => "departmentId === '' || impactDepartments.includes(Number(departmentId))",
+                                    'requiredWhen' => 'impactCategories.includes(Number(categoryId))',
                                     'group' => \App\Support\TicketTechnicalFields::APPLIES_IMPACT,
                                     'emptyLabel' => __('Select…'),
                                 ])
@@ -165,18 +172,21 @@
                         </div>
 
                         {{-- Technical details (the 'technical' group), shown only for a
-                             department marked technical. "Provision a laptop for a new
+                             category marked technical. "Provision a laptop for a new
                              starter" has no environment and no reproduction steps, and
                              requiring them teaches the agent to pick a value to clear the
                              form — junk that looks like data. The server decides too:
                              StoreTicketRequest resolves `is_technical` from the tenant-scoped
-                             Department row, so this `x-show` is convenience, not the rule. --}}
-                        <div x-data="{ departmentId: @js((string) old('department_id', '')), technicalDepartments: @js($technicalDepartmentIds) }"
-                             x-init="document.getElementById('department_id')?.addEventListener('change', (e) => { departmentId = e.target.value })"
-                             x-show="technicalDepartments.includes(Number(departmentId))"
+                             TicketCategory row, so this `x-show` is convenience, not the
+                             rule. --}}
+                        <div x-data="{ categoryId: @js((string) old('category_id', '')), technicalCategories: @js($technicalCategoryIds) }"
+                             x-init="document.getElementById('category_id')?.addEventListener('change', (e) => { categoryId = e.target.value });
+                                   /* Changing department empties the category select programmatically, which fires no change event — reset the gate here or it keeps answering for a category that is no longer selected. */
+                                   document.getElementById('department_id')?.addEventListener('change', () => { categoryId = '' })"
+                             x-show="technicalCategories.includes(Number(categoryId))"
                              x-cloak>
                             <h3 class="text-sm font-semibold text-gray-900">{{ __('Technical details') }}</h3>
-                            <p class="mt-0.5 text-xs text-gray-500">{{ __('Asked because this department handles technical work.') }}</p>
+                            <p class="mt-0.5 text-xs text-gray-500">{{ __('Asked because this category covers technical work.') }}</p>
                             <div class="mt-3">
                                 @include('tickets.partials._technical-details', [
                                     'values' => $technicalValues,
@@ -268,7 +278,7 @@
                          past the top of the form still meets the Department warning. --}}
                     <div class="mt-6">
                         @include('tickets.partials._information-needed', [
-                            'missing' => \App\Support\TicketTechnicalFields::missing(old(), $oldDepartmentIsTechnical, $oldDepartmentAsksImpact),
+                            'missing' => \App\Support\TicketTechnicalFields::missing(old(), $oldCategoryIsTechnical, $oldCategoryAsksImpact),
                             'departmentWarning' => old('department_id') ? null : $departmentWarning,
                         ])
                     </div>

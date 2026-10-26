@@ -41,6 +41,12 @@ class StructureTicketDraftRequest extends FormRequest
             // accept another workspace's id and hand back its staff as candidates;
             // `departmentOwnedBy()` in the service is the second defence, not the first.
             'department_id' => ['nullable', $this->tenantExists('departments')],
+            // Which of the five declared detail fields below apply at all, resolved from
+            // this row by TicketCategory::detailFlagsFor(). Tenant-scoped here for the same
+            // reason as `department_id`: a bare `exists:ticket_categories,id` would accept
+            // another workspace's id, and the resolver's own predicate is the second
+            // defence, not the first.
+            'category_id' => ['nullable', $this->tenantExists('ticket_categories')],
             'context' => ['nullable', 'in:'.DraftSuggestionService::CONTEXT_CREATE.','.DraftSuggestionService::CONTEXT_EDIT],
             // Always the nullable variant: Polish is pressed mid-draft on a half-filled
             // form, so a `required` rule here would 422 the button instead of polishing.

@@ -3,7 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ScopesRulesToTenant;
-use App\Models\Department;
+use App\Models\TicketCategory;
 use App\Support\TicketTechnicalFields;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -27,6 +27,10 @@ class StoreTicketRequest extends FormRequest
      */
     public function rules(): array
     {
+        // One read, one query: both halves come off the same row, so they cannot be
+        // resolved against different categories.
+        $flags = TicketCategory::detailFlagsFor((int) $this->currentTenantId(), $this->categoryId());
+
         return [
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
@@ -50,38 +54,31 @@ class StoreTicketRequest extends FormRequest
             // so — nothing is hand-written here, so the required selects and the optional
             // text fields cannot drift from the forms or the ticket page.
             //
-            // Applicability is resolved from the DEPARTMENT ROW, not from the browser:
-            // `tenantExists('departments')` above is the first defence and
-            // `Department::isTechnicalFor()`'s own explicit `tenant_id` predicate is the
-            // second, so another workspace's department resolves to false (fewer required
-            // fields) rather than to its answer. A ticket with no department is not
-            // technical, which asks for less rather than fabricating a requirement.
+            // Applicability is resolved from the CATEGORY ROW, not from the browser:
+            // `tenantExists('ticket_categories')` above is the first defence and
+            // `TicketCategory::detailFlagsFor()`'s own explicit `tenant_id` predicate is
+            // the second, so another workspace's category resolves to the no-category
+            // answer rather than to its configuration.
             //
-            // The impact pair is gated the same way and resolved from the same row, but
-            // its absent-department fallback is TRUE rather than false (see
-            // Department::asksImpactFor()): a ticket with no department is still asked who
-            // is affected, because those two answers are what the priority rubric
-            // separates critical from high on.
+            // A ticket with NO category is asked NOTHING — both halves resolve false, so
+            // this form requires none of the five. That is the whole point of moving the
+            // gate: the questions belong to a category, and a ticket nobody has placed in
+            // one has not been placed in a bucket that asks them. The five rules are still
+            // EMITTED (as `nullable`), so a stray value is still refused.
         ] + TicketTechnicalFields::rules(
             internal: true,
-            technical: Department::isTechnicalFor(
-                (int) $this->currentTenantId(),
-                $this->departmentId(),
-            ),
-            asksImpact: Department::asksImpactFor(
-                (int) $this->currentTenantId(),
-                $this->departmentId(),
-            ),
+            technical: $flags['technical'],
+            asksImpact: $flags['asks_impact'],
         );
     }
 
     /**
-     * The submitted department id as an int, or null when none was chosen — read once so
-     * the two applicability resolvers cannot be given different ids.
+     * The submitted category id as an int, or null when none was chosen — an unselected
+     * select posts '', which is not a category.
      */
-    private function departmentId(): ?int
+    private function categoryId(): ?int
     {
-        $raw = $this->input('department_id');
+        $raw = $this->input('category_id');
 
         return $raw === null || $raw === '' ? null : (int) $raw;
     }

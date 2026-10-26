@@ -254,21 +254,24 @@
                     {{-- Information needed. The same derived list and the same wording as both
                          intake forms, outside the AI gate for the same reason as the rows
                          above: it is about ticket data and is useful with AI switched off. --}}
+                    @php
+                        $showDetailFlags = \App\Models\TicketCategory::detailFlagsFor((int) $ticket->tenant_id, $ticket->category_id);
+                    @endphp
                     <div>
                         @include('tickets.partials._information-needed', [
-                            {{-- Applicability from the ticket's own department: a Sales or HR
+                            {{-- Applicability from the ticket's own CATEGORY: a quote-request
                                  ticket must never be told it is missing an environment, and a
-                                 department that does not ask the impact pair must never be
-                                 told it is missing one. Both groups off leaves no rows, and
-                                 the partial renders nothing rather than an empty heading.
-                                 The detail ROWS above are deliberately keyed on the stored
-                                 value, not on the flags, for the same reason the edit form
-                                 keeps showing a value a department later stopped asking
-                                 for. --}}
+                                 category that does not ask the impact pair must never be told
+                                 it is missing one. Both groups off — which is also what a
+                                 ticket with no category gets — leaves no rows, and the partial
+                                 renders nothing rather than an empty heading. The detail ROWS
+                                 above are deliberately keyed on the stored value, not on the
+                                 flags, for the same reason the edit form keeps showing a value
+                                 a category later stopped asking for. --}}
                             'missing' => \App\Support\TicketTechnicalFields::missing(
                                 $ticket,
-                                \App\Models\Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id),
-                                \App\Models\Department::asksImpactFor((int) $ticket->tenant_id, $ticket->department_id),
+                                $showDetailFlags['technical'],
+                                $showDetailFlags['asks_impact'],
                             ),
                             {{-- Gated on `update tickets` (with the owner bypass) because that
                                  is what TicketController::edit() enforces: a link to a page

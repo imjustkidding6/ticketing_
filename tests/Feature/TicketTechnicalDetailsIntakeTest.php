@@ -10,6 +10,7 @@ use App\Models\Plan;
 use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\Ticket;
+use App\Models\TicketCategory;
 use App\Models\User;
 use App\Services\PlanService;
 use App\Services\TenantRoleService;
@@ -76,14 +77,15 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
-        $department = Department::factory()->create(['tenant_id' => $tenant->id, 'is_technical' => true]);
+        // P10: the gate is the CATEGORY. Technical on, impact on by default.
+        $category = TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'is_technical' => true]);
 
         $this->post($this->tenantUrl('/tickets'), [
             'subject' => 'Reporting down',
             'description' => 'Nobody can open reports',
             'priority' => 'high',
             'client_id' => $client->id,
-            'department_id' => $department->id,
+            'category_id' => $category->id,
         ])->assertSessionHasErrors(['impact_scope', 'workaround', 'environment']);
 
         $this->assertSame(0, Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count());
@@ -94,8 +96,11 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        // Both gates ON, so all five are asked for AND all five are stored.
+        $category = TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'is_technical' => true]);
 
         $this->post($this->tenantUrl('/tickets'), [
+            'category_id' => $category->id,
             'subject' => 'Reporting down',
             'description' => 'Nobody can open reports',
             'priority' => 'high',
@@ -263,22 +268,23 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
         $this->assertSame('HTTP 500 from /reports', $ticket->error_text);
     }
 
-    public function test_a_non_technical_department_is_not_asked_for_an_environment(): void
+    public function test_a_non_technical_category_is_not_asked_for_an_environment(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
-        // The default: HR, Sales, Finance. "Provision a laptop for a new starter" has no
-        // environment, and requiring one trains the agent to pick a value to clear the form.
-        $department = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Human Resources']);
+        // The default: a leave request, an invoice query. "Provision a laptop for a new
+        // starter" has no environment, and requiring one trains the agent to pick a value
+        // to clear the form.
+        $category = TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Payroll']);
 
         $this->post($this->tenantUrl('/tickets'), [
             'subject' => 'Payroll portal will not accept my timesheet',
             'description' => 'The submit button does nothing.',
             'priority' => 'medium',
             'client_id' => $client->id,
-            'department_id' => $department->id,
-            // The universal pair is still required, and still answered: an HR fault hitting
+            'category_id' => $category->id,
+            // The impact pair is still required, and still answered: an HR fault hitting
             // everyone is more urgent than one hitting one person.
             'impact_scope' => 'team',
             'workaround' => 'partial',
@@ -290,22 +296,34 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
         $this->assertNull($ticket->environment);
     }
 
-    public function test_the_universal_pair_is_required_even_with_no_department(): void
+    /**
+     * P10's deliberate reversal of P9's direction, and the behaviour a future reader is
+     * most likely to try to "fix" back: these questions belong to a CATEGORY, so a ticket
+     * nobody has put in one is asked NOTHING. The cost is real and accepted — the priority
+     * rubric gets neither the breadth of impact nor the existence of a workaround, so
+     * `critical` is out of reach for this ticket.
+     */
+    public function test_a_ticket_with_no_category_is_asked_nothing(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        // A configured category exists in the workspace; this ticket is simply not in it,
+        // so the gate must read the TICKET's category rather than the workspace's.
+        TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'is_technical' => true]);
 
         $this->post($this->tenantUrl('/tickets'), [
             'subject' => 'Something is wrong',
             'description' => 'Not sure which team owns this.',
             'priority' => 'medium',
             'client_id' => $client->id,
-        ])
-            ->assertSessionHasErrors(['impact_scope', 'workaround'])
-            // No department is not technical: asking for less beats fabricating a
-            // requirement nobody can answer.
-            ->assertSessionDoesntHaveErrors('environment');
+        ])->assertSessionHasNoErrors();
+
+        $ticket = Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->sole();
+
+        $this->assertNull($ticket->impact_scope);
+        $this->assertNull($ticket->workaround);
+        $this->assertNull($ticket->environment);
     }
 
     public function test_a_stray_environment_on_a_non_technical_ticket_is_still_validated(): void
@@ -313,7 +331,7 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
-        $department = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Sales']);
+        $category = TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Quotes']);
 
         // Not applicable is not the same as unvalidated: an unvalidated string would reach
         // the column and the prompt.
@@ -322,7 +340,7 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
             'description' => 'Please send pricing.',
             'priority' => 'low',
             'client_id' => $client->id,
-            'department_id' => $department->id,
+            'category_id' => $category->id,
             'impact_scope' => 'one_person',
             'workaround' => 'yes',
             'environment' => 'prod',
@@ -334,72 +352,95 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
     /**
      * FOLLOW-UP 28, discharged directly rather than through a request.
      *
-     * `Department::isTechnicalFor()` is the one new query this package adds, and it carries
-     * an explicit `tenant_id` predicate because it is reached from a FormRequest AND from
-     * the queued intake analysis, where TenantScope applies no predicate at all. An
-     * end-to-end test on a session-bearing surface cannot prove that predicate: Department's
-     * own global scope would mask its absence. So the assertion is on the resolver, with a
-     * hostile raw-inserted decoy — a technical department in the WRONG workspace, carrying
-     * the same id the caller is about to ask about.
+     * `TicketCategory::detailFlagsFor()` is the one new query this package adds, and it
+     * carries an explicit `tenant_id` predicate because it is reached from a FormRequest AND
+     * from the queued intake analysis and the draft service, where TenantScope applies no
+     * predicate at all. An end-to-end test on a session-bearing surface cannot prove that
+     * predicate: TicketCategory's own global scope would mask its absence. So the assertion
+     * is on the resolver, with a hostile raw-inserted decoy — a category in the WRONG
+     * workspace, configured so that BOTH of its answers differ from the fail-closed ones,
+     * carrying the id the caller is about to ask about.
+     *
+     * MUTATION CHECKED by hand: deleting `->where('tenant_id', $tenantId)` from
+     * detailFlagsFor() reds both tenant-A assertions below (tenant A reads tenant B's
+     * `technical: true, asks_impact: false`), and the request-driven tests in this file stay
+     * green — which is exactly the masking follow-up 28 describes.
      */
-    public function test_a_foreign_departments_technical_flag_cannot_decide_this_workspaces_fields(): void
+    public function test_a_foreign_categorys_detail_gates_cannot_decide_this_workspaces_fields(): void
     {
         $tenantA = $this->tenantOnPlan();
         $tenantB = $this->tenantOnPlan();
+        $foreignDepartment = Department::factory()->create(['tenant_id' => $tenantB->id]);
 
-        // Raw-inserted so no scope, factory default or observer can tidy it away.
-        $foreignId = DB::table('departments')->insertGetId([
+        // Raw-inserted so no scope, factory default or observer can tidy it away. BOTH flags
+        // are set away from the fail-closed answer: technical ON (which would demand an
+        // environment) and impact OFF (which would drop the rubric's two inputs).
+        $foreignId = DB::table('ticket_categories')->insertGetId([
             'tenant_id' => $tenantB->id,
-            'name' => 'Technical Software',
-            'code' => 'SOFTWARE',
+            'department_id' => $foreignDepartment->id,
+            'name' => 'Production outage',
             'color' => '#3b82f6',
             'is_active' => true,
-            'is_default' => true,
             'is_technical' => true,
-            'sort_order' => 2,
+            'asks_impact' => false,
+            'sort_order' => 1,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        // The decoy IS technical, in its own workspace.
-        $this->assertTrue(Department::isTechnicalFor($tenantB->id, $foreignId));
+        // The decoy really is configured that way, in its own workspace.
+        $this->assertSame(
+            ['technical' => true, 'asks_impact' => false],
+            TicketCategory::detailFlagsFor($tenantB->id, $foreignId),
+        );
 
-        // Asked for from tenant A it resolves to FALSE — fewer fields demanded, never
-        // another workspace's answer. Without the predicate this returns true.
-        $this->assertFalse(Department::isTechnicalFor($tenantA->id, $foreignId));
+        // Asked for from tenant A it resolves to the NO-CATEGORY answer — never another
+        // workspace's configuration. Without the predicate both halves come back wrong.
+        $this->assertSame(
+            ['technical' => false, 'asks_impact' => false],
+            TicketCategory::detailFlagsFor($tenantA->id, $foreignId),
+        );
 
-        // And an id that exists nowhere, and no id at all.
-        $this->assertFalse(Department::isTechnicalFor($tenantA->id, 999999));
-        $this->assertFalse(Department::isTechnicalFor($tenantA->id, null));
+        // And an id that exists nowhere, and no id at all: both fail closed to asking
+        // nothing. This is the OPPOSITE direction from the deleted
+        // Department::asksImpactFor(), deliberately — see detailFlagsFor()'s docblock.
+        $this->assertSame(
+            ['technical' => false, 'asks_impact' => false],
+            TicketCategory::detailFlagsFor($tenantA->id, 999999),
+        );
+        $this->assertSame(
+            ['technical' => false, 'asks_impact' => false],
+            TicketCategory::detailFlagsFor($tenantA->id, null),
+        );
     }
 
-    public function test_a_department_that_switched_the_impact_questions_off_does_not_require_them(): void
+    public function test_a_category_that_switched_the_impact_questions_off_does_not_require_them(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
-        $leave = Department::factory()->create([
+        $leave = TicketCategory::factory()->create([
             'tenant_id' => $tenant->id,
-            'name' => 'People',
+            'name' => 'Leave request',
             'asks_impact' => false,
         ]);
-        $support = Department::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Support']);
+        $outage = TicketCategory::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Service down']);
 
-        // P9: the gate is the DEPARTMENT ROW, so a leave request clears the form with no
-        // scope and no workaround — which is the trade the department form spells out.
+        // P10: the gate is the CATEGORY ROW, so a leave request clears the form with no
+        // scope and no workaround — which is the trade the category form spells out.
         $this->post($this->tenantUrl('/tickets'), [
             'subject' => 'Annual leave in March',
             'description' => 'Requesting the last week of March off.',
             'priority' => 'low',
             'client_id' => $client->id,
-            'department_id' => $leave->id,
+            'category_id' => $leave->id,
         ])->assertSessionHasNoErrors();
 
         $this->assertNull(
             Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->sole()->impact_scope,
         );
 
-        // And the default still points the other way: the very next department, untouched,
+        // And the default still points the other way: the very next category, untouched,
         // keeps requiring both. Without this half the test would pass with the gate wired
         // to a constant false.
         $this->post($this->tenantUrl('/tickets'), [
@@ -407,22 +448,22 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
             'description' => 'Nobody can open reports.',
             'priority' => 'high',
             'client_id' => $client->id,
-            'department_id' => $support->id,
+            'category_id' => $outage->id,
         ])->assertSessionHasErrors(['impact_scope', 'workaround']);
     }
 
-    public function test_a_stray_impact_scope_on_a_department_that_does_not_ask_is_still_validated(): void
+    public function test_a_stray_impact_scope_on_a_category_that_does_not_ask_is_still_validated(): void
     {
         $tenant = $this->tenantOnPlan();
         $this->actor($tenant);
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
-        $leave = Department::factory()->create([
+        $leave = TicketCategory::factory()->create([
             'tenant_id' => $tenant->id,
-            'name' => 'People',
+            'name' => 'Leave request',
             'asks_impact' => false,
         ]);
 
-        // The same mechanism that refuses a stray `environment=prod` on a Sales ticket: not
+        // The same mechanism that refuses a stray `environment=prod` on a quote: not
         // applicable is not the same as unvalidated, or an unvalidated string reaches the
         // column and the prompt.
         $this->post($this->tenantUrl('/tickets'), [
@@ -430,59 +471,10 @@ class TicketTechnicalDetailsIntakeTest extends TestCase
             'description' => 'Requesting time off.',
             'priority' => 'low',
             'client_id' => $client->id,
-            'department_id' => $leave->id,
+            'category_id' => $leave->id,
             'impact_scope' => 'the entire planet',
         ])->assertSessionHasErrors('impact_scope');
 
         $this->assertSame(0, Ticket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count());
-    }
-
-    /**
-     * FOLLOW-UP 28 again, for P9's one new query, and discharged the same way.
-     *
-     * `Department::asksImpactFor()` states `tenant_id` explicitly because it is reached
-     * from a FormRequest AND from the session-less intake analysis and draft service. An
-     * end-to-end test on a session-bearing surface cannot prove that predicate — Department's
-     * own global scope masks its absence — so the assertion is on the resolver, with a
-     * hostile raw-inserted decoy in the WRONG workspace.
-     *
-     * MUTATION CHECKED by hand: deleting `->where('tenant_id', $tenantId)` from
-     * asksImpactFor() reds `assertTrue(... $tenantA, $foreignId)`'s sibling below (tenant A
-     * would read tenant B's `false` instead of the default), and this file's other
-     * request-driven tests stay green — which is the masking follow-up 28 describes.
-     */
-    public function test_a_foreign_departments_impact_flag_cannot_decide_this_workspaces_fields(): void
-    {
-        $tenantA = $this->tenantOnPlan();
-        $tenantB = $this->tenantOnPlan();
-
-        // Raw-inserted so no scope, factory default or observer can tidy it away. It has
-        // OPTED OUT in its own workspace, which is the state that could leak.
-        $foreignId = DB::table('departments')->insertGetId([
-            'tenant_id' => $tenantB->id,
-            'name' => 'People',
-            'code' => 'PEOPLE',
-            'color' => '#3b82f6',
-            'is_active' => true,
-            'is_default' => false,
-            'is_technical' => false,
-            'asks_impact' => false,
-            'sort_order' => 2,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        // The decoy really does have the group off, in its own workspace.
-        $this->assertFalse(Department::asksImpactFor($tenantB->id, $foreignId));
-
-        // Asked for from tenant A it resolves to the DEFAULT — the group stays ASKED, never
-        // another workspace's answer. Without the predicate this returns false and tenant
-        // A silently loses the rubric's two decisive inputs.
-        $this->assertTrue(Department::asksImpactFor($tenantA->id, $foreignId));
-
-        // An id that exists nowhere, and no id at all: both fail closed to ASKED, the
-        // opposite direction from isTechnicalFor() and deliberately so.
-        $this->assertTrue(Department::asksImpactFor($tenantA->id, 999999));
-        $this->assertTrue(Department::asksImpactFor($tenantA->id, null));
     }
 }

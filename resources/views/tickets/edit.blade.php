@@ -55,21 +55,23 @@
                         </div>
 
                         {{-- Impact and urgency, then the technical half only where the
-                             ticket's own department asks for it. Nothing is required here:
+                             ticket's own category asks for it. Nothing is required here:
                              every rule on UpdateTicketRequest is nullable, which is also what
                              stops _ai-analyze's Apply (whose hidden snapshot carries none of
                              these keys) from 422-ing or from wiping a stored value.
 
-                             A stored value on a department that later unticked the group
+                             A stored value on a category that later unticked the group (or
+                             on a ticket that has no category at all, which asks nothing)
                              still renders, deliberately: hiding data that exists is worse
-                             than showing a field the department no longer asks for. That is
-                             why both halves are an OR of the department flag and the stored
+                             than showing a field the category no longer asks for. That is
+                             why both halves are an OR of the category flag and the stored
                              values, and why a group with neither disappears entirely —
                              heading included, so no empty section is left behind. --}}
                         @php
-                            $editTechnical = \App\Models\Department::isTechnicalFor((int) $ticket->tenant_id, $ticket->department_id)
+                            $editFlags = \App\Models\TicketCategory::detailFlagsFor((int) $ticket->tenant_id, $ticket->category_id);
+                            $editTechnical = $editFlags['technical']
                                 || filled($ticket->environment) || filled($ticket->steps_to_reproduce) || filled($ticket->error_text);
-                            $editAsksImpact = \App\Models\Department::asksImpactFor((int) $ticket->tenant_id, $ticket->department_id)
+                            $editAsksImpact = $editFlags['asks_impact']
                                 || filled($ticket->impact_scope) || filled($ticket->workaround);
                             $editValues = collect(\App\Support\TicketTechnicalFields::keys())->mapWithKeys(fn ($k) => [$k => old($k, $ticket->{$k})])->all();
                         @endphp
