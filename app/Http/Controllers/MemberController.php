@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Concerns\ScopesRulesToTenant;
 use App\Models\Department;
 use App\Models\User;
 use App\Services\ActivityLogger;
@@ -18,6 +19,8 @@ use Spatie\Permission\Models\Role;
 
 class MemberController extends Controller
 {
+    use ScopesRulesToTenant;
+
     public function __construct(
         private TenantRoleService $roleService,
         private AgentPerformanceService $performanceService,
@@ -99,7 +102,7 @@ class MemberController extends Controller
             'support_tier' => ['nullable', 'integer', 'in:1,2,3'],
             'is_available' => ['nullable', 'boolean'],
             'department_ids' => ['nullable', 'array'],
-            'department_ids.*' => ['exists:departments,id'],
+            'department_ids.*' => [$this->tenantExists('departments')],
         ], [
             'email.email' => 'Please enter a valid email address.',
             'role.in' => 'Please select a valid role.',
@@ -234,7 +237,7 @@ class MemberController extends Controller
             'support_tier' => ['nullable', 'integer', 'in:1,2,3'],
             'is_available' => ['nullable', 'boolean'],
             'department_ids' => ['nullable', 'array'],
-            'department_ids.*' => ['exists:departments,id'],
+            'department_ids.*' => [$this->tenantExists('departments')],
         ]);
 
         $oldRole = $member->roles->first()?->name;

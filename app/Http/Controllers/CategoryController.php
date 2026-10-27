@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Concerns\ScopesRulesToTenant;
 use App\Models\Department;
 use App\Models\TicketCategory;
 use Illuminate\Http\RedirectResponse;
@@ -10,6 +11,8 @@ use Illuminate\View\View;
 
 class CategoryController extends Controller
 {
+    use ScopesRulesToTenant;
+
     /**
      * Display a listing of categories.
      */
@@ -45,7 +48,7 @@ class CategoryController extends Controller
         $this->checkPermission('create categories');
 
         $validated = $request->validate([
-            'department_id' => ['required', 'exists:departments,id'],
+            'department_id' => ['required', $this->tenantExists('departments')],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'color' => ['required', 'string', 'max:7'],
@@ -87,7 +90,7 @@ class CategoryController extends Controller
         $this->checkPermission('update categories');
 
         $validated = $request->validate([
-            'department_id' => ['required', 'exists:departments,id'],
+            'department_id' => ['required', $this->tenantExists('departments')],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'color' => ['required', 'string', 'max:7'],
