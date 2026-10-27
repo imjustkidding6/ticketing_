@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Concerns\ScopesRulesToTenant;
 use App\Models\Department;
 use App\Models\TicketCategory;
 use Illuminate\Http\JsonResponse;
@@ -10,6 +11,8 @@ use Illuminate\Http\Request;
 
 class LookupController extends Controller
 {
+    use ScopesRulesToTenant;
+
     public function departments(): JsonResponse
     {
         $departments = Department::active()->ordered()->get(['id', 'name', 'code', 'color']);
@@ -20,7 +23,7 @@ class LookupController extends Controller
     public function categories(Request $request): JsonResponse
     {
         $request->validate([
-            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'department_id' => ['nullable', 'integer', $this->tenantExists('departments')],
         ]);
 
         $query = TicketCategory::active()->ordered();
