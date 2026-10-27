@@ -111,6 +111,16 @@ return [
                     'Save. A double-click is absorbed, so you will not create the same ticket twice.',
                 ], 'minutes' => 3, 'permission' => 'create tickets'],
 
+                ['h' => 'The detail questions'],
+                ['p' => 'Some tickets ask for more than a subject and a description. What is asked is decided by the <strong>category</strong>, not by the department and not by who is filing it, so the questions match the kind of request.'],
+                ['ul' => [
+                    'Categories that cover technical work also ask for the <strong>environment</strong>, the <strong>steps to reproduce</strong> and the <strong>exact error message</strong>.',
+                    'Categories that ask about impact also ask <strong>who is affected</strong> and <strong>whether there is a workaround</strong>.',
+                ]],
+                ['note' => 'Those last two are what separate a high ticket from a critical one. One person blocked with a workaround is not the same as a whole department blocked without one, and the two answers are what make that judgement rather than the wording of the description.'],
+                ['tip' => 'Nothing here is required. An unanswered question is simply left out — it is never filed as "unknown", because a field saying "unknown" reads as an answer when it is really an absence.'],
+                ['p' => 'A ticket filed with no category at all is asked neither set, so its priority is judged from the wording alone. If your team keeps meeting that, the fix is a category rather than a longer description.'],
+
                 ['h' => 'Assigning', 'permission' => 'assign tickets'],
                 ['p' => 'Claiming an unassigned ticket is first-come-first-served: if someone claims it while you are looking at it, your claim is refused rather than silently overwriting theirs. A manager reassigning a ticket overrides that deliberately.', 'permission' => 'assign tickets'],
 
@@ -682,6 +692,14 @@ return [
             'blocks' => [
                 ['p' => 'Categories classify what a ticket is about. They drive the category breakdown in reports, so a tidy list is worth keeping.'],
                 ['note' => 'A category belongs to a department. Picking a department on the ticket form narrows the categories offered, so a category on the wrong department is effectively invisible.'],
+                ['h' => 'What the category asks for', 'permission' => 'update categories'],
+                ['p' => 'Each category decides which detail questions its tickets are asked. Both settings sit on the category form.', 'permission' => 'update categories'],
+                ['ul' => [
+                    '<strong>Covers technical work</strong> — adds the environment, the steps to reproduce and the exact error message. Leave it off for categories like leave requests, invoices or quotes, where those questions have no answer.',
+                    '<strong>Ask who is affected and whether there is a workaround</strong> — adds the impact pair. On by default, because it is what separates a high ticket from a critical one.',
+                ], 'permission' => 'update categories'],
+                ['note' => 'These used to live on the department. They moved to the category because a single department handles both kinds of request: the same team fields a server outage and a software licence request, and only one of those has an error message.', 'permission' => 'update categories'],
+
                 ['h' => 'Adding one', 'permission' => 'create categories'],
                 ['steps' => [
                     'Choose the department it belongs to first.',
@@ -698,6 +716,7 @@ return [
                     ['route' => 'categories.index', 'selector' => '[data-tour="category-create"]', 'title' => 'Start here', 'body' => 'Opens the new category form.', 'advance' => 'click', 'side' => 'bottom'],
                     ['route' => 'categories.create', 'selector' => '[data-tour="category-department"]', 'title' => 'Pick the department first', 'body' => 'The ticket form only offers categories belonging to the department chosen on it. A category filed under the wrong department will never appear.', 'advance' => 'next', 'side' => 'bottom'],
                     ['route' => 'categories.create', 'selector' => '[data-tour="category-name"]', 'title' => 'Name it for the symptom', 'body' => 'Agents pick this while the customer is describing the problem, before anyone knows the cause. "Cannot log in" gets chosen; "LDAP misconfiguration" does not.', 'advance' => 'next', 'side' => 'bottom'],
+                    ['route' => 'categories.create', 'selector' => '[data-tour="category-detail-questions"]', 'title' => 'Decide what it asks for', 'body' => 'These two settings decide what the ticket form asks for in this category. The impact pair is on by default; the technical questions are off until you turn them on.', 'advance' => 'next', 'side' => 'top'],
                 ],
             ],
         ],

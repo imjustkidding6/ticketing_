@@ -875,8 +875,23 @@
         @endif
 
         {{-- In-app AI assistant (per-user memory) --}}
-        @if(auth()->user()?->currentTenant() && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot) && (bool) \App\Models\AppSetting::get('ai_enabled', false))
+        @php
+            $aiAssistantVisible = auth()->user()?->currentTenant()
+                && app(\App\Services\PlanService::class)->currentTenantHasFeature(\App\Enums\PlanFeature::AiChatbot)
+                && (bool) \App\Models\AppSetting::get('ai_enabled', false);
+        @endphp
+        @if($aiAssistantVisible)
             @include('partials.app-ai-assistant')
+        @endif
+
+        {{-- Floating "What's new", stacked above the assistant launcher when that is
+             present. Tenant context only: it links to the tenant help centre, which
+             needs a slug to resolve. --}}
+        @if(config('whats_new.enabled') && session('current_tenant_id') && config('whats_new.release'))
+            @include('partials.whats-new', [
+                'aiAssistantVisible' => $aiAssistantVisible,
+                'wnUrl' => route('tutorials.show', config('whats_new.topic')),
+            ])
         @endif
         @endauth
     </body>
