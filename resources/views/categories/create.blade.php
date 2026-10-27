@@ -51,7 +51,7 @@
                              and the priority rubric loses both of its decisive inputs for
                              that ticket. The fix is a category, which is why it is said
                              here. --}}
-                        <div class="rounded-md border border-amber-200 bg-amber-50 p-3">
+                        <div data-tour="category-detail-questions" class="rounded-md border border-amber-200 bg-amber-50 p-3">
                             <p class="text-xs text-amber-800">{{ __('These two settings decide what the ticket form asks for. A ticket filed with no category at all is asked neither, so its priority is judged from the wording alone.') }}</p>
                         </div>
 
